@@ -124,6 +124,36 @@ class RestoreExecutionRepositoryAdapterIT {
         }).isInstanceOf(DataIntegrityViolationException.class);
     }
 
+    @Test
+    void countsAndRemovesTheRestoresBelongingToOneBackup() {
+        restores.save(RestoreExecution.started(UUID.randomUUID(), backupId, STARTED));
+        restores.save(RestoreExecution.started(UUID.randomUUID(), backupId, STARTED.plusSeconds(60)));
+        assertThat(restores.countForBackup(backupId)).isEqualTo(2);
+
+        restores.deleteForBackup(backupId);
+
+        assertThat(restores.countForBackup(backupId)).isZero();
+        assertThat(restores.findAllNewestFirst()).isEmpty();
+    }
+
+    /** Which is what makes the backup itself deletable afterwards. */
+    @Test
+    void removingTheRestoresReleasesTheForeignKeyOnTheBackup() {
+        restores.save(RestoreExecution.started(UUID.randomUUID(), backupId, STARTED));
+
+        restores.deleteForBackup(backupId);
+        backups.deleteById(backupId);
+
+        assertThat(backups.findById(backupId)).isEmpty();
+    }
+
+    @Test
+    void deletingRestoresForABackupThatHasNoneIsHarmless() {
+        restores.deleteForBackup(UUID.randomUUID());
+
+        assertThat(restores.countForBackup(backupId)).isZero();
+    }
+
     private static DatabaseTarget target() {
         return DatabaseTarget.builder()
                 .id(UUID.randomUUID()).name("production").host("127.0.0.1").port(3306)

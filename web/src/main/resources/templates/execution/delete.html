@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout/base :: page('Delete backup', ~{:: #content})}">
+<body>
+<div id="content">
+
+  <div class="page-head">
+    <h1>Delete this backup?</h1>
+  </div>
+
+  <div class="danger-box" role="alert">
+    <p><strong>The artifact is deleted from disk. There is no undo.</strong></p>
+    <p th:if="${preview.restoreCount() > 0}">
+      <!-- Said before the click, not discovered after it. -->
+      <span th:text="${preview.restoreCount()}">2</span>
+      restore record(s) referring to this backup are deleted with it.
+    </p>
+    <p th:unless="${preview.artifactPresent()}">
+      The file is already missing from disk. Deleting the record here is all
+      that is left to do.
+    </p>
+  </div>
+
+  <dl class="detail">
+    <dt>Target</dt>
+    <dd th:text="${targetNames.getOrDefault(preview.execution().targetId, '(removed)')}">production</dd>
+
+    <dt>Taken</dt>
+    <dd class="mono"
+        th:text="${#temporals.format(
+                    preview.execution().startedAt.atOffset(T(java.time.ZoneOffset).UTC),
+                    'yyyy-MM-dd HH:mm:ss')} + ' UTC'">…</dd>
+
+    <dt>Status</dt>
+    <dd th:replace="~{fragments/execution-status :: statusBadge(${preview.execution().status})}"></dd>
+
+    <dt>Artifact</dt>
+    <dd class="mono break"
+        th:text="${preview.execution().artifactPath != null ? preview.execution().artifactPath : '—'}">—</dd>
+
+    <dt>Size</dt>
+    <dd class="mono"
+        th:text="${preview.execution().sizeBytes != null ? preview.execution().sizeBytes + ' bytes' : '—'}">—</dd>
+  </dl>
+
+  <form method="post" th:action="@{/executions/{id}/delete(id=${preview.execution().id})}">
+    <div class="actions">
+      <button class="button danger-solid" type="submit">Delete this backup</button>
+      <a class="button subtle"
+         th:href="@{/executions/{id}(id=${preview.execution().id})}">Cancel</a>
+    </div>
+  </form>
+
+</div>
+</body>
+</html>

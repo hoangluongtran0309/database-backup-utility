@@ -11,8 +11,8 @@ together. See [ROADMAP.md](ROADMAP.md) for what exists and what is next.
 ## What works today
 
 Registering a MySQL target, testing that it is reachable, running a full
-logical backup of it, restoring one of those backups, and reading the history
-of both. The target's
+logical backup of it, restoring one of those backups, downloading or deleting
+its artifact, and reading the history of all of it. The target's
 password is encrypted with AES-256-GCM before it is stored.
 
 Backups run in the background: starting one redirects to its detail page, which
@@ -24,8 +24,11 @@ schema and you type the target's name to proceed. It applies the dump rather
 than resetting the schema — tables the backup does not contain are left alone.
 See [ADR-007](docs/adr/007-restore-applies-a-dump-and-asks-first.md).
 
-Nothing deletes artifacts yet, so a target that has backups cannot be removed —
-that is deliberate, and lifts when artifact deletion arrives.
+Deleting a backup removes its file, its row and any restore records that refer
+to it — the confirmation page counts them first. A target can be removed once
+its backups are gone. Nothing is deleted automatically: there is no retention
+policy, so the backup directory grows until somebody prunes it. See
+[ADR-008](docs/adr/008-deleting-a-backup-takes-its-history-with-it.md).
 
 ## Running it
 

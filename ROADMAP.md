@@ -17,7 +17,7 @@ that needs it.
 - [x] **4. Compress the dump.** Stream `mysqldump` output through gzip.
 - [x] **5. Restore a backup into a target.** With an explicit overwrite
       confirmation, and a round-trip integration test.
-- [ ] **6. Download and delete artifacts.** Deleting an execution deletes its
+- [x] **6. Download and delete artifacts.** Deleting an execution deletes its
       file, which is also what makes a used target removable.
 - [ ] **7. Package.** One Dockerfile, one compose file, quickstart.
 

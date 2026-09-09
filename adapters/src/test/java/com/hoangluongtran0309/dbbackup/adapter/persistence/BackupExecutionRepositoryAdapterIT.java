@@ -137,15 +137,31 @@ class BackupExecutionRepositoryAdapterIT {
         assertThat(targets.findById(targetId)).isEmpty();
     }
 
-    private void deleteExecution(UUID id) {
-        // Only this test needs to remove executions; the application cannot yet,
-        // which is exactly why removing a target is refused above.
-        executionJpa.deleteById(id);
-        executionJpa.flush();
+    /**
+     * The chain the console walks an operator through: delete the backups, and
+     * only then can the target go.
+     */
+    @Test
+    void deletingTheBackupsIsWhatMakesTheTargetRemovable() {
+        BackupExecution backup = executions.save(
+                BackupExecution.started(UUID.randomUUID(), targetId, STARTED));
+        assertThatThrownBy(() -> targets.deleteById(targetId))
+                .isInstanceOf(TargetInUseException.class);
+
+        executions.deleteById(backup.getId());
+        targets.deleteById(targetId);
+
+        assertThat(targets.findById(targetId)).isEmpty();
     }
 
-    @Autowired
-    private BackupExecutionJpaRepository executionJpa;
+    @Test
+    void deletingAnUnknownExecutionIsNotAnError() {
+        executions.deleteById(UUID.randomUUID());
+    }
+
+    private void deleteExecution(UUID id) {
+        executions.deleteById(id);
+    }
 
     private static DatabaseTarget target(String name) {
         return DatabaseTarget.builder()

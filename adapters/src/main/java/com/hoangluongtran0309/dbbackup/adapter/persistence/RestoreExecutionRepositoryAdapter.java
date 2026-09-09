@@ -6,6 +6,7 @@ import java.util.UUID;
 
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.hoangluongtran0309.dbbackup.core.model.ExecutionStatus;
 import com.hoangluongtran0309.dbbackup.core.model.RestoreExecution;
@@ -45,6 +46,18 @@ class RestoreExecutionRepositoryAdapter implements RestoreExecutionRepository {
         return jpaRepository.findByStatus(ExecutionStatus.RUNNING).stream()
                 .map(RestoreExecutionRepositoryAdapter::toDomain)
                 .toList();
+    }
+
+    @Override
+    public long countForBackup(UUID backupExecutionId) {
+        return jpaRepository.countByBackupExecutionId(backupExecutionId);
+    }
+
+    @Override
+    @Transactional
+    public void deleteForBackup(UUID backupExecutionId) {
+        jpaRepository.deleteByBackupExecutionId(backupExecutionId);
+        jpaRepository.flush();
     }
 
     private static RestoreExecutionEntity toEntity(RestoreExecution execution) {
