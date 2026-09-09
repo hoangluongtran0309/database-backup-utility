@@ -35,7 +35,7 @@
             th:text="${backup == null ? '—'
                       : #temporals.format(backup.startedAt.atOffset(T(java.time.ZoneOffset).UTC),
                                           'yyyy-MM-dd HH:mm')}">…</td>
-        <td th:replace="~{fragments/execution-status :: statusBadge(${restore.status})}"></td>
+        <td th:insert="~{fragments/execution-status :: statusBadge(${restore.status})}"></td>
         <td class="row-actions">
           <a class="button" th:href="@{/restores/{id}(id=${restore.id})}">Details</a>
         </td>

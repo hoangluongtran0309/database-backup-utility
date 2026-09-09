@@ -30,7 +30,7 @@
                         'yyyy-MM-dd HH:mm:ss')} + ' UTC'">…</td>
         <!-- A target removed after the fact leaves its history readable. -->
         <td th:text="${targetNames.getOrDefault(execution.targetId, '(removed)')}">production</td>
-        <td th:replace="~{fragments/execution-status :: statusBadge(${execution.status})}"></td>
+        <td th:insert="~{fragments/execution-status :: statusBadge(${execution.status})}"></td>
         <td class="mono" th:text="${execution.sizeBytes != null ? execution.sizeBytes + ' B' : '—'}">—</td>
         <td class="row-actions">
           <a class="button" th:if="${execution.status.name() == 'SUCCEEDED'}"

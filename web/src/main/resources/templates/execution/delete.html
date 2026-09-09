@@ -32,7 +32,7 @@
                     'yyyy-MM-dd HH:mm:ss')} + ' UTC'">…</dd>
 
     <dt>Status</dt>
-    <dd th:replace="~{fragments/execution-status :: statusBadge(${preview.execution().status})}"></dd>
+    <dd th:insert="~{fragments/execution-status :: statusBadge(${preview.execution().status})}"></dd>
 
     <dt>Artifact</dt>
     <dd class="mono break"

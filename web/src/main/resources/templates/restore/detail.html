@@ -15,7 +15,7 @@
 
   <dl class="detail">
     <dt>Status</dt>
-    <dd th:replace="~{fragments/execution-status :: statusBadge(${restore.status})}"></dd>
+    <dd th:insert="~{fragments/execution-status :: statusBadge(${restore.status})}"></dd>
 
     <dt>Into target</dt>
     <dd th:text="${targetName != null ? targetName : '(removed)'}">production</dd>

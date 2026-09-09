@@ -29,7 +29,7 @@
         <td class="mono" th:text="${target.address}">127.0.0.1:3306/shop</td>
         <td class="mono" th:text="${target.username}">backup</td>
 
-        <td>
+        <td class="check">
           <span class="badge untested" th:unless="${target.hasBeenTested()}">Never tested</span>
           <th:block th:if="${target.hasBeenTested()}">
             <span class="badge ok" th:if="${target.lastConnectionCheck.successful}">Connected</span>
