@@ -2,9 +2,11 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    # Every branch GitFlow merges from, so a release branch is already proven
+    # before it reaches main. feature/* is covered by its pull request.
+    branches: [main, develop, 'release/*', 'hotfix/*']
   pull_request:
-    branches: [main]
+    branches: [main, develop]
 
 permissions:
   contents: read
