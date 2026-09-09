@@ -1,6 +1,11 @@
-# Local development dependencies. One service so far: the PostgreSQL instance
-# where this tool keeps its own metadata. The application itself still runs
-# from Maven at this point; it gets an image in the packaging slice.
+# Everything needed to run this tool: the application, and the PostgreSQL it
+# keeps its own metadata in. Nothing on the host but Docker.
+#
+#   echo "ENCRYPTION_SECRET_KEY=$(openssl rand -base64 32)" > .env
+#   docker compose up --build
+#
+# For local development against a Maven-run application, `docker compose up -d
+# postgres` starts just the metadata store.
 
 services:
   postgres:
@@ -20,5 +25,33 @@ services:
       timeout: 3s
       retries: 10
 
+  app:
+    build: .
+    container_name: dbbackup
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/dbbackup
+      DB_USERNAME: dbbackup
+      DB_PASSWORD: dbbackup
+      # No default. Starting without it fails loudly, which is the right
+      # outcome: a default key would mean every stored password is protected by
+      # a secret published in this repository.
+      ENCRYPTION_SECRET_KEY: ${ENCRYPTION_SECRET_KEY}
+    ports:
+      - "8080:8080"
+    volumes:
+      # Named, not bind-mounted: the artifacts outlive the container, and
+      # nothing about them belongs in the source tree.
+      - backups:/var/lib/dbbackup/backups
+    # A MySQL running on the host is reachable as host.docker.internal from
+    # inside this container. On Linux that name does not exist without this
+    # line; on Docker Desktop it is harmless.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
 volumes:
   postgres-data:
+  backups:

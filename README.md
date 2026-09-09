@@ -32,32 +32,43 @@ policy, so the backup directory grows until somebody prunes it. See
 
 ## Running it
 
+### With Docker — nothing else needed
+
+```bash
+echo "ENCRYPTION_SECRET_KEY=$(openssl rand -base64 32)" > .env
+docker compose up --build
+```
+
+Then open <http://localhost:8080>. The image carries the MySQL client tools, so
+the host needs only Docker.
+
+Keep that key. Passwords encrypted under one key cannot be read back under
+another, and there is no recovery path.
+
+A MySQL running on the Docker host is reachable from the container as
+`host.docker.internal` — use that as the target's host, not `localhost`.
+
+Backups live in a named volume, `backups`, so they survive the container. If the
+application will not start, `docker compose logs app` says why; note that with
+`restart: unless-stopped` a bad configuration shows as a restart loop while
+`docker compose ps` still reports `Up`.
+
+### From source
+
 Requires JDK 21, Maven, Docker, and the MySQL client binaries (`mysql` and
-`mysqldump`). The application drives those binaries directly and refuses to
-start if it cannot find them — see
+`mysqldump`) on the host — the application drives those directly and refuses to
+start if it cannot find them, see
 [ADR-003](docs/adr/003-shelling-out-to-the-mysql-client.md).
 
 ```bash
-# 1. Metadata store
 docker compose up -d postgres
-
-# 2. An encryption key: 32 bytes, Base64. Keep it — passwords encrypted under
-#    one key cannot be read back under another.
 export ENCRYPTION_SECRET_KEY=$(openssl rand -base64 32)
-
-# 3. Build the modules, then run the web module
 mvn -DskipTests install
 mvn -pl web spring-boot:run
 ```
 
 (`spring-boot:run` has to be aimed at `web` alone: pointed at the reactor it
 would also try to run the parent pom, which has no main class.)
-
-Then open <http://localhost:8080/databases>.
-
-The application refuses to start without `ENCRYPTION_SECRET_KEY`. That is
-deliberate: a default key would mean stored passwords are protected by a secret
-that is in the repository.
 
 ### Configuration
 
@@ -69,7 +80,7 @@ that is in the repository.
 | `DB_PASSWORD` | `dbbackup` | Metadata store password |
 | `MYSQL_CLIENT_PATH` | `/usr/bin/mysql` | The `mysql` client binary; checked for executability at startup |
 | `MYSQLDUMP_PATH` | `/usr/bin/mysqldump` | The `mysqldump` binary; likewise checked at startup |
-| `BACKUP_DIR` | `./backups` | Where dumps are written; created at startup. Relative, so it follows the working directory — `mvn -pl web spring-boot:run` puts it under `web/`. Set an absolute path for anything real. |
+| `BACKUP_DIR` | `./backups` | Where dumps are written; created at startup. Relative, so it follows the working directory — `mvn -pl web spring-boot:run` puts it under `web/`. The image sets it to `/var/lib/dbbackup/backups`. |
 | `JOB_CONCURRENCY` | `2` | How many backups and restores may run at once, together |
 | `JOB_QUEUE_CAPACITY` | `20` | Beyond this, a job is refused and recorded as failed |
 | `BACKUP_TIMEOUT` | `30m` | A dump running longer than this is killed |
