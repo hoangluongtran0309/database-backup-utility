@@ -1,0 +1,24 @@
+# Local development dependencies. One service so far: the PostgreSQL instance
+# where this tool keeps its own metadata. The application itself still runs
+# from Maven at this point; it gets an image in the packaging slice.
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: dbbackup-postgres
+    environment:
+      POSTGRES_DB: dbbackup
+      POSTGRES_USER: dbbackup
+      POSTGRES_PASSWORD: dbbackup
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dbbackup -d dbbackup"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  postgres-data:

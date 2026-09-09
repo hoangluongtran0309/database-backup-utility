@@ -1,0 +1,32 @@
+server:
+  servlet:
+    session:
+      # Cookie only. Without this Tomcat falls back to rewriting URLs with
+      # ;jsessionid= for the first request of a session, which puts the session
+      # identifier into browser history, logs and Referer headers.
+      tracking-modes: cookie
+
+spring:
+  application:
+    name: database-backup-utility
+
+  # PostgreSQL is where this tool keeps its own metadata. It is not, and is not
+  # yet, an engine that can be backed up — see docs/architecture/overview.md.
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/dbbackup}
+    username: ${DB_USERNAME:dbbackup}
+    password: ${DB_PASSWORD:dbbackup}
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      # Flyway owns the schema. Hibernate only checks that the mapping still
+      # matches it, and refuses to start when a migration is missing.
+      ddl-auto: validate
+
+dbbackup:
+  encryption:
+    # 32 bytes, Base64 encoded: openssl rand -base64 32
+    # No default. Starting without it must fail loudly rather than silently
+    # protect stored passwords with a key everyone knows.
+    key: ${ENCRYPTION_SECRET_KEY:}

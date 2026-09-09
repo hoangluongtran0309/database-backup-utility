@@ -1,0 +1,11 @@
+<!--
+  Rendering per-field errors through a fragment rather than th:errors, because
+  th:errors needs a literal field name and this takes the name as a parameter.
+-->
+<div xmlns:th="http://www.thymeleaf.org">
+  <p class="field-error" role="alert"
+     th:fragment="fieldError(field)"
+     th:if="${#fields.hasErrors(field)}">
+    <span th:each="err : ${#fields.errors(field)}" th:text="${err}"></span>
+  </p>
+</div>

@@ -1,0 +1,16 @@
+target/
+!.mvn/wrapper/maven-wrapper.jar
+
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+
+*.log
+.DS_Store
+
+# Never commit a real encryption key or datasource password.
+.env
+.env.local

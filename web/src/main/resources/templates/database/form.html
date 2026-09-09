@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout/base :: page('Add target', ~{:: #content})}">
+<body>
+<div id="content">
+
+  <div class="page-head">
+    <h1>Add a backup target</h1>
+  </div>
+
+  <form class="card" method="post" th:action="@{/databases}" th:object="${form}">
+
+    <div th:replace="~{fragments/form-errors :: formErrors}"></div>
+
+    <label for="name">Name</label>
+    <input id="name" type="text" th:field="*{name}" autofocus
+           aria-describedby="name-help" placeholder="production shop db">
+    <p class="help" id="name-help">How this target is listed. Must be unique.</p>
+    <div th:replace="~{fragments/field-error :: fieldError('name')}"></div>
+
+    <div class="row">
+      <div class="grow">
+        <label for="host">Host</label>
+        <input id="host" type="text" th:field="*{host}" placeholder="127.0.0.1">
+        <div th:replace="~{fragments/field-error :: fieldError('host')}"></div>
+      </div>
+      <div class="port">
+        <label for="port">Port</label>
+        <input id="port" type="number" min="1" max="65535" th:field="*{port}">
+        <div th:replace="~{fragments/field-error :: fieldError('port')}"></div>
+      </div>
+    </div>
+
+    <label for="database">Database</label>
+    <input id="database" type="text" th:field="*{database}" placeholder="shop">
+    <div th:replace="~{fragments/field-error :: fieldError('database')}"></div>
+
+    <label for="username">Username</label>
+    <input id="username" type="text" th:field="*{username}" autocomplete="off">
+    <div th:replace="~{fragments/field-error :: fieldError('username')}"></div>
+
+    <label for="password">Password</label>
+    <input id="password" type="password" th:field="*{password}"
+           autocomplete="new-password" aria-describedby="password-help">
+    <p class="help" id="password-help">Encrypted before it is stored, and never shown again.</p>
+    <div th:replace="~{fragments/field-error :: fieldError('password')}"></div>
+
+    <div class="actions">
+      <button class="button primary" type="submit">Register target</button>
+      <a class="button subtle" th:href="@{/databases}">Cancel</a>
+    </div>
+  </form>
+
+</div>
+</body>
+</html>

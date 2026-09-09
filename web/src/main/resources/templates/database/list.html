@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout/base :: page('Targets', ~{:: #content})}">
+<body>
+<div id="content">
+
+  <div class="page-head">
+    <h1>Backup targets</h1>
+    <a class="button" th:href="@{/databases/new}">Add target</a>
+  </div>
+
+  <p class="empty" th:if="${targets.isEmpty()}">
+    No targets yet. Add one to get started.
+  </p>
+
+  <table class="targets" th:unless="${targets.isEmpty()}">
+    <thead>
+      <tr>
+        <th scope="col">Name</th>
+        <th scope="col">Address</th>
+        <th scope="col">User</th>
+        <th scope="col"><span class="visually-hidden">Actions</span></th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr th:each="target : ${targets}">
+        <td th:text="${target.name}">prod</td>
+        <td class="mono" th:text="${target.address}">127.0.0.1:3306/shop</td>
+        <td class="mono" th:text="${target.username}">backup</td>
+        <td class="row-actions">
+          <form method="post" th:action="@{/databases/{id}/delete(id=${target.id})}">
+            <button class="button danger" type="submit">Remove</button>
+          </form>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+</div>
+</body>
+</html>

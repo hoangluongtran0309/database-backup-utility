@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org" th:fragment="page(title, content)">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title th:text="|${title} · dbbackup|">dbbackup</title>
+  <link rel="stylesheet" th:href="@{/css/app.css}">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" th:href="@{/databases}">dbbackup</a>
+    <span class="tagline">MySQL logical backup</span>
+  </header>
+
+  <main>
+    <p class="flash" role="status" th:if="${message}" th:text="${message}"></p>
+    <th:block th:replace="${content}"></th:block>
+  </main>
+</body>
+</html>

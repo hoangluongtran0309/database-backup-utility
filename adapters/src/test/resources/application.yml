@@ -1,0 +1,8 @@
+# The datasource is supplied per test class from the Testcontainers instance.
+dbbackup:
+  encryption:
+    key: ZGJiYWNrdXAtaW50ZWdyYXRpb24tdGVzdC1rZXktMzI=
+
+logging:
+  level:
+    org.hibernate.SQL: warn
