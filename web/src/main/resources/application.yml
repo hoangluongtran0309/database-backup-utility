@@ -30,9 +30,24 @@ dbbackup:
     # stops startup rather than surfacing later as a puzzling connection
     # failure.
     client-path: ${MYSQL_CLIENT_PATH:/usr/bin/mysql}
-    # Passed to the client as --connect-timeout, so an unreachable host fails
+    dump-path: ${MYSQLDUMP_PATH:/usr/bin/mysqldump}
+    # Passed to the clients as --connect-timeout, so an unreachable host fails
     # in seconds instead of holding the request open.
     connect-timeout: 10s
+
+  backup:
+    # How many dumps may run at once. Each is a child process competing for the
+    # same disk, so more is not faster.
+    concurrency: ${BACKUP_CONCURRENCY:2}
+    # Beyond this the pool refuses the work and the execution is recorded as
+    # failed, rather than the queue growing without limit.
+    queue-capacity: ${BACKUP_QUEUE_CAPACITY:20}
+    # Backstop for a dump that hangs; the child is killed after this.
+    timeout: ${BACKUP_TIMEOUT:30m}
+
+  storage:
+    local:
+      root: ${BACKUP_DIR:./backups}
 
   encryption:
     # 32 bytes, Base64 encoded: openssl rand -base64 32

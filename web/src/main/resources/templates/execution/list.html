@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout/base :: page('Backups', ~{:: #content})}">
+<body>
+<div id="content">
+
+  <div class="page-head">
+    <h1>Backups</h1>
+  </div>
+
+  <p class="empty" th:if="${executions.isEmpty()}">
+    No backups yet. Start one from a target.
+  </p>
+
+  <table class="targets" th:unless="${executions.isEmpty()}">
+    <thead>
+      <tr>
+        <th scope="col">Started</th>
+        <th scope="col">Target</th>
+        <th scope="col">Status</th>
+        <th scope="col">Size</th>
+        <th scope="col"><span class="visually-hidden">Actions</span></th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr th:each="execution : ${executions}">
+        <td class="mono"
+            th:text="${#temporals.format(
+                        execution.startedAt.atOffset(T(java.time.ZoneOffset).UTC),
+                        'yyyy-MM-dd HH:mm:ss')} + ' UTC'">…</td>
+        <!-- A target removed after the fact leaves its history readable. -->
+        <td th:text="${targetNames.getOrDefault(execution.targetId, '(removed)')}">production</td>
+        <td th:replace="~{fragments/execution-status :: statusBadge(${execution.status})}"></td>
+        <td class="mono" th:text="${execution.sizeBytes != null ? execution.sizeBytes + ' B' : '—'}">—</td>
+        <td class="row-actions">
+          <a class="button" th:href="@{/executions/{id}(id=${execution.id})}">Details</a>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+</div>
+</body>
+</html>

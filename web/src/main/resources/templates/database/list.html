@@ -53,6 +53,9 @@
           <form method="post" th:action="@{/databases/{id}/test(id=${target.id})}">
             <button class="button" type="submit">Test</button>
           </form>
+          <form method="post" th:action="@{/databases/{id}/backup(id=${target.id})}">
+            <button class="button primary" type="submit">Back up now</button>
+          </form>
           <form method="post" th:action="@{/databases/{id}/delete(id=${target.id})}">
             <button class="button danger" type="submit">Remove</button>
           </form>

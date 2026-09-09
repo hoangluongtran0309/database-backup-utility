@@ -24,9 +24,11 @@ import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import com.hoangluongtran0309.dbbackup.application.backup.RunBackupService;
 import com.hoangluongtran0309.dbbackup.application.target.ManageDatabaseTargetService;
 import com.hoangluongtran0309.dbbackup.application.target.TestTargetConnectionService;
 import com.hoangluongtran0309.dbbackup.core.exception.DuplicateTargetNameException;
+import com.hoangluongtran0309.dbbackup.core.exception.TargetInUseException;
 import com.hoangluongtran0309.dbbackup.core.model.ConnectionCheck;
 import com.hoangluongtran0309.dbbackup.core.model.DatabaseTarget;
 
@@ -43,6 +45,9 @@ class DatabaseTargetControllerTest {
 
     @MockitoBean
     private TestTargetConnectionService connectionTest;
+
+    @MockitoBean
+    private RunBackupService backups;
 
     @Test
     void listsTargets() throws Exception {
@@ -197,6 +202,45 @@ class DatabaseTargetControllerTest {
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrl("/databases"))
                 .andExpect(flash().attribute("error", "That target no longer exists"));
+    }
+
+    /**
+     * The redirect goes to the execution, not back to the list: the row exists
+     * before the dump starts, so there is always somewhere to send the browser.
+     */
+    @Test
+    void startingABackupRedirectsToTheNewExecution() throws Exception {
+        UUID targetId = UUID.randomUUID();
+        UUID executionId = UUID.randomUUID();
+        when(backups.start(targetId)).thenReturn(executionId);
+
+        mockMvc.perform(post("/databases/{id}/backup", targetId))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/executions/" + executionId));
+    }
+
+    @Test
+    void startingABackupForATargetDeletedInAnotherTabDoesNotBlowUp() throws Exception {
+        UUID targetId = UUID.randomUUID();
+        when(backups.start(targetId)).thenThrow(new NoSuchElementException("gone"));
+
+        mockMvc.perform(post("/databases/{id}/backup", targetId))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/databases"))
+                .andExpect(flash().attribute("error", "That target no longer exists"));
+    }
+
+    @Test
+    void refusingToRemoveATargetWithBackupsIsReportedNotThrown() throws Exception {
+        UUID targetId = UUID.randomUUID();
+        org.mockito.Mockito.doThrow(new TargetInUseException("production"))
+                .when(service).delete(targetId);
+
+        mockMvc.perform(post("/databases/{id}/delete", targetId))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/databases"))
+                .andExpect(flash().attribute("error",
+                        org.hamcrest.Matchers.containsString("still has backups")));
     }
 
     @Test

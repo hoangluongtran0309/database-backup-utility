@@ -11,6 +11,13 @@ target/
 *.log
 .DS_Store
 
+# Default dbbackup.storage.local.root — real dumps, never commit them.
+# Not anchored to the repository root: `./backups` resolves against whatever
+# working directory the process has, and `mvn -pl web spring-boot:run` puts it
+# under web/. A production deployment sets BACKUP_DIR to an absolute path
+# outside the checkout.
+backups/
+
 # Never commit a real encryption key or datasource password.
 .env
 .env.local
