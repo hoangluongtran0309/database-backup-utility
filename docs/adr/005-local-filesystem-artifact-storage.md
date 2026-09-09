@@ -1,6 +1,6 @@
 # ADR-005: Artifacts on the local filesystem, written by mysqldump itself
 
-**Status**: Accepted
+**Status**: Accepted, with the `--result-file` decision superseded by [ADR-006](006-gzip-the-dump-as-it-is-written.md)
 **Date**: 2026-09
 **Related**: [ADR-003](003-shelling-out-to-the-mysql-client.md), [ADR-004](004-persist-the-execution-before-running-it.md)
 
@@ -15,8 +15,11 @@ One directory on the local filesystem, behind `StoragePort`, configured by
 `dbbackup.storage.local.root` and created and checked for writability at
 startup.
 
-`mysqldump --result-file=<path>` writes the file itself. The JVM never sees the
-dump's bytes.
+~~`mysqldump --result-file=<path>` writes the file itself. The JVM never sees
+the dump's bytes.~~ Superseded by
+[ADR-006](006-gzip-the-dump-as-it-is-written.md): the dump is streamed from
+stdout through gzip instead, which `--result-file` makes impossible. Everything
+else here still holds.
 
 Artifacts are named `<schema>_<yyyyMMdd_HHmmss UTC>.sql`, with the schema name
 sanitised to `[a-zA-Z0-9._-]`.
@@ -25,11 +28,13 @@ A failed dump deletes its own partial file before reporting the failure.
 
 ## Rationale
 
-**Why `--result-file` rather than reading stdout.** Streaming the dump through
-the JVM would put a multi-gigabyte schema through the heap for no benefit, and
-add a second place where a copy could be truncated. stderr is still drained
-concurrently by `ProcessRunner`, which is what keeps a chatty warning from
-filling its pipe and stalling the child.
+**Why `--result-file` rather than reading stdout.** *(Superseded — see
+[ADR-006](006-gzip-the-dump-as-it-is-written.md).)* Streaming the dump through
+the JVM would put a multi-gigabyte schema through the heap for no benefit.
+The part of this that was right is narrower than it was written: buffering a
+dump in memory would be fatal, copying it through a fixed buffer is not. stderr
+is still drained concurrently by `ProcessRunner`, which is what keeps a chatty
+warning from filling its pipe and stalling the child.
 
 **Why the partial file is deleted.** A truncated dump is worse than no dump at
 all: it is the right size to look plausible and restores as silent, partial data

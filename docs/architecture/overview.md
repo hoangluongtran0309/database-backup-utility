@@ -73,6 +73,12 @@ once:
   this with half a megabyte on each stream, and runs on a separate thread so a
   reintroduced deadlock fails the build instead of hanging it.
 - **Every command has a timeout**, after which the child is forcibly killed.
+- **Output too large for memory is streamed.** `runStreaming` copies stdout into
+  a caller-supplied sink through a fixed buffer, so a dump costs the same heap
+  whatever its size. The sink is flushed but never closed — a
+  `GZIPOutputStream`'s trailer is written on close, and that belongs to whoever
+  opened it. If the sink cannot be written to, the child is killed at once
+  rather than left blocked on a pipe until the timeout.
 - **Credentials travel in `ProcessBuilder.environment()`** as `MYSQL_PWD`. Never
   on the command line, where `ps` shows them to every user on the host, and
   never through `System.setProperty`, which is JVM-global and would leak between
@@ -97,8 +103,10 @@ are separate on purpose — see
    `@Transactional`: the row has to be visible to the background thread, which
    reads it through a different connection.
 2. **Running.** The pooled thread decrypts the password, asks `StoragePort`
-   where the artifact goes, runs `mysqldump`, and writes the outcome onto the
-   same row.
+   where the artifact goes, runs `mysqldump` with its stdout gzipped straight
+   to that file, and writes the outcome onto the same row. Artifacts are
+   `<schema>_<timestamp>.sql.gz` — see
+   [ADR-006](../adr/006-gzip-the-dump-as-it-is-written.md).
 
 The pool is bounded on both axes. A full queue is refused and recorded as a
 failed execution rather than growing without limit, because every running
