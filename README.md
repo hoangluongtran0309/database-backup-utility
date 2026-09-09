@@ -63,7 +63,15 @@ mvn verify   # adds the integration tests, which need Docker
 Testcontainers. H2 is not used anywhere, and no test skips itself when something
 it needs is missing.
 
+## Working on it
+
+The repository follows GitFlow: `develop` integrates, `main` holds only tagged
+releases, and neither is committed to directly. See
+[docs/branching.md](docs/branching.md) for the branch names and the release and
+hotfix procedures.
+
 ## Documentation
 
 - [docs/architecture/overview.md](docs/architecture/overview.md) — modules and dependency direction
+- [docs/branching.md](docs/branching.md) — branching model
 - [docs/adr/](docs/adr/) — decisions and what they cost
