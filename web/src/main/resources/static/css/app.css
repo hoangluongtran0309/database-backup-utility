@@ -33,9 +33,10 @@ body {
   border-bottom: 1px solid var(--border);
 }
 .brand { font-weight: 600; text-decoration: none; color: var(--text); }
-.tagline { color: var(--muted); font-size: .85rem; }
+/* Pushed to the far end so it does not read as one more nav item. */
+.tagline { margin-left: auto; color: var(--muted); font-size: .85rem; }
 
-main { max-width: 52rem; margin: 0 auto; padding: 1.75rem 1.5rem 4rem; }
+main { max-width: 64rem; margin: 0 auto; padding: 1.75rem 1.5rem 4rem; }
 
 .page-head {
   display: flex;
@@ -78,6 +79,9 @@ table.targets {
 }
 .targets th { font-size: .78rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
 .targets tr:last-child td { border-bottom: 0; }
+.targets td { vertical-align: top; }
+/* An address is one token; wrapping it mid-host helps nobody. */
+.targets td.mono { white-space: nowrap; }
 .row-actions { text-align: right; }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .88rem; }
 
@@ -122,6 +126,8 @@ table.targets {
 
 .button {
   display: inline-block;
+  /* Labels are short; breaking "Back up now" over three lines is never right. */
+  white-space: nowrap;
   padding: .45rem .85rem;
   font: inherit;
   text-decoration: none;
@@ -164,12 +170,16 @@ table.targets {
 .badge.failed   { background: var(--err-bg); border-color: var(--err-border); color: var(--danger); }
 .badge.untested { background: var(--bg);     border-color: var(--border);     color: var(--muted); }
 
-.checked-at { margin-left: .4rem; font-size: .78rem; color: var(--muted); }
+.checked-at { margin-left: .4rem; font-size: .78rem; color: var(--muted); white-space: nowrap; }
+
+/* MySQL's errors are long. Give the column room rather than letting it collapse
+   to one word per line next to a wide address. */
+.targets td.check { min-width: 17rem; }
 
 /* MySQL's own error text. Long, and allowed to wrap rather than be clipped. */
 .check-message {
   margin: .3rem 0 0;
-  max-width: 22rem;
+  max-width: 30rem;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: .78rem;
   color: var(--danger);
@@ -177,6 +187,9 @@ table.targets {
 }
 
 .row-actions { display: flex; gap: .4rem; justify-content: flex-end; }
+
+/* The status column is a badge, not a stretched block. */
+.detail dd > .badge { justify-self: start; }
 
 /* --- backups --- */
 
