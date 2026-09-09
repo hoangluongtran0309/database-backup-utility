@@ -82,7 +82,7 @@ class BackupExecutionControllerTest {
         mockMvc.perform(get("/executions/{id}", execution.getId()))
                 .andExpect(status().isOk())
                 .andExpect(view().name("execution/detail"))
-                .andExpect(content().string(containsString("/backups/shop_20260909_100000.sql")))
+                .andExpect(content().string(containsString("/backups/shop_20260909_100000.sql.gz")))
                 .andExpect(content().string(containsString("8192 bytes")));
     }
 
@@ -116,7 +116,7 @@ class BackupExecutionControllerTest {
 
     private static BackupExecution succeeded() {
         return BackupExecution.started(UUID.randomUUID(), TARGET_ID, STARTED)
-                .succeeded("/backups/shop_20260909_100000.sql", 8192L, STARTED.plusSeconds(90));
+                .succeeded("/backups/shop_20260909_100000.sql.gz", 8192L, STARTED.plusSeconds(90));
     }
 
     private static DatabaseTarget target() {

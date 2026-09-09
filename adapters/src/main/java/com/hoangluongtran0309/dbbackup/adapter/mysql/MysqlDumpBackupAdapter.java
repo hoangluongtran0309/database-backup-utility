@@ -1,12 +1,15 @@
 package com.hoangluongtran0309.dbbackup.adapter.mysql;
 
+import java.io.BufferedOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.zip.GZIPOutputStream;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -19,13 +22,20 @@ import com.hoangluongtran0309.dbbackup.core.port.MysqlLogicalBackupPort;
 /**
  * Produces a logical dump by running {@code mysqldump}.
  *
- * <p>{@code --result-file} is used rather than capturing stdout: the dump never
- * passes through the JVM, so a multi-gigabyte schema costs no heap. stderr is
- * still drained concurrently by {@link ProcessRunner}, which is what keeps a
- * chatty warning from filling its pipe and stalling the child.
+ * <p>The dump is read from the child's stdout and gzipped straight to disk as
+ * it arrives, so it is never held in memory whatever its size. stderr is
+ * drained concurrently by {@link ProcessRunner}, which is what keeps a chatty
+ * warning from filling its pipe and stalling the child.
  */
 @Component
 class MysqlDumpBackupAdapter implements MysqlLogicalBackupPort {
+
+    /**
+     * Bigger than {@link GZIPOutputStream}'s 512-byte default. A dump is one
+     * long sequential write and this is the whole cost of not doing it in
+     * half-kilobyte pieces.
+     */
+    private static final int GZIP_BUFFER_BYTES = 64 * 1024;
 
     private final ProcessRunner processRunner;
     private final Path binary;
@@ -44,11 +54,21 @@ class MysqlDumpBackupAdapter implements MysqlLogicalBackupPort {
     @Override
     public long dumpTo(MysqlConnection connection, Path destination) {
         ProcessRunner.Result result;
-        try {
-            result = processRunner.run(
-                    command(connection, destination),
+
+        // The gzip trailer is written when this stream closes, so the file is
+        // only a valid archive once the block has exited. Everything that
+        // inspects or deletes it therefore happens afterwards.
+        try (OutputStream out = new GZIPOutputStream(
+                new BufferedOutputStream(Files.newOutputStream(destination)), GZIP_BUFFER_BYTES)) {
+
+            result = processRunner.runStreaming(
+                    command(connection),
                     Map.of("MYSQL_PWD", connection.password()),
-                    timeout);
+                    timeout,
+                    out);
+
+        } catch (IOException e) {
+            throw failed(destination, "Could not write '%s': %s".formatted(destination, e.getMessage()));
         } catch (ProcessRunner.ProcessFailedException e) {
             throw failed(destination, e.getMessage());
         }
@@ -60,7 +80,7 @@ class MysqlDumpBackupAdapter implements MysqlLogicalBackupPort {
         return sizeOf(destination);
     }
 
-    List<String> command(MysqlConnection connection, Path destination) {
+    List<String> command(MysqlConnection connection) {
         return List.of(
                 binary.toString(),
                 // See MysqlClient: a literal "localhost" makes the client use a
@@ -80,7 +100,8 @@ class MysqlDumpBackupAdapter implements MysqlLogicalBackupPort {
                 // Otherwise the dump begins with SET @@GLOBAL.GTID_PURGED,
                 // which restore cannot execute without SUPER.
                 "--set-gtid-purged=OFF",
-                "--result-file=" + destination,
+                // No --result-file: the dump goes to stdout so it can be
+                // compressed on the way past. See ADR-006.
                 // Positional, not --databases: that keeps CREATE DATABASE and
                 // USE out of the dump, so it can be restored into a schema
                 // with a different name.
@@ -89,7 +110,9 @@ class MysqlDumpBackupAdapter implements MysqlLogicalBackupPort {
 
     /**
      * A partial dump is worse than no dump: it looks like a backup and restores
-     * as silent data loss. The file goes before the exception does.
+     * as silent data loss. With gzip it is worse still — a truncated archive
+     * has no trailer, so it fails to decompress at exactly the moment someone
+     * needs it. The file goes before the exception does.
      */
     private BackupFailedException failed(Path destination, String message) {
         try {

@@ -129,11 +129,11 @@ public class RunBackupService {
     }
 
     /**
-     * {@code shop_20260909_075300.sql}. The schema name is sanitised because it
-     * comes from user input and is about to become a file name.
+     * {@code shop_20260909_075300.sql.gz}. The schema name is sanitised because
+     * it comes from user input and is about to become a file name.
      */
     static String artifactFileName(DatabaseTarget target, Instant startedAt) {
         String schema = target.getDatabaseName().replaceAll("[^a-zA-Z0-9._-]", "_");
-        return "%s_%s.sql".formatted(schema, TIMESTAMP.format(startedAt));
+        return "%s_%s.sql.gz".formatted(schema, TIMESTAMP.format(startedAt));
     }
 }

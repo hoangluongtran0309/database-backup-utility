@@ -3,13 +3,22 @@ package com.hoangluongtran0309.dbbackup.adapter.process;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.zip.GZIPInputStream;
+import java.util.zip.GZIPOutputStream;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.Timeout.ThreadMode;
+import org.junit.jupiter.api.io.TempDir;
 
 /**
  * Uses real child processes — {@code /bin/sh} and friends are as much a part of
@@ -110,6 +119,113 @@ class ProcessRunnerTest {
 
         assertThat(result.stdout()).isEqualTo("a; rm -rf / b\n");
     }
+
+    // --- streaming stdout ---------------------------------------------------
+
+    @Test
+    void streamsStdoutIntoTheSinkInsteadOfCapturingIt() {
+        ByteArrayOutputStream sink = new ByteArrayOutputStream();
+
+        ProcessRunner.Result result = runner.runStreaming(
+                List.of("/bin/sh", "-c", "echo hello"), Map.of(), Duration.ofSeconds(5), sink);
+
+        assertThat(sink.toString(StandardCharsets.UTF_8)).isEqualTo("hello\n");
+        assertThat(result.stdout()).isEmpty();
+        assertThat(result.succeeded()).isTrue();
+    }
+
+    /**
+     * Ten megabytes is far more than a pipe buffer and far more than anything
+     * that should sit in a String. A truncated copy here would be a silently
+     * corrupt backup.
+     */
+    @Test
+    @Timeout(value = 60, threadMode = ThreadMode.SEPARATE_THREAD)
+    void streamsOutputFarLargerThanMemoryWouldWantWithoutTruncating() {
+        ByteArrayOutputStream sink = new ByteArrayOutputStream();
+
+        ProcessRunner.Result result = runner.runStreaming(
+                List.of("/bin/sh", "-c", "yes payload 2>/dev/null | head -c 10000000"),
+                Map.of(), Duration.ofSeconds(50), sink);
+
+        assertThat(sink.size()).isEqualTo(10_000_000);
+        assertThat(result.succeeded()).isTrue();
+    }
+
+    /** stderr still has to be drained while stdout is being streamed. */
+    @Test
+    @Timeout(value = 60, threadMode = ThreadMode.SEPARATE_THREAD)
+    void doesNotDeadlockWhenStreamingStdoutAndStderrIsAlsoLarge() {
+        ByteArrayOutputStream sink = new ByteArrayOutputStream();
+
+        ProcessRunner.Result result = runner.runStreaming(
+                List.of("/bin/sh", "-c",
+                        "yes out 2>/dev/null | head -c 500000; "
+                                + "yes err 2>/dev/null | head -c 500000 >&2"),
+                Map.of(), Duration.ofSeconds(50), sink);
+
+        assertThat(sink.size()).isEqualTo(500_000);
+        assertThat(result.stderr()).hasSize(500_000);
+    }
+
+    @Test
+    void streamingStillReportsANonZeroExitAndItsStderr() {
+        ByteArrayOutputStream sink = new ByteArrayOutputStream();
+
+        ProcessRunner.Result result = runner.runStreaming(
+                List.of("/bin/sh", "-c", "echo partial; echo boom >&2; exit 4"),
+                Map.of(), Duration.ofSeconds(5), sink);
+
+        assertThat(result.exitCode()).isEqualTo(4);
+        assertThat(result.errorOutput()).isEqualTo("boom");
+        assertThat(sink.toString(StandardCharsets.UTF_8)).isEqualTo("partial\n");
+    }
+
+    /**
+     * A full disk during a backup. Without killing the child it would block on
+     * a pipe nobody is draining until the timeout — half an hour, by default.
+     */
+    @Test
+    @Timeout(value = 30, threadMode = ThreadMode.SEPARATE_THREAD)
+    void killsTheChildAtOnceWhenTheSinkCannotBeWrittenTo() {
+        OutputStream broken = new OutputStream() {
+            @Override
+            public void write(int b) throws IOException {
+                throw new IOException("No space left on device");
+            }
+
+            @Override
+            public void write(byte[] b, int off, int len) throws IOException {
+                throw new IOException("No space left on device");
+            }
+        };
+
+        assertThatThrownBy(() -> runner.runStreaming(
+                List.of("/bin/sh", "-c", "yes 2>/dev/null | head -c 5000000; sleep 60"),
+                Map.of(), Duration.ofSeconds(25), broken))
+                .isInstanceOf(ProcessRunner.ProcessFailedException.class)
+                .hasMessageContaining("No space left on device");
+    }
+
+    @Test
+    void doesNotCloseTheSinkSoAGzipTrailerIsTheCallersToWrite(@TempDir Path dir) throws Exception {
+        Path archive = dir.resolve("out.gz");
+
+        try (OutputStream gzip = new GZIPOutputStream(Files.newOutputStream(archive))) {
+            runner.runStreaming(
+                    List.of("/bin/sh", "-c", "echo compressed payload"),
+                    Map.of(), Duration.ofSeconds(5), gzip);
+            // Still open here: had runStreaming closed it, the close above
+            // would throw and the archive would have no trailer.
+        }
+
+        try (var in = new GZIPInputStream(Files.newInputStream(archive))) {
+            assertThat(new String(in.readAllBytes(), StandardCharsets.UTF_8))
+                    .isEqualTo("compressed payload\n");
+        }
+    }
+
+    // --- result shape -------------------------------------------------------
 
     @Test
     void errorOutputFallsBackToStdoutWhenStderrIsEmpty() {

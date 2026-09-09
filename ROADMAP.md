@@ -14,7 +14,7 @@ that needs it.
 - [x] **3. Run a full logical backup.** `mysqldump` to local disk, execution
       history, started in the background so a long dump does not hold an HTTP
       request open.
-- [ ] **4. Compress the dump.** Stream `mysqldump` output through gzip.
+- [x] **4. Compress the dump.** Stream `mysqldump` output through gzip.
 - [ ] **5. Restore a backup into a target.** With an explicit overwrite
       confirmation, and a round-trip integration test.
 - [ ] **6. Download and delete artifacts.** Deleting an execution deletes its

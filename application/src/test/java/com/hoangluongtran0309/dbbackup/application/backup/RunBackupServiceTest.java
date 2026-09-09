@@ -47,7 +47,7 @@ class RunBackupServiceTest {
 
     private static final Instant NOW = Instant.parse("2026-09-09T10:15:30Z");
     private static final UUID TARGET_ID = UUID.randomUUID();
-    private static final Path ARTIFACT = Path.of("/backups/shop_20260909_101530.sql");
+    private static final Path ARTIFACT = Path.of("/backups/shop_20260909_101530.sql.gz");
 
     @Mock private DatabaseTargetRepository targets;
     @Mock private BackupExecutionRepository executions;
@@ -158,7 +158,7 @@ class RunBackupServiceTest {
         givenTarget();
         givenSaveEchoes();
         when(encryption.decrypt("sealed")).thenReturn("s3cr3t");
-        when(storage.locationFor("shop_20260909_101530.sql")).thenReturn(ARTIFACT);
+        when(storage.locationFor("shop_20260909_101530.sql.gz")).thenReturn(ARTIFACT);
         when(backupEngine.dumpTo(any(), eq(ARTIFACT))).thenReturn(8192L);
 
         runQueuedWork(service.start(TARGET_ID));
@@ -250,7 +250,7 @@ class RunBackupServiceTest {
     @Test
     void namesTheArtifactAfterTheSchemaAndTheUtcStartTime() {
         assertThat(RunBackupService.artifactFileName(target("shop"), NOW))
-                .isEqualTo("shop_20260909_101530.sql");
+                .isEqualTo("shop_20260909_101530.sql.gz");
     }
 
     /** The schema name is typed by a user and is about to become a file name. */
@@ -258,14 +258,14 @@ class RunBackupServiceTest {
     void sanitisesASchemaNameThatWouldEscapeTheStorageDirectory() {
         // Dots survive, separators do not, so the result is still a bare name.
         assertThat(RunBackupService.artifactFileName(target("../../etc"), NOW))
-                .isEqualTo(".._.._etc_20260909_101530.sql")
+                .isEqualTo(".._.._etc_20260909_101530.sql.gz")
                 .doesNotContain("/");
     }
 
     @Test
     void sanitisesSpacesAndQuotesInASchemaName() {
         assertThat(RunBackupService.artifactFileName(target("my db'; drop"), NOW))
-                .isEqualTo("my_db___drop_20260909_101530.sql");
+                .isEqualTo("my_db___drop_20260909_101530.sql.gz");
     }
 
     // --- helpers ------------------------------------------------------------

@@ -3,9 +3,13 @@ package com.hoangluongtran0309.dbbackup.adapter.mysql;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.zip.GZIPInputStream;
 
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -60,19 +64,50 @@ class MysqlDumpBackupAdapterIT {
 
     @Test
     void writesADumpContainingTheSchemaAndTheRows() throws Exception {
-        Path destination = outputDir.resolve("shop.sql");
+        Path destination = outputDir.resolve("shop.sql.gz");
 
         long sizeBytes = adapter.dumpTo(connection("backup", "s3cr3t"), destination);
 
         assertThat(destination).exists();
         assertThat(sizeBytes).isEqualTo(Files.size(destination)).isPositive();
 
-        String dump = Files.readString(destination);
+        String dump = gunzip(destination);
         assertThat(dump)
                 .contains("CREATE TABLE `orders`")
                 .contains("Ada Lovelace")
-                .contains("O''Brien".replace("''", "\\'"))
+                .contains("O\\'Brien")
                 .contains("recent_orders");
+    }
+
+    /**
+     * The gzip trailer is only written when the stream closes, so a dump that
+     * is merely "written" is not necessarily readable. Decompressing the whole
+     * file is the only assertion that proves it.
+     */
+    @Test
+    void theArtifactIsAValidGzipArchive() throws Exception {
+        Path destination = outputDir.resolve("shop.sql.gz");
+
+        adapter.dumpTo(connection("backup", "s3cr3t"), destination);
+
+        byte[] header = new byte[2];
+        try (InputStream in = Files.newInputStream(destination)) {
+            assertThat(in.read(header)).isEqualTo(2);
+        }
+        // 0x1f 0x8b — the gzip magic number.
+        assertThat(header).containsExactly((byte) 0x1f, (byte) 0x8b);
+        assertThat(gunzip(destination)).startsWith("-- MySQL dump");
+    }
+
+    /** Compression has to be worth doing; SQL text is extremely compressible. */
+    @Test
+    void theArchiveIsSubstantiallySmallerThanTheDumpItHolds() throws Exception {
+        Path destination = outputDir.resolve("shop.sql.gz");
+
+        long compressed = adapter.dumpTo(connection("backup", "s3cr3t"), destination);
+        long uncompressed = gunzip(destination).getBytes(StandardCharsets.UTF_8).length;
+
+        assertThat(compressed).isLessThan(uncompressed);
     }
 
     /**
@@ -82,11 +117,11 @@ class MysqlDumpBackupAdapterIT {
      */
     @Test
     void theDumpDoesNotHardcodeTheSourceSchemaName() throws Exception {
-        Path destination = outputDir.resolve("shop.sql");
+        Path destination = outputDir.resolve("shop.sql.gz");
 
         adapter.dumpTo(connection("backup", "s3cr3t"), destination);
 
-        assertThat(Files.readString(destination))
+        assertThat(gunzip(destination))
                 .doesNotContain("CREATE DATABASE")
                 .doesNotContain("USE `shop`");
     }
@@ -94,11 +129,11 @@ class MysqlDumpBackupAdapterIT {
     /** Restoring as a non-SUPER user fails if this leaks in. */
     @Test
     void theDumpDoesNotSetGtidPurged() throws Exception {
-        Path destination = outputDir.resolve("shop.sql");
+        Path destination = outputDir.resolve("shop.sql.gz");
 
         adapter.dumpTo(connection("backup", "s3cr3t"), destination);
 
-        assertThat(Files.readString(destination)).doesNotContain("GTID_PURGED");
+        assertThat(gunzip(destination)).doesNotContain("GTID_PURGED");
     }
 
     /**
@@ -107,7 +142,7 @@ class MysqlDumpBackupAdapterIT {
      */
     @Test
     void leavesNoPartialFileBehindWhenTheDumpFails() {
-        Path destination = outputDir.resolve("shop.sql");
+        Path destination = outputDir.resolve("shop.sql.gz");
 
         assertThatThrownBy(() -> adapter.dumpTo(connection("backup", "wrong-password"), destination))
                 .isInstanceOf(BackupFailedException.class)
@@ -120,7 +155,7 @@ class MysqlDumpBackupAdapterIT {
     void reportsMysqldumpsOwnWordsForAnUnreachableServer() {
         assertThatThrownBy(() -> adapter.dumpTo(
                 new MysqlConnection(MYSQL.getHost(), 1, "shop", "backup", "s3cr3t"),
-                outputDir.resolve("shop.sql")))
+                outputDir.resolve("shop.sql.gz")))
                 .isInstanceOf(BackupFailedException.class)
                 .hasMessageContaining("mysqldump exited with");
     }
@@ -128,9 +163,17 @@ class MysqlDumpBackupAdapterIT {
     @Test
     void neverPutsThePasswordOnTheCommandLine() {
         var command = new MysqlDumpBackupAdapter(new ProcessRunner(), MYSQLDUMP, Duration.ofMinutes(2))
-                .command(connection("backup", "s3cr3t"), outputDir.resolve("shop.sql"));
+                .command(connection("backup", "s3cr3t"));
 
         assertThat(command).noneMatch(argument -> argument.contains("s3cr3t"));
+    }
+
+    private static String gunzip(Path archive) throws Exception {
+        try (InputStream in = new GZIPInputStream(Files.newInputStream(archive))) {
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            in.transferTo(out);
+            return out.toString(StandardCharsets.UTF_8);
+        }
     }
 
     private static MysqlConnection connection(String user, String password) {

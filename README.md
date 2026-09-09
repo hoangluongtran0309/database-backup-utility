@@ -15,9 +15,11 @@ logical backup of it, and reading the history of those backups. The target's
 password is encrypted with AES-256-GCM before it is stored.
 
 Backups run in the background: starting one redirects to its detail page, which
-shows `RUNNING` until you reload it. Nothing deletes artifacts yet, so a target
-that has backups cannot be removed — that is deliberate, and lifts when
-artifact deletion arrives.
+shows `RUNNING` until you reload it. Artifacts are gzipped and named
+`<schema>_<timestamp>.sql.gz`, readable with `zcat` like any other archive.
+
+Nothing deletes artifacts yet, so a target that has backups cannot be removed —
+that is deliberate, and lifts when artifact deletion arrives.
 
 ## Running it
 
