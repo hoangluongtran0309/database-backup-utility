@@ -22,4 +22,7 @@ public interface BackupExecutionRepository {
      * at startup belongs to a run that died with the previous process.
      */
     List<BackupExecution> findRunning();
+
+    /** Silent when the id is unknown. */
+    void deleteById(UUID id);
 }

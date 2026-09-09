@@ -125,6 +125,19 @@ actually does — and what it deliberately does not — is in
 Any row still RUNNING when the application starts belongs to a process that is
 gone — jobs run here and nowhere else — so startup marks them failed.
 
+## Removing things
+
+Nothing is removed automatically. The chain is strict and walked by hand:
+a target cannot go while it has backups, and a backup cannot go while restore
+records refer to it. Deleting a backup removes those records, then its file,
+then its row — in that order, so a failure never strands a file on disk with
+nothing pointing at it. See
+[ADR-008](../adr/008-deleting-a-backup-takes-its-history-with-it.md).
+
+`StoragePort` refuses to read or delete anything outside its configured root.
+Every path it receives was read back from the database, and a value in a
+database is not a reason to trust it.
+
 ## Testing
 
 `*Test.java` is a plain JUnit test run by Surefire in `mvn test`. `*IT.java` is

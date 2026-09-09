@@ -3,6 +3,8 @@ package com.hoangluongtran0309.dbbackup.adapter.storage;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
@@ -59,6 +61,47 @@ class LocalFilesystemStorageAdapterTest {
     @ValueSource(strings = {"", "   "})
     void refusesABlankName(String filename) {
         assertThatThrownBy(() -> storage.locationFor(filename))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void reportsWhetherAnArtifactIsThere() throws Exception {
+        Path artifact = storage.locationFor("shop.sql.gz");
+        assertThat(storage.exists(artifact)).isFalse();
+
+        Files.writeString(artifact, "-- dump");
+
+        assertThat(storage.exists(artifact)).isTrue();
+    }
+
+    @Test
+    void doesNotMistakeADirectoryForAnArtifact() throws Exception {
+        Files.createDirectory(root.resolve("notafile"));
+
+        assertThat(storage.exists(root.resolve("notafile"))).isFalse();
+    }
+
+    @Test
+    void opensAnArtifactForReading() throws Exception {
+        Path artifact = Files.writeString(storage.locationFor("shop.sql.gz"), "-- dump contents");
+
+        try (InputStream in = storage.openForReading(artifact)) {
+            assertThat(new String(in.readAllBytes(), StandardCharsets.UTF_8)).isEqualTo("-- dump contents");
+        }
+    }
+
+    /**
+     * The path handed to these methods was read back from the database. A row
+     * edited by hand must not be enough to read an arbitrary file.
+     */
+    @Test
+    void refusesToReadOutsideTheRoot(@TempDir Path elsewhere) throws Exception {
+        Path outsider = Files.writeString(elsewhere.resolve("secrets.txt"), "not yours");
+
+        assertThatThrownBy(() -> storage.openForReading(outsider))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("outside the backup directory");
+        assertThatThrownBy(() -> storage.exists(outsider))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 

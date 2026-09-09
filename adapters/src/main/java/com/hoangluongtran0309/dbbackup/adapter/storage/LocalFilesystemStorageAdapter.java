@@ -1,6 +1,7 @@
 package com.hoangluongtran0309.dbbackup.adapter.storage;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -40,20 +41,43 @@ class LocalFilesystemStorageAdapter implements StoragePort {
     }
 
     @Override
-    public void delete(Path artifact) {
-        Path normalised = artifact.toAbsolutePath().normalize();
-        // Refuse to delete outside the store even if asked to. The path
-        // reaching here came from the database, and a value in a database is
-        // not a reason to trust it.
-        if (!normalised.startsWith(root)) {
-            throw new IllegalArgumentException(
-                    "Refusing to delete '%s': it is outside the backup directory".formatted(artifact));
-        }
+    public boolean exists(Path artifact) {
+        return Files.isRegularFile(within(artifact, "read"));
+    }
+
+    @Override
+    public InputStream openForReading(Path artifact) {
         try {
-            Files.deleteIfExists(normalised);
+            return Files.newInputStream(within(artifact, "read"));
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
+    }
+
+    @Override
+    public void delete(Path artifact) {
+        try {
+            Files.deleteIfExists(within(artifact, "delete"));
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    /**
+     * Refuses to touch anything outside the store, whatever it is asked.
+     *
+     * <p>Every path reaching this class was read back from the database, and a
+     * value in a database is not a reason to trust it — a row edited by hand,
+     * or a restore of an older dump of the metadata store, would otherwise be
+     * enough to read or delete an arbitrary file.
+     */
+    private Path within(Path artifact, String action) {
+        Path normalised = artifact.toAbsolutePath().normalize();
+        if (!normalised.startsWith(root)) {
+            throw new IllegalArgumentException(
+                    "Refusing to %s '%s': it is outside the backup directory".formatted(action, artifact));
+        }
+        return normalised;
     }
 
     /**

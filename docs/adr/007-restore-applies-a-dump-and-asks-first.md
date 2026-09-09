@@ -70,7 +70,9 @@ backup would lose the history of every restore but the last.
   needs that much free space in the backup directory.
 - Restores share the job pool with backups, so the bound is on total heavy work
   rather than on each kind separately.
-- Removing a backup that has been restored is refused, for the same reason
-  removing a target that has backups is: the record should not vanish quietly.
+- Removing a backup that has been restored is refused by the foreign key. What
+  "should not vanish quietly" means in practice is settled by
+  [ADR-008](008-deleting-a-backup-takes-its-history-with-it.md): the deletion
+  use case removes the restore records itself, after saying how many there are.
 - Restoring into a *different* target is not possible. Every restore goes back
   to the target its backup came from.

@@ -44,6 +44,14 @@ class BackupExecutionRepositoryAdapter implements BackupExecutionRepository {
     }
 
     @Override
+    public void deleteById(UUID id) {
+        jpaRepository.deleteById(id);
+        // Flushed so a foreign key still holding this row surfaces here rather
+        // than at some later commit.
+        jpaRepository.flush();
+    }
+
+    @Override
     public List<BackupExecution> findAllNewestFirst() {
         return jpaRepository.findAll(NEWEST_FIRST).stream()
                 .map(BackupExecutionMapper::toDomain)

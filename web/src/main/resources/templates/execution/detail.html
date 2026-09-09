@@ -7,8 +7,12 @@
   <div class="page-head">
     <h1>Backup</h1>
     <span class="head-actions">
+      <a class="button" th:if="${execution.status.name() == 'SUCCEEDED'}"
+         th:href="@{/executions/{id}/download(id=${execution.id})}">Download</a>
       <a class="button danger" th:if="${execution.status.name() == 'SUCCEEDED'}"
          th:href="@{/restores/new(backup=${execution.id})}">Restore this backup</a>
+      <a class="button danger" th:unless="${execution.status.name() == 'RUNNING'}"
+         th:href="@{/executions/{id}/delete(id=${execution.id})}">Delete</a>
       <a class="button subtle" th:href="@{/executions}">All backups</a>
     </span>
   </div>

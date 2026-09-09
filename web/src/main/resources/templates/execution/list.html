@@ -33,6 +33,8 @@
         <td th:replace="~{fragments/execution-status :: statusBadge(${execution.status})}"></td>
         <td class="mono" th:text="${execution.sizeBytes != null ? execution.sizeBytes + ' B' : '—'}">—</td>
         <td class="row-actions">
+          <a class="button" th:if="${execution.status.name() == 'SUCCEEDED'}"
+             th:href="@{/executions/{id}/download(id=${execution.id})}">Download</a>
           <a class="button" th:href="@{/executions/{id}(id=${execution.id})}">Details</a>
         </td>
       </tr>
