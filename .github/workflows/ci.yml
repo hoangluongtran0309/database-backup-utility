@@ -33,5 +33,15 @@ jobs:
       # allowed to skip itself when a dependency is missing: a test that turns
       # green by not running is worse than no test, so anything an IT needs is
       # installed here and its absence must fail the job.
+      # The application drives these binaries directly, and the integration
+      # tests run them against a real server. Asserted here rather than assumed:
+      # the predecessor of this project had a MongoDB test that skipped itself
+      # for its entire life because CI never installed the tools it needed.
+      - name: Install the MySQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mysql-client
+          test -x /usr/bin/mysql
+
       - name: Verify
         run: mvn --batch-mode --no-transfer-progress verify

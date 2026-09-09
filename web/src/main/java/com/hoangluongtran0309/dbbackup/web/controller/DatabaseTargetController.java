@@ -1,6 +1,7 @@
 package com.hoangluongtran0309.dbbackup.web.controller;
 
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.UUID;
 
 import org.springframework.stereotype.Controller;
@@ -14,8 +15,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import com.hoangluongtran0309.dbbackup.application.target.ManageDatabaseTargetService;
+import com.hoangluongtran0309.dbbackup.application.target.TestTargetConnectionService;
 import com.hoangluongtran0309.dbbackup.core.exception.DuplicateTargetNameException;
 import com.hoangluongtran0309.dbbackup.core.exception.InvalidTargetException;
+import com.hoangluongtran0309.dbbackup.core.model.ConnectionCheck;
 import com.hoangluongtran0309.dbbackup.core.model.DatabaseTarget;
 import com.hoangluongtran0309.dbbackup.web.dto.DatabaseTargetForm;
 
@@ -46,6 +49,7 @@ public class DatabaseTargetController {
             "password", "password");
 
     private final ManageDatabaseTargetService service;
+    private final TestTargetConnectionService connectionTest;
 
     @GetMapping
     String list(Model model) {
@@ -82,6 +86,26 @@ public class DatabaseTargetController {
             rejectOnForm(binding, e);
             return FORM_VIEW;
         }
+    }
+
+    /**
+     * Runs synchronously: the client is given an explicit connect timeout, so
+     * this is bounded in a way a backup is not. Backups will need the
+     * background treatment; a probe does not.
+     */
+    @PostMapping("/{id}/test")
+    String test(@PathVariable UUID id, RedirectAttributes flash) {
+        try {
+            ConnectionCheck check = connectionTest.test(id);
+            if (check.successful()) {
+                flash.addFlashAttribute("message", "Connection succeeded");
+            } else {
+                flash.addFlashAttribute("error", "Connection failed: " + check.message());
+            }
+        } catch (NoSuchElementException e) {
+            flash.addFlashAttribute("error", "That target no longer exists");
+        }
+        return "redirect:/databases";
     }
 
     @PostMapping("/{id}/delete")

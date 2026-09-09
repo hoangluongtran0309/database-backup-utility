@@ -14,6 +14,7 @@
 
   <main>
     <p class="flash" role="status" th:if="${message}" th:text="${message}"></p>
+    <p class="flash error" role="alert" th:if="${error}" th:text="${error}"></p>
     <th:block th:replace="${content}"></th:block>
   </main>
 </body>

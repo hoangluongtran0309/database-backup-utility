@@ -55,6 +55,24 @@
       <version>${testcontainers.version}</version>
       <scope>test</scope>
     </dependency>
+    <!--
+      Test scope only, and only because Testcontainers decides a MySQL
+      container is ready by opening a JDBC connection to it. The application
+      itself has no MySQL driver and does not talk JDBC to a target: it drives
+      the client binaries, which is the same path a backup takes. Do not
+      promote this to compile scope.
+    -->
+    <dependency>
+      <groupId>com.mysql</groupId>
+      <artifactId>mysql-connector-j</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>testcontainers-mysql</artifactId>
+      <version>${testcontainers.version}</version>
+      <scope>test</scope>
+    </dependency>
     <dependency>
       <groupId>org.testcontainers</groupId>
       <artifactId>testcontainers-junit-jupiter</artifactId>

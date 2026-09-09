@@ -19,6 +19,7 @@
         <th scope="col">Name</th>
         <th scope="col">Address</th>
         <th scope="col">User</th>
+        <th scope="col">Last check</th>
         <th scope="col"><span class="visually-hidden">Actions</span></th>
       </tr>
     </thead>
@@ -27,7 +28,31 @@
         <td th:text="${target.name}">prod</td>
         <td class="mono" th:text="${target.address}">127.0.0.1:3306/shop</td>
         <td class="mono" th:text="${target.username}">backup</td>
+
+        <td>
+          <span class="badge untested" th:unless="${target.hasBeenTested()}">Never tested</span>
+          <th:block th:if="${target.hasBeenTested()}">
+            <span class="badge ok" th:if="${target.lastConnectionCheck.successful}">Connected</span>
+            <!-- MySQL's own words, shown in full rather than summarised: they
+                 are what tells an operator which thing to go and fix. -->
+            <span class="badge failed" th:unless="${target.lastConnectionCheck.successful}"
+                  th:title="${target.lastConnectionCheck.message}">Failed</span>
+            <!-- atOffset(UTC) is not optional. #temporals.format renders an
+                 Instant in the JVM's default zone, so without it the label
+                 says UTC while the digits are the server's local time. -->
+            <span class="checked-at"
+                  th:text="${#temporals.format(
+                              target.lastConnectionCheck.checkedAt.atOffset(T(java.time.ZoneOffset).UTC),
+                              'yyyy-MM-dd HH:mm')} + ' UTC'">…</span>
+            <p class="check-message" th:unless="${target.lastConnectionCheck.successful}"
+               th:text="${target.lastConnectionCheck.message}"></p>
+          </th:block>
+        </td>
+
         <td class="row-actions">
+          <form method="post" th:action="@{/databases/{id}/test(id=${target.id})}">
+            <button class="button" type="submit">Test</button>
+          </form>
           <form method="post" th:action="@{/databases/{id}/delete(id=${target.id})}">
             <button class="button danger" type="submit">Remove</button>
           </form>

@@ -59,6 +59,29 @@ roadmap. MySQL is the only engine, which is also why `database_targets` has no
 `engine` column: the migration that introduces a second engine is the one that
 should add it.
 
+## Talking to MySQL
+
+Everything that reaches a target does so by running the MySQL client binaries as
+child processes, never over JDBC — see
+[ADR-003](../adr/003-shelling-out-to-the-mysql-client.md). Every such call goes
+through `ProcessRunner`, which is where three subprocess hazards are handled
+once:
+
+- **Both pipes are drained concurrently, before `waitFor`.** A pipe holds only a
+  few kilobytes; reading stdout to EOF and only then reading stderr deadlocks
+  the moment the child fills the other buffer. `ProcessRunnerTest` reproduces
+  this with half a megabyte on each stream, and runs on a separate thread so a
+  reintroduced deadlock fails the build instead of hanging it.
+- **Every command has a timeout**, after which the child is forcibly killed.
+- **Credentials travel in `ProcessBuilder.environment()`** as `MYSQL_PWD`. Never
+  on the command line, where `ps` shows them to every user on the host, and
+  never through `System.setProperty`, which is JVM-global and would leak between
+  jobs running at the same time.
+
+`MysqlClient` adds the MySQL-specific knowledge: it rewrites the literal host
+`localhost` to `127.0.0.1`, because the client otherwise connects over a Unix
+socket and silently ignores `--port`.
+
 ## Testing
 
 `*Test.java` is a plain JUnit test run by Surefire in `mvn test`. `*IT.java` is
@@ -68,7 +91,9 @@ constraint-violation message, and Hibernate schema validation against the real
 Flyway output, and H2 would misreport all three.
 
 No test may skip itself because something it needs is absent. A test that turns
-green by not running is worse than no test at all.
+green by not running is worse than no test at all — so the integration tests
+assert that the `mysql` binary is present rather than assuming it, and CI
+installs it explicitly.
 
 ## Database migrations
 

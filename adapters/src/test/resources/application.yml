@@ -1,5 +1,9 @@
 # The datasource is supplied per test class from the Testcontainers instance.
 dbbackup:
+  mysql:
+    client-path: ${MYSQL_CLIENT_PATH:/usr/bin/mysql}
+    connect-timeout: 10s
+
   encryption:
     key: ZGJiYWNrdXAtaW50ZWdyYXRpb24tdGVzdC1rZXktMzI=
 

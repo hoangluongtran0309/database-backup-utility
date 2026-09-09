@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import com.hoangluongtran0309.dbbackup.core.model.ConnectionCheck;
 import com.hoangluongtran0309.dbbackup.core.model.DatabaseTarget;
 
 /**
@@ -30,4 +31,13 @@ public interface DatabaseTargetRepository {
 
     /** Silent when the id is unknown — deleting an absent target is not an error. */
     void deleteById(UUID id);
+
+    /**
+     * Stores the outcome of a connection probe against one target.
+     *
+     * <p>Deliberately narrower than {@link #save}: a probe must be incapable of
+     * rewriting the target's credentials, so it updates only these columns
+     * instead of persisting a whole reconstructed aggregate.
+     */
+    void recordConnectionCheck(UUID id, ConnectionCheck check);
 }

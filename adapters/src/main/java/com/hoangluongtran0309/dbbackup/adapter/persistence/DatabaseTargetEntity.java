@@ -48,4 +48,14 @@ class DatabaseTargetEntity {
 
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
+
+    // Null as a set until the target is first probed.
+    @Column(name = "last_connection_successful")
+    private Boolean lastConnectionSuccessful;
+
+    @Column(name = "last_connection_message", length = 500)
+    private String lastConnectionMessage;
+
+    @Column(name = "last_connection_checked_at")
+    private Instant lastConnectionCheckedAt;
 }

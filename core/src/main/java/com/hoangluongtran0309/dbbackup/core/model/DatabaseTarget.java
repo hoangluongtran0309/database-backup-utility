@@ -50,6 +50,15 @@ public final class DatabaseTarget {
 
     private final Instant createdAt;
 
+    /**
+     * The last connection probe's outcome, or {@code null} if this target has
+     * never been tested. Recorded through
+     * {@link com.hoangluongtran0309.dbbackup.core.port.DatabaseTargetRepository#recordConnectionCheck}
+     * rather than by saving the whole target, so a probe can never rewrite the
+     * stored password.
+     */
+    private final ConnectionCheck lastConnectionCheck;
+
     @Builder
     private DatabaseTarget(
             UUID id,
@@ -59,7 +68,8 @@ public final class DatabaseTarget {
             String databaseName,
             String username,
             String passwordCiphertext,
-            Instant createdAt) {
+            Instant createdAt,
+            ConnectionCheck lastConnectionCheck) {
 
         this.id = require(id, "id", "Target id is required");
         this.name = text(name, "name", "Name", MAX_NAME_LENGTH);
@@ -69,6 +79,12 @@ public final class DatabaseTarget {
         this.username = text(username, "username", "Username", MAX_USERNAME_LENGTH);
         this.passwordCiphertext = require(passwordCiphertext, "passwordCiphertext", "Password is required");
         this.createdAt = require(createdAt, "createdAt", "Creation timestamp is required");
+        this.lastConnectionCheck = lastConnectionCheck; // absent until the target is first tested
+    }
+
+    /** True once this target has been probed at least once, whatever the outcome. */
+    public boolean hasBeenTested() {
+        return lastConnectionCheck != null;
     }
 
     /** {@code host:port/schema} — how a target identifies itself in the console. */

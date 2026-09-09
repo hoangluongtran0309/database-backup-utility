@@ -8,7 +8,7 @@ that needs it.
 - [x] **1. Register and list MySQL targets.** Immutable `DatabaseTarget`,
       JPA persistence, AES-256-GCM encryption of the stored password,
       registration form and list page.
-- [ ] **2. Test connection to a target.** `mysql --execute="SELECT 1"` through
+- [x] **2. Test connection to a target.** `mysql --execute="SELECT 1"` through
       a shared `ProcessRunner`; the result and MySQL's own error text are
       stored and shown.
 - [ ] **3. Run a full logical backup.** `mysqldump` to local disk, execution

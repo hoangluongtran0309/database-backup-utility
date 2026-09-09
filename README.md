@@ -10,12 +10,15 @@ together. See [ROADMAP.md](ROADMAP.md) for what exists and what is next.
 
 ## What works today
 
-Registering a MySQL target, listing what is registered, and removing one. The
-target's password is encrypted with AES-256-GCM before it is stored.
+Registering a MySQL target, listing what is registered, testing that it is
+reachable, and removing one. The target's password is encrypted with AES-256-GCM
+before it is stored.
 
 ## Running it
 
-Requires JDK 21, Maven, and Docker.
+Requires JDK 21, Maven, Docker, and the MySQL client binaries (`mysql`). The
+application drives those binaries directly and refuses to start if it cannot
+find them — see [ADR-003](docs/adr/003-shelling-out-to-the-mysql-client.md).
 
 ```bash
 # 1. Metadata store
@@ -47,6 +50,7 @@ that is in the repository.
 | `DB_URL` | `jdbc:postgresql://localhost:5432/dbbackup` | Metadata store |
 | `DB_USERNAME` | `dbbackup` | Metadata store user |
 | `DB_PASSWORD` | `dbbackup` | Metadata store password |
+| `MYSQL_CLIENT_PATH` | `/usr/bin/mysql` | The `mysql` client binary; checked for executability at startup |
 
 ## Tests
 

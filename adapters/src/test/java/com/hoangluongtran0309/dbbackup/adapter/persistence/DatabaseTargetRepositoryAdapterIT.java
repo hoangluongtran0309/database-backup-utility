@@ -18,6 +18,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 
 import com.hoangluongtran0309.dbbackup.adapter.TestAdaptersApplication;
 import com.hoangluongtran0309.dbbackup.core.exception.DuplicateTargetNameException;
+import com.hoangluongtran0309.dbbackup.core.model.ConnectionCheck;
 import com.hoangluongtran0309.dbbackup.core.model.DatabaseTarget;
 import com.hoangluongtran0309.dbbackup.core.port.DatabaseTargetRepository;
 
@@ -80,6 +81,74 @@ class DatabaseTargetRepositoryAdapterIT {
         assertThatThrownBy(() -> repository.save(target("PRODUCTION", "other")))
                 .isInstanceOf(DuplicateTargetNameException.class)
                 .hasMessageContaining("PRODUCTION");
+    }
+
+    @Test
+    void aNewTargetHasNoConnectionCheck() {
+        DatabaseTarget saved = repository.save(target("production", "shop"));
+
+        assertThat(repository.findById(saved.getId()).orElseThrow().hasBeenTested()).isFalse();
+    }
+
+    @Test
+    void recordsAConnectionCheckAndReadsItBack() {
+        DatabaseTarget saved = repository.save(target("production", "shop"));
+        Instant checkedAt = Instant.parse("2026-09-09T11:00:00Z");
+
+        repository.recordConnectionCheck(saved.getId(), ConnectionCheck.failed("ERROR 1045: Access denied", checkedAt));
+
+        ConnectionCheck stored = repository.findById(saved.getId()).orElseThrow().getLastConnectionCheck();
+        assertThat(stored.successful()).isFalse();
+        assertThat(stored.message()).isEqualTo("ERROR 1045: Access denied");
+        assertThat(stored.checkedAt()).isEqualTo(checkedAt);
+    }
+
+    /**
+     * The reason recordConnectionCheck is a targeted update rather than a
+     * save() of a reconstructed aggregate: a probe must not be able to touch
+     * the credentials.
+     */
+    @Test
+    void recordingACheckLeavesTheStoredPasswordUntouched() {
+        DatabaseTarget saved = repository.save(target("production", "shop"));
+
+        repository.recordConnectionCheck(saved.getId(), ConnectionCheck.passed(Instant.parse("2026-09-09T11:00:00Z")));
+
+        DatabaseTarget after = repository.findById(saved.getId()).orElseThrow();
+        assertThat(after.getPasswordCiphertext()).isEqualTo("Y2lwaGVydGV4dA==");
+        assertThat(after.getName()).isEqualTo("production");
+        assertThat(after.getCreatedAt()).isEqualTo(saved.getCreatedAt());
+    }
+
+    @Test
+    void aLaterCheckReplacesTheEarlierOne() {
+        DatabaseTarget saved = repository.save(target("production", "shop"));
+
+        repository.recordConnectionCheck(saved.getId(), ConnectionCheck.failed("first", Instant.parse("2026-09-09T11:00:00Z")));
+        repository.recordConnectionCheck(saved.getId(), ConnectionCheck.passed(Instant.parse("2026-09-09T12:00:00Z")));
+
+        ConnectionCheck stored = repository.findById(saved.getId()).orElseThrow().getLastConnectionCheck();
+        assertThat(stored.successful()).isTrue();
+        assertThat(stored.checkedAt()).isEqualTo(Instant.parse("2026-09-09T12:00:00Z"));
+    }
+
+    /** A target deleted in another tab is not worth failing a probe over. */
+    @Test
+    void recordingACheckForAnUnknownTargetIsNotAnError() {
+        repository.recordConnectionCheck(
+                UUID.randomUUID(), ConnectionCheck.passed(Instant.parse("2026-09-09T11:00:00Z")));
+    }
+
+    /** MySQL errors can be long; the column is 500 characters. */
+    @Test
+    void storesAnOverlongFailureMessageByTruncatingIt() {
+        DatabaseTarget saved = repository.save(target("production", "shop"));
+
+        repository.recordConnectionCheck(
+                saved.getId(), ConnectionCheck.failed("x".repeat(900), Instant.parse("2026-09-09T11:00:00Z")));
+
+        assertThat(repository.findById(saved.getId()).orElseThrow()
+                .getLastConnectionCheck().message()).hasSize(500);
     }
 
     @Test

@@ -144,3 +144,36 @@ table.targets {
   clip-path: inset(50%);
   white-space: nowrap;
 }
+
+/* --- connection check --- */
+
+.flash.error {
+  background: var(--err-bg);
+  border-color: var(--err-border);
+}
+
+.badge {
+  display: inline-block;
+  padding: .1rem .45rem;
+  font-size: .78rem;
+  font-weight: 500;
+  border: 1px solid transparent;
+  border-radius: 999px;
+}
+.badge.ok       { background: var(--ok-bg);  border-color: var(--ok-border); }
+.badge.failed   { background: var(--err-bg); border-color: var(--err-border); color: var(--danger); }
+.badge.untested { background: var(--bg);     border-color: var(--border);     color: var(--muted); }
+
+.checked-at { margin-left: .4rem; font-size: .78rem; color: var(--muted); }
+
+/* MySQL's own error text. Long, and allowed to wrap rather than be clipped. */
+.check-message {
+  margin: .3rem 0 0;
+  max-width: 22rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: .78rem;
+  color: var(--danger);
+  overflow-wrap: anywhere;
+}
+
+.row-actions { display: flex; gap: .4rem; justify-content: flex-end; }

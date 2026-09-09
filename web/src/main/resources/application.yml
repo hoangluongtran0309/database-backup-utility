@@ -25,6 +25,15 @@ spring:
       ddl-auto: validate
 
 dbbackup:
+  mysql:
+    # The tool drives the MySQL client binaries directly. A wrong path here
+    # stops startup rather than surfacing later as a puzzling connection
+    # failure.
+    client-path: ${MYSQL_CLIENT_PATH:/usr/bin/mysql}
+    # Passed to the client as --connect-timeout, so an unreachable host fails
+    # in seconds instead of holding the request open.
+    connect-timeout: 10s
+
   encryption:
     # 32 bytes, Base64 encoded: openssl rand -base64 32
     # No default. Starting without it must fail loudly rather than silently
