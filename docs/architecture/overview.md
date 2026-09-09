@@ -80,7 +80,32 @@ once:
 
 `MysqlClient` adds the MySQL-specific knowledge: it rewrites the literal host
 `localhost` to `127.0.0.1`, because the client otherwise connects over a Unix
-socket and silently ignores `--port`.
+socket and silently ignores `--port`. `MysqlDumpBackupAdapter` reuses that rule
+but not the connect timeout — `mysqldump` does not accept `--connect-timeout`
+and exits 7 with *unknown variable* if given it, so the `ProcessRunner` timeout
+is its only backstop.
+
+## Running a backup
+
+A dump takes minutes, so it does not run on the request thread. The two halves
+are separate on purpose — see
+[ADR-004](../adr/004-persist-the-execution-before-running-it.md):
+
+1. **Accepting.** `RunBackupService.start` writes a RUNNING `backup_executions`
+   row, commits it, submits the job to a bounded pool and returns its id. The
+   controller redirects to `/executions/{id}`. This method is deliberately not
+   `@Transactional`: the row has to be visible to the background thread, which
+   reads it through a different connection.
+2. **Running.** The pooled thread decrypts the password, asks `StoragePort`
+   where the artifact goes, runs `mysqldump`, and writes the outcome onto the
+   same row.
+
+The pool is bounded on both axes. A full queue is refused and recorded as a
+failed execution rather than growing without limit, because every running
+backup is a child process competing for the same disk.
+
+Any row still RUNNING when the application starts belongs to a process that is
+gone — backups run here and nowhere else — so startup marks them failed.
 
 ## Testing
 

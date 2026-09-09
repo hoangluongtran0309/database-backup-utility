@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout/base :: page('Backup', ~{:: #content})}">
+<body>
+<div id="content">
+
+  <div class="page-head">
+    <h1>Backup</h1>
+    <a class="button subtle" th:href="@{/executions}">All backups</a>
+  </div>
+
+  <!-- No auto-refresh: reloading is the operator's call, and a page that
+       reloads itself is a surprise when you are reading an error message. -->
+  <p class="flash" th:if="${execution.status.name() == 'RUNNING'}" role="status">
+    This backup is still running. Reload the page to see where it got to.
+  </p>
+
+  <dl class="detail">
+    <dt>Status</dt>
+    <dd th:replace="~{fragments/execution-status :: statusBadge(${execution.status})}"></dd>
+
+    <dt>Target</dt>
+    <dd th:text="${targetName != null ? targetName : '(removed)'}">production</dd>
+
+    <dt>Started</dt>
+    <dd class="mono"
+        th:text="${#temporals.format(
+                    execution.startedAt.atOffset(T(java.time.ZoneOffset).UTC),
+                    'yyyy-MM-dd HH:mm:ss')} + ' UTC'">…</dd>
+
+    <dt>Finished</dt>
+    <dd class="mono" th:if="${execution.finishedAt == null}">—</dd>
+    <dd class="mono" th:unless="${execution.finishedAt == null}"
+        th:text="${#temporals.format(
+                    execution.finishedAt.atOffset(T(java.time.ZoneOffset).UTC),
+                    'yyyy-MM-dd HH:mm:ss')} + ' UTC'">…</dd>
+
+    <dt>Artifact</dt>
+    <dd class="mono break" th:text="${execution.artifactPath != null ? execution.artifactPath : '—'}">—</dd>
+
+    <dt>Size</dt>
+    <dd class="mono" th:text="${execution.sizeBytes != null ? execution.sizeBytes + ' bytes' : '—'}">—</dd>
+  </dl>
+
+  <div th:if="${execution.errorMessage != null}">
+    <h2>Why it failed</h2>
+    <!-- mysqldump's own output, in full. Summarising it here would remove the
+         one thing that says which knob to turn. -->
+    <pre class="error-output" th:text="${execution.errorMessage}"></pre>
+  </div>
+
+</div>
+</body>
+</html>

@@ -1,6 +1,5 @@
 package com.hoangluongtran0309.dbbackup.adapter.mysql;
 
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -43,17 +42,7 @@ public class MysqlClient {
 
         this.processRunner = processRunner;
         this.connectTimeout = connectTimeout;
-        this.binary = binary;
-
-        // Fail at startup, not at the first backup. This tool cannot do
-        // anything useful without the client binaries, so a wrong path is
-        // worth refusing to start over rather than reporting later as a
-        // mysterious connection failure.
-        if (!Files.isExecutable(binary)) {
-            throw new IllegalStateException(
-                    "dbbackup.mysql.client-path points at '%s', which is not an executable file"
-                            .formatted(binary));
-        }
+        this.binary = MysqlBinaries.require(binary, "dbbackup.mysql.client-path");
     }
 
     /**

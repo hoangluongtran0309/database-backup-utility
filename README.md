@@ -10,15 +10,21 @@ together. See [ROADMAP.md](ROADMAP.md) for what exists and what is next.
 
 ## What works today
 
-Registering a MySQL target, listing what is registered, testing that it is
-reachable, and removing one. The target's password is encrypted with AES-256-GCM
-before it is stored.
+Registering a MySQL target, testing that it is reachable, running a full
+logical backup of it, and reading the history of those backups. The target's
+password is encrypted with AES-256-GCM before it is stored.
+
+Backups run in the background: starting one redirects to its detail page, which
+shows `RUNNING` until you reload it. Nothing deletes artifacts yet, so a target
+that has backups cannot be removed — that is deliberate, and lifts when
+artifact deletion arrives.
 
 ## Running it
 
-Requires JDK 21, Maven, Docker, and the MySQL client binaries (`mysql`). The
-application drives those binaries directly and refuses to start if it cannot
-find them — see [ADR-003](docs/adr/003-shelling-out-to-the-mysql-client.md).
+Requires JDK 21, Maven, Docker, and the MySQL client binaries (`mysql` and
+`mysqldump`). The application drives those binaries directly and refuses to
+start if it cannot find them — see
+[ADR-003](docs/adr/003-shelling-out-to-the-mysql-client.md).
 
 ```bash
 # 1. Metadata store
@@ -51,6 +57,11 @@ that is in the repository.
 | `DB_USERNAME` | `dbbackup` | Metadata store user |
 | `DB_PASSWORD` | `dbbackup` | Metadata store password |
 | `MYSQL_CLIENT_PATH` | `/usr/bin/mysql` | The `mysql` client binary; checked for executability at startup |
+| `MYSQLDUMP_PATH` | `/usr/bin/mysqldump` | The `mysqldump` binary; likewise checked at startup |
+| `BACKUP_DIR` | `./backups` | Where dumps are written; created at startup. Relative, so it follows the working directory — `mvn -pl web spring-boot:run` puts it under `web/`. Set an absolute path for anything real. |
+| `BACKUP_CONCURRENCY` | `2` | How many dumps may run at once |
+| `BACKUP_QUEUE_CAPACITY` | `20` | Beyond this, a backup is refused and recorded as failed |
+| `BACKUP_TIMEOUT` | `30m` | A dump running longer than this is killed |
 
 ## Tests
 

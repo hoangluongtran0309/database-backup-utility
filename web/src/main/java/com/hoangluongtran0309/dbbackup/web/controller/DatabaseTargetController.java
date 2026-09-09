@@ -14,10 +14,12 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
+import com.hoangluongtran0309.dbbackup.application.backup.RunBackupService;
 import com.hoangluongtran0309.dbbackup.application.target.ManageDatabaseTargetService;
 import com.hoangluongtran0309.dbbackup.application.target.TestTargetConnectionService;
 import com.hoangluongtran0309.dbbackup.core.exception.DuplicateTargetNameException;
 import com.hoangluongtran0309.dbbackup.core.exception.InvalidTargetException;
+import com.hoangluongtran0309.dbbackup.core.exception.TargetInUseException;
 import com.hoangluongtran0309.dbbackup.core.model.ConnectionCheck;
 import com.hoangluongtran0309.dbbackup.core.model.DatabaseTarget;
 import com.hoangluongtran0309.dbbackup.web.dto.DatabaseTargetForm;
@@ -50,6 +52,7 @@ public class DatabaseTargetController {
 
     private final ManageDatabaseTargetService service;
     private final TestTargetConnectionService connectionTest;
+    private final RunBackupService backups;
 
     @GetMapping
     String list(Model model) {
@@ -108,10 +111,29 @@ public class DatabaseTargetController {
         return "redirect:/databases";
     }
 
+    /**
+     * Returns as soon as the execution row exists, redirecting to its detail
+     * page. The dump itself runs in the background, so a schema that takes
+     * minutes does not hold the request open.
+     */
+    @PostMapping("/{id}/backup")
+    String backUpNow(@PathVariable UUID id, RedirectAttributes flash) {
+        try {
+            return "redirect:/executions/" + backups.start(id);
+        } catch (NoSuchElementException e) {
+            flash.addFlashAttribute("error", "That target no longer exists");
+            return "redirect:/databases";
+        }
+    }
+
     @PostMapping("/{id}/delete")
     String delete(@PathVariable UUID id, RedirectAttributes flash) {
-        service.delete(id);
-        flash.addFlashAttribute("message", "Target removed");
+        try {
+            service.delete(id);
+            flash.addFlashAttribute("message", "Target removed");
+        } catch (TargetInUseException e) {
+            flash.addFlashAttribute("error", e.getMessage());
+        }
         return "redirect:/databases";
     }
 

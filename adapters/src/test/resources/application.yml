@@ -2,7 +2,15 @@
 dbbackup:
   mysql:
     client-path: ${MYSQL_CLIENT_PATH:/usr/bin/mysql}
+    dump-path: ${MYSQLDUMP_PATH:/usr/bin/mysqldump}
     connect-timeout: 10s
+
+  backup:
+    timeout: 5m
+
+  storage:
+    local:
+      root: ${java.io.tmpdir}/dbbackup-it
 
   encryption:
     key: ZGJiYWNrdXAtaW50ZWdyYXRpb24tdGVzdC1rZXktMzI=
