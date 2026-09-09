@@ -1,0 +1,17 @@
+target/
+*/target/
+
+.git/
+.github/
+
+# Real dumps. They must never end up in a build context, let alone an image.
+backups/
+*/backups/
+
+.env
+.env.local
+.idea/
+*.iml
+.vscode/
+docs/
+*.md
