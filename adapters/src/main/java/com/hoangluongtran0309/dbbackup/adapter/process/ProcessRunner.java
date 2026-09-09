@@ -5,6 +5,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -81,7 +82,27 @@ public class ProcessRunner {
      *                                outlives {@code timeout}
      */
     public Result run(List<String> command, Map<String, String> environment, Duration timeout) {
-        return execute(command, environment, timeout, null);
+        return execute(command, environment, timeout, null, null);
+    }
+
+    /**
+     * Runs a command whose stdin is the contents of a file.
+     *
+     * <p>Redirected by the operating system rather than written from a thread
+     * of ours. Feeding a child's stdin from Java means a fourth stream to keep
+     * moving in lockstep with the other three, and a writer that blocks while
+     * the child is blocked writing output nobody is draining yet is the same
+     * deadlock this class exists to avoid — in a shape that is much harder to
+     * see. Letting the kernel do it removes the possibility.
+     */
+    public Result runWithInput(
+            List<String> command,
+            Map<String, String> environment,
+            Duration timeout,
+            Path stdinFile) {
+
+        return execute(command, environment, timeout, null,
+                Objects.requireNonNull(stdinFile, "stdinFile"));
     }
 
     /**
@@ -105,17 +126,22 @@ public class ProcessRunner {
             Duration timeout,
             OutputStream stdoutSink) {
 
-        return execute(command, environment, timeout, Objects.requireNonNull(stdoutSink, "stdoutSink"));
+        return execute(command, environment, timeout,
+                Objects.requireNonNull(stdoutSink, "stdoutSink"), null);
     }
 
     private Result execute(
             List<String> command,
             Map<String, String> environment,
             Duration timeout,
-            OutputStream stdoutSink) {
+            OutputStream stdoutSink,
+            Path stdinFile) {
 
         ProcessBuilder builder = new ProcessBuilder(new ArrayList<>(command));
         builder.environment().putAll(environment);
+        if (stdinFile != null) {
+            builder.redirectInput(stdinFile.toFile());
+        }
 
         Process process;
         try {

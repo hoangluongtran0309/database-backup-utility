@@ -15,7 +15,7 @@ that needs it.
       history, started in the background so a long dump does not hold an HTTP
       request open.
 - [x] **4. Compress the dump.** Stream `mysqldump` output through gzip.
-- [ ] **5. Restore a backup into a target.** With an explicit overwrite
+- [x] **5. Restore a backup into a target.** With an explicit overwrite
       confirmation, and a round-trip integration test.
 - [ ] **6. Download and delete artifacts.** Deleting an execution deletes its
       file, which is also what makes a used target removable.

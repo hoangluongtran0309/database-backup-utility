@@ -10,12 +10,15 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * The pool backups run on.
+ * The pool backups and restores run on.
  *
- * <p>Bounded on both axes on purpose. Each running backup is a {@code
- * mysqldump} child process competing for the same disk, so an unbounded pool
- * turns a handful of impatient clicks into a server that is slower at
- * everything. A bounded queue means the pool refuses work instead of growing
+ * <p>One pool for both, so the bound is on total heavy work rather than on each
+ * kind separately — a machine busy restoring is not also free to run four
+ * dumps.
+ *
+ * <p>Bounded on both axes on purpose. Each running job is a child process
+ * competing for the same disk, so an unbounded pool turns a handful of
+ * impatient clicks into a server that is slower at everything. A bounded queue means the pool refuses work instead of growing
  * without limit, and {@code RunBackupService} turns that refusal into a visible
  * failed execution rather than a silently dropped job.
  *
@@ -28,12 +31,12 @@ import org.springframework.context.annotation.Configuration;
  * in {@link InterruptedBackupRepair} instead.
  */
 @Configuration
-class BackupExecutorConfig {
+class JobExecutorConfig {
 
     @Bean
-    Executor backupExecutor(
-            @Value("${dbbackup.backup.concurrency}") int concurrency,
-            @Value("${dbbackup.backup.queue-capacity}") int queueCapacity) {
+    Executor jobExecutor(
+            @Value("${dbbackup.jobs.concurrency}") int concurrency,
+            @Value("${dbbackup.jobs.queue-capacity}") int queueCapacity) {
 
         return new ThreadPoolExecutor(
                 concurrency, concurrency,
@@ -41,8 +44,8 @@ class BackupExecutorConfig {
                 new ArrayBlockingQueue<>(queueCapacity),
                 runnable -> {
                     Thread thread = new Thread(runnable);
-                    thread.setName("backup-" + thread.threadId());
-                    // Daemon: shutdown is not held up by a long dump. The row it
+                    thread.setName("dbbackup-job-" + thread.threadId());
+                    // Daemon: shutdown is not held up by a long job. The row it
                     // leaves behind is repaired at the next startup.
                     thread.setDaemon(true);
                     return thread;

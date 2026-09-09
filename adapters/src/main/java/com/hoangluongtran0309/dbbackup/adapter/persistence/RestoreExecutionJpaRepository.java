@@ -7,7 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 import com.hoangluongtran0309.dbbackup.core.model.ExecutionStatus;
 
-interface BackupExecutionJpaRepository extends JpaRepository<BackupExecutionEntity, UUID> {
+interface RestoreExecutionJpaRepository extends JpaRepository<RestoreExecutionEntity, UUID> {
 
-    List<BackupExecutionEntity> findByStatus(ExecutionStatus status);
+    List<RestoreExecutionEntity> findByStatus(ExecutionStatus status);
 }

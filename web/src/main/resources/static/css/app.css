@@ -213,3 +213,31 @@ table.targets {
 }
 
 h2 { margin: 1.75rem 0 .6rem; font-size: 1.05rem; }
+
+/* --- restore --- */
+
+.head-actions { display: flex; gap: .5rem; }
+
+/* Restoring overwrites live data. The page should not look routine. */
+.danger-box {
+  margin-bottom: 1.25rem;
+  padding: .9rem 1.1rem;
+  background: var(--err-bg);
+  border: 1px solid var(--err-border);
+  border-left-width: 4px;
+  border-radius: var(--radius);
+}
+.danger-box p { margin: 0 0 .5rem; }
+.danger-box p:last-child { margin-bottom: 0; }
+.danger-box code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: .88rem;
+}
+
+.button.danger-solid {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+
+.detail + .card { margin-top: 1.25rem; }

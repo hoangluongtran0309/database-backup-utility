@@ -73,6 +73,11 @@ once:
   this with half a megabyte on each stream, and runs on a separate thread so a
   reintroduced deadlock fails the build instead of hanging it.
 - **Every command has a timeout**, after which the child is forcibly killed.
+- **Input too large for memory is redirected from a file.** `runWithInput`
+  points the child's stdin at a file and lets the kernel do the feeding.
+  Writing to a child's stdin from a thread of ours would add a fourth stream to
+  keep in lockstep, and a writer blocked on a child that is itself blocked
+  writing output is the same deadlock in a harder-to-see shape.
 - **Output too large for memory is streamed.** `runStreaming` copies stdout into
   a caller-supplied sink through a fixed buffer, so a dump costs the same heap
   whatever its size. The sink is flushed but never closed — a
@@ -112,8 +117,13 @@ The pool is bounded on both axes. A full queue is refused and recorded as a
 failed execution rather than growing without limit, because every running
 backup is a child process competing for the same disk.
 
+A restore follows the same two-step shape and shares the same pool, so the bound
+is on total heavy work rather than on each kind separately. What a restore
+actually does — and what it deliberately does not — is in
+[ADR-007](../adr/007-restore-applies-a-dump-and-asks-first.md).
+
 Any row still RUNNING when the application starts belongs to a process that is
-gone — backups run here and nowhere else — so startup marks them failed.
+gone — jobs run here and nowhere else — so startup marks them failed.
 
 ## Testing
 
