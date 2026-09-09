@@ -8,6 +8,9 @@ dbbackup:
   backup:
     timeout: 5m
 
+  restore:
+    timeout: 5m
+
   storage:
     local:
       root: ${java.io.tmpdir}/dbbackup-it

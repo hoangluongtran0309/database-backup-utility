@@ -16,20 +16,18 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Entity
-@Table(name = "backup_executions")
+@Table(name = "restore_executions")
 @Getter
 @Setter
 @NoArgsConstructor
-class BackupExecutionEntity {
+class RestoreExecutionEntity {
 
     @Id
     private UUID id;
 
-    @Column(name = "target_id", nullable = false)
-    private UUID targetId;
+    @Column(name = "backup_execution_id", nullable = false)
+    private UUID backupExecutionId;
 
-    // STRING, not ORDINAL: an ordinal turns a reordering of the enum into a
-    // silent rewrite of every historical row.
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 16)
     private ExecutionStatus status;
@@ -39,12 +37,6 @@ class BackupExecutionEntity {
 
     @Column(name = "finished_at")
     private Instant finishedAt;
-
-    @Column(name = "artifact_path", columnDefinition = "text")
-    private String artifactPath;
-
-    @Column(name = "size_bytes")
-    private Long sizeBytes;
 
     @Column(name = "error_message", length = 2000)
     private String errorMessage;

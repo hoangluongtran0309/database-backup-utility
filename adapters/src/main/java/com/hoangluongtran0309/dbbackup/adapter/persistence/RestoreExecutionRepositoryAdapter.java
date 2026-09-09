@@ -1,0 +1,71 @@
+package com.hoangluongtran0309.dbbackup.adapter.persistence;
+
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+import org.springframework.data.domain.Sort;
+import org.springframework.stereotype.Component;
+
+import com.hoangluongtran0309.dbbackup.core.model.ExecutionStatus;
+import com.hoangluongtran0309.dbbackup.core.model.RestoreExecution;
+import com.hoangluongtran0309.dbbackup.core.port.RestoreExecutionRepository;
+
+import lombok.RequiredArgsConstructor;
+
+@Component
+@RequiredArgsConstructor
+class RestoreExecutionRepositoryAdapter implements RestoreExecutionRepository {
+
+    private static final Sort NEWEST_FIRST =
+            Sort.by(Sort.Order.desc("startedAt"), Sort.Order.desc("id"));
+
+    private final RestoreExecutionJpaRepository jpaRepository;
+
+    @Override
+    public RestoreExecution save(RestoreExecution execution) {
+        // Flushed so the RUNNING row is visible to the thread about to update it.
+        return toDomain(jpaRepository.saveAndFlush(toEntity(execution)));
+    }
+
+    @Override
+    public Optional<RestoreExecution> findById(UUID id) {
+        return jpaRepository.findById(id).map(RestoreExecutionRepositoryAdapter::toDomain);
+    }
+
+    @Override
+    public List<RestoreExecution> findAllNewestFirst() {
+        return jpaRepository.findAll(NEWEST_FIRST).stream()
+                .map(RestoreExecutionRepositoryAdapter::toDomain)
+                .toList();
+    }
+
+    @Override
+    public List<RestoreExecution> findRunning() {
+        return jpaRepository.findByStatus(ExecutionStatus.RUNNING).stream()
+                .map(RestoreExecutionRepositoryAdapter::toDomain)
+                .toList();
+    }
+
+    private static RestoreExecutionEntity toEntity(RestoreExecution execution) {
+        RestoreExecutionEntity entity = new RestoreExecutionEntity();
+        entity.setId(execution.getId());
+        entity.setBackupExecutionId(execution.getBackupExecutionId());
+        entity.setStatus(execution.getStatus());
+        entity.setStartedAt(execution.getStartedAt());
+        entity.setFinishedAt(execution.getFinishedAt());
+        entity.setErrorMessage(execution.getErrorMessage());
+        return entity;
+    }
+
+    private static RestoreExecution toDomain(RestoreExecutionEntity entity) {
+        return RestoreExecution.builder()
+                .id(entity.getId())
+                .backupExecutionId(entity.getBackupExecutionId())
+                .status(entity.getStatus())
+                .startedAt(entity.getStartedAt())
+                .finishedAt(entity.getFinishedAt())
+                .errorMessage(entity.getErrorMessage())
+                .build();
+    }
+}

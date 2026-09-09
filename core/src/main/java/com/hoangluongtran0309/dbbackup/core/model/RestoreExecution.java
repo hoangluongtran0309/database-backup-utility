@@ -8,102 +8,88 @@ import lombok.Builder;
 import lombok.Getter;
 
 /**
- * One attempt to back up one target.
+ * One attempt to load a backup artifact back into its target.
  *
- * <p>Immutable, and it owns its own state machine: {@link #succeeded} and
- * {@link #failed} return new instances and refuse to act on an execution that
- * has already finished. A late-arriving result therefore cannot quietly
- * overwrite a recorded outcome.
+ * <p>A separate aggregate from {@link BackupExecution} rather than a status on
+ * it: a backup is a thing that exists, and restoring it is an event that can
+ * happen to it many times, or never.
+ *
+ * <p>Immutable, and it owns its state machine for the same reason a backup
+ * does — a result arriving late must not overwrite a recorded outcome.
  */
 @Getter
-public final class BackupExecution {
+public final class RestoreExecution {
 
-    /** Matches the column width in V3. A stderr dump can be far longer. */
+    /** Matches the column width in V4. */
     public static final int MAX_ERROR_LENGTH = 2000;
 
     private final UUID id;
-    private final UUID targetId;
+
+    /** The backup being restored. Its target is where the data goes. */
+    private final UUID backupExecutionId;
+
     private final ExecutionStatus status;
     private final Instant startedAt;
-
-    /** Null while {@link ExecutionStatus#RUNNING}, set on every terminal state. */
     private final Instant finishedAt;
-
-    /** Where the dump was written. Null unless the backup succeeded. */
-    private final String artifactPath;
-
-    /** Null unless the backup succeeded. */
-    private final Long sizeBytes;
-
-    /** Null unless the backup failed. */
     private final String errorMessage;
 
     @Builder
-    private BackupExecution(
+    private RestoreExecution(
             UUID id,
-            UUID targetId,
+            UUID backupExecutionId,
             ExecutionStatus status,
             Instant startedAt,
             Instant finishedAt,
-            String artifactPath,
-            Long sizeBytes,
             String errorMessage) {
 
-        this.id = require(id, "Execution id is required");
-        this.targetId = require(targetId, "Target id is required");
+        this.id = require(id, "Restore id is required");
+        this.backupExecutionId = require(backupExecutionId, "Backup execution id is required");
         this.status = require(status, "Status is required");
         this.startedAt = require(startedAt, "Start timestamp is required");
         this.finishedAt = finishedAt;
-        this.artifactPath = artifactPath;
-        this.sizeBytes = sizeBytes;
         this.errorMessage = truncate(errorMessage);
 
         if (status.isFinished() == (finishedAt == null)) {
             throw new IllegalArgumentException(
-                    "A finished execution needs a finish timestamp, and a running one must not have "
+                    "A finished restore needs a finish timestamp, and a running one must not have "
                             + "(status=%s, finishedAt=%s)".formatted(status, finishedAt));
         }
     }
 
-    /** A backup that has just been accepted and not yet run. */
-    public static BackupExecution started(UUID id, UUID targetId, Instant startedAt) {
-        return BackupExecution.builder()
+    public static RestoreExecution started(UUID id, UUID backupExecutionId, Instant startedAt) {
+        return RestoreExecution.builder()
                 .id(id)
-                .targetId(targetId)
+                .backupExecutionId(backupExecutionId)
                 .status(ExecutionStatus.RUNNING)
                 .startedAt(startedAt)
                 .build();
     }
 
-    public BackupExecution succeeded(String artifactPath, long sizeBytes, Instant finishedAt) {
+    public RestoreExecution succeeded(Instant finishedAt) {
         requireStillRunning();
-        return BackupExecution.builder()
+        return RestoreExecution.builder()
                 .id(id)
-                .targetId(targetId)
+                .backupExecutionId(backupExecutionId)
                 .status(ExecutionStatus.SUCCEEDED)
                 .startedAt(startedAt)
                 .finishedAt(finishedAt)
-                .artifactPath(artifactPath)
-                .sizeBytes(sizeBytes)
                 .build();
     }
 
-    public BackupExecution failed(String errorMessage, Instant finishedAt) {
+    public RestoreExecution failed(String errorMessage, Instant finishedAt) {
         requireStillRunning();
-        return BackupExecution.builder()
+        return RestoreExecution.builder()
                 .id(id)
-                .targetId(targetId)
+                .backupExecutionId(backupExecutionId)
                 .status(ExecutionStatus.FAILED)
                 .startedAt(startedAt)
                 .finishedAt(finishedAt)
-                // A failure with nothing to say is worse than a house message.
                 .errorMessage((errorMessage == null || errorMessage.isBlank())
-                        ? "Backup failed, with no reason reported"
+                        ? "Restore failed, with no reason reported"
                         : errorMessage.strip())
                 .build();
     }
 
-    /** How long it ran, or has been running so far. */
     public Duration duration(Instant now) {
         return Duration.between(startedAt, finishedAt != null ? finishedAt : now);
     }
@@ -111,7 +97,7 @@ public final class BackupExecution {
     private void requireStillRunning() {
         if (status.isFinished()) {
             throw new IllegalStateException(
-                    "Execution %s already finished as %s".formatted(id, status));
+                    "Restore %s already finished as %s".formatted(id, status));
         }
     }
 

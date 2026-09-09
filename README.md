@@ -11,12 +11,18 @@ together. See [ROADMAP.md](ROADMAP.md) for what exists and what is next.
 ## What works today
 
 Registering a MySQL target, testing that it is reachable, running a full
-logical backup of it, and reading the history of those backups. The target's
+logical backup of it, restoring one of those backups, and reading the history
+of both. The target's
 password is encrypted with AES-256-GCM before it is stored.
 
 Backups run in the background: starting one redirects to its detail page, which
 shows `RUNNING` until you reload it. Artifacts are gzipped and named
 `<schema>_<timestamp>.sql.gz`, readable with `zcat` like any other archive.
+
+Restoring overwrites live data, so it asks: the confirmation page names the
+schema and you type the target's name to proceed. It applies the dump rather
+than resetting the schema — tables the backup does not contain are left alone.
+See [ADR-007](docs/adr/007-restore-applies-a-dump-and-asks-first.md).
 
 Nothing deletes artifacts yet, so a target that has backups cannot be removed —
 that is deliberate, and lifts when artifact deletion arrives.
@@ -61,9 +67,10 @@ that is in the repository.
 | `MYSQL_CLIENT_PATH` | `/usr/bin/mysql` | The `mysql` client binary; checked for executability at startup |
 | `MYSQLDUMP_PATH` | `/usr/bin/mysqldump` | The `mysqldump` binary; likewise checked at startup |
 | `BACKUP_DIR` | `./backups` | Where dumps are written; created at startup. Relative, so it follows the working directory — `mvn -pl web spring-boot:run` puts it under `web/`. Set an absolute path for anything real. |
-| `BACKUP_CONCURRENCY` | `2` | How many dumps may run at once |
-| `BACKUP_QUEUE_CAPACITY` | `20` | Beyond this, a backup is refused and recorded as failed |
+| `JOB_CONCURRENCY` | `2` | How many backups and restores may run at once, together |
+| `JOB_QUEUE_CAPACITY` | `20` | Beyond this, a job is refused and recorded as failed |
 | `BACKUP_TIMEOUT` | `30m` | A dump running longer than this is killed |
+| `RESTORE_TIMEOUT` | `60m` | A restore running longer than this is killed |
 
 ## Tests
 

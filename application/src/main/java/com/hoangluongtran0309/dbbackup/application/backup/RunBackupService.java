@@ -49,7 +49,7 @@ public class RunBackupService {
     private final MysqlLogicalBackupPort backupEngine;
     private final StoragePort storage;
     private final EncryptionPort encryption;
-    private final Executor backupExecutor;
+    private final Executor jobExecutor;
     private final Clock clock;
 
     /**
@@ -71,11 +71,11 @@ public class RunBackupService {
                 BackupExecution.started(UUID.randomUUID(), targetId, clock.instant()));
 
         try {
-            backupExecutor.execute(() -> run(execution.getId(), target));
+            jobExecutor.execute(() -> run(execution.getId(), target));
         } catch (RejectedExecutionException e) {
             // The queue is full. Saying so beats a row that sits at RUNNING
             // forever because nothing ever picked it up.
-            finish(execution, "Too many backups are already running or queued. Try again shortly.");
+            finish(execution, "Too many jobs are already running or queued. Try again shortly.");
         }
         return execution.getId();
     }

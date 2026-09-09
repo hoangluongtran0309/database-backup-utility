@@ -6,7 +6,11 @@
 
   <div class="page-head">
     <h1>Backup</h1>
-    <a class="button subtle" th:href="@{/executions}">All backups</a>
+    <span class="head-actions">
+      <a class="button danger" th:if="${execution.status.name() == 'SUCCEEDED'}"
+         th:href="@{/restores/new(backup=${execution.id})}">Restore this backup</a>
+      <a class="button subtle" th:href="@{/executions}">All backups</a>
+    </span>
   </div>
 
   <!-- No auto-refresh: reloading is the operator's call, and a page that

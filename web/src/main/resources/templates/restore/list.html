@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout/base :: page('Restores', ~{:: #content})}">
+<body>
+<div id="content">
+
+  <div class="page-head">
+    <h1>Restores</h1>
+  </div>
+
+  <p class="empty" th:if="${restores.isEmpty()}">
+    No restores yet. Start one from a backup.
+  </p>
+
+  <table class="targets" th:unless="${restores.isEmpty()}">
+    <thead>
+      <tr>
+        <th scope="col">Started</th>
+        <th scope="col">Into</th>
+        <th scope="col">From backup</th>
+        <th scope="col">Status</th>
+        <th scope="col"><span class="visually-hidden">Actions</span></th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr th:each="restore : ${restores}">
+        <td class="mono"
+            th:text="${#temporals.format(
+                        restore.startedAt.atOffset(T(java.time.ZoneOffset).UTC),
+                        'yyyy-MM-dd HH:mm:ss')} + ' UTC'">…</td>
+        <td th:with="backup=${backups.get(restore.backupExecutionId)}"
+            th:text="${backup == null ? '(unknown)'
+                      : targetNames.getOrDefault(backup.targetId, '(removed)')}">production</td>
+        <td class="mono" th:with="backup=${backups.get(restore.backupExecutionId)}"
+            th:text="${backup == null ? '—'
+                      : #temporals.format(backup.startedAt.atOffset(T(java.time.ZoneOffset).UTC),
+                                          'yyyy-MM-dd HH:mm')}">…</td>
+        <td th:replace="~{fragments/execution-status :: statusBadge(${restore.status})}"></td>
+        <td class="row-actions">
+          <a class="button" th:href="@{/restores/{id}(id=${restore.id})}">Details</a>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+</div>
+</body>
+</html>

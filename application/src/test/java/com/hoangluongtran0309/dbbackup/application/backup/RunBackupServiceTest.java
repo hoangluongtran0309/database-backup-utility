@@ -33,7 +33,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.hoangluongtran0309.dbbackup.core.exception.BackupFailedException;
 import com.hoangluongtran0309.dbbackup.core.model.BackupExecution;
-import com.hoangluongtran0309.dbbackup.core.model.BackupStatus;
+import com.hoangluongtran0309.dbbackup.core.model.ExecutionStatus;
 import com.hoangluongtran0309.dbbackup.core.model.DatabaseTarget;
 import com.hoangluongtran0309.dbbackup.core.model.MysqlConnection;
 import com.hoangluongtran0309.dbbackup.core.port.BackupExecutionRepository;
@@ -102,7 +102,7 @@ class RunBackupServiceTest {
 
         verify(executions).save(saved.capture());
         assertThat(executionId).isEqualTo(saved.getValue().getId());
-        assertThat(saved.getValue().getStatus()).isEqualTo(BackupStatus.RUNNING);
+        assertThat(saved.getValue().getStatus()).isEqualTo(ExecutionStatus.RUNNING);
         assertThat(saved.getValue().getStartedAt()).isEqualTo(NOW);
         assertThat(saved.getValue().getTargetId()).isEqualTo(TARGET_ID);
     }
@@ -147,8 +147,8 @@ class RunBackupServiceTest {
 
         verify(executions, org.mockito.Mockito.times(2)).save(saved.capture());
         BackupExecution recorded = saved.getAllValues().get(1);
-        assertThat(recorded.getStatus()).isEqualTo(BackupStatus.FAILED);
-        assertThat(recorded.getErrorMessage()).contains("Too many backups");
+        assertThat(recorded.getStatus()).isEqualTo(ExecutionStatus.FAILED);
+        assertThat(recorded.getErrorMessage()).contains("Too many jobs");
     }
 
     // --- running it ---------------------------------------------------------
@@ -164,7 +164,7 @@ class RunBackupServiceTest {
         runQueuedWork(service.start(TARGET_ID));
 
         BackupExecution recorded = lastSaved();
-        assertThat(recorded.getStatus()).isEqualTo(BackupStatus.SUCCEEDED);
+        assertThat(recorded.getStatus()).isEqualTo(ExecutionStatus.SUCCEEDED);
         assertThat(recorded.getArtifactPath()).isEqualTo(ARTIFACT.toString());
         assertThat(recorded.getSizeBytes()).isEqualTo(8192L);
         assertThat(recorded.getFinishedAt()).isEqualTo(NOW);
@@ -198,7 +198,7 @@ class RunBackupServiceTest {
         runQueuedWork(service.start(TARGET_ID));
 
         BackupExecution recorded = lastSaved();
-        assertThat(recorded.getStatus()).isEqualTo(BackupStatus.FAILED);
+        assertThat(recorded.getStatus()).isEqualTo(ExecutionStatus.FAILED);
         assertThat(recorded.getErrorMessage()).isEqualTo("mysqldump exited with 2: Access denied");
         // The engine already removed its own partial file.
         verify(storage, never()).delete(any());
@@ -217,7 +217,7 @@ class RunBackupServiceTest {
 
         runQueuedWork(service.start(TARGET_ID));
 
-        assertThat(lastSaved().getStatus()).isEqualTo(BackupStatus.FAILED);
+        assertThat(lastSaved().getStatus()).isEqualTo(ExecutionStatus.FAILED);
         assertThat(lastSaved().getErrorMessage()).contains("key rotated");
         verify(storage).delete(ARTIFACT);
     }
@@ -233,7 +233,7 @@ class RunBackupServiceTest {
         assertThat(service.failInterruptedBackups()).isEqualTo(1);
 
         BackupExecution recorded = lastSaved();
-        assertThat(recorded.getStatus()).isEqualTo(BackupStatus.FAILED);
+        assertThat(recorded.getStatus()).isEqualTo(ExecutionStatus.FAILED);
         assertThat(recorded.getErrorMessage()).contains("the application stopped");
     }
 

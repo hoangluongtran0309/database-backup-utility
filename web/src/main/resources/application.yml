@@ -35,15 +35,22 @@ dbbackup:
     # in seconds instead of holding the request open.
     connect-timeout: 10s
 
-  backup:
-    # How many dumps may run at once. Each is a child process competing for the
-    # same disk, so more is not faster.
-    concurrency: ${BACKUP_CONCURRENCY:2}
+  jobs:
+    # How many backups and restores may run at once, together. Each is a child
+    # process competing for the same disk, so more is not faster.
+    concurrency: ${JOB_CONCURRENCY:2}
     # Beyond this the pool refuses the work and the execution is recorded as
     # failed, rather than the queue growing without limit.
-    queue-capacity: ${BACKUP_QUEUE_CAPACITY:20}
+    queue-capacity: ${JOB_QUEUE_CAPACITY:20}
+
+  backup:
     # Backstop for a dump that hangs; the child is killed after this.
     timeout: ${BACKUP_TIMEOUT:30m}
+
+  restore:
+    # Loading a large dump is slower than producing it: the server is executing
+    # every statement, not just reading pages.
+    timeout: ${RESTORE_TIMEOUT:60m}
 
   storage:
     local:
