@@ -4,10 +4,16 @@
     th:replace="~{layout/base :: page('Title', 'section', ~{:: #content})}"
   where `section` is the nav entry the page belongs to — 'targets', 'backups'
   or 'restores' — and drives the highlighted sidebar item and the breadcrumb.
+
+  The error page passes 'error': it belongs to no section, and it shows no
+  flash. Spring's error model carries an `error` attribute of its own (the
+  reason phrase), which the flash below would otherwise print as a red banner
+  repeating the page's own heading.
 -->
 <html lang="en" xmlns:th="http://www.thymeleaf.org" th:fragment="page(title, section, content)"
-      th:with="sectionLabel=${section == 'backups' ? 'Backups' : (section == 'restores' ? 'Restores' : 'Targets')},
-               sectionUrl=${section == 'backups' ? '/executions' : (section == 'restores' ? '/restores' : '/databases')}">
+      th:with="sectionLabel=${section == 'targets' ? 'Targets' : (section == 'backups' ? 'Backups' : (section == 'restores' ? 'Restores' : null))},
+               sectionUrl=${section == 'backups' ? '/executions' : (section == 'restores' ? '/restores' : '/databases')},
+               showFlash=${section != 'error'}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -72,18 +78,18 @@
       <nav class="breadcrumb" aria-label="Breadcrumb">
         <a th:href="@{/databases}">Home</a>
         <span aria-hidden="true">/</span>
-        <th:block th:if="${title != sectionLabel}">
+        <th:block th:if="${sectionLabel != null and title != sectionLabel}">
           <a th:href="@{${sectionUrl}}" th:text="${sectionLabel}">Section</a>
           <span aria-hidden="true">/</span>
         </th:block>
         <span aria-current="page" th:text="${title}">Page</span>
       </nav>
 
-      <div class="flash flash-success" role="status" th:if="${message}" data-flash>
+      <div class="flash flash-success" role="status" th:if="${showFlash and message != null}" data-flash>
         <span th:text="${message}"></span>
         <button type="button" class="flash-dismiss" data-flash-dismiss aria-label="Dismiss message">&times;</button>
       </div>
-      <div class="flash flash-error" role="alert" th:if="${error}" data-flash>
+      <div class="flash flash-error" role="alert" th:if="${showFlash and error != null}" data-flash>
         <span th:text="${error}"></span>
         <button type="button" class="flash-dismiss" data-flash-dismiss aria-label="Dismiss message">&times;</button>
       </div>
