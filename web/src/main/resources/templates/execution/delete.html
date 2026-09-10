@@ -51,7 +51,7 @@
 
   <form method="post" th:action="@{/executions/{id}/delete(id=${preview.execution().id})}">
     <div class="form-actions">
-      <button class="button button-danger-solid" type="submit">Delete this backup</button>
+      <button class="button button-danger-solid" type="submit" data-busy-label="Deleting…">Delete this backup</button>
       <a class="button button-ghost"
          th:href="@{/executions/{id}(id=${preview.execution().id})}">Cancel</a>
     </div>

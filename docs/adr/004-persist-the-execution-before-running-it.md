@@ -50,7 +50,9 @@ option that stays honest with the operator.
 - Every accepted backup has a stable URL before any work starts.
 - The detail page shows RUNNING and is reloaded by hand. There is no polling and
   no auto-refresh: a page that reloads itself is a nuisance while you are
-  reading an error message.
+  reading an error message. *Superseded by
+  [ADR-010](010-the-detail-page-follows-a-running-job.md): the page now follows
+  a running job, and stops as soon as it finishes.*
 - A row still RUNNING at startup belongs to a process that is gone — backups run
   in this process and nowhere else — so `failInterruptedBackups` marks them
   failed when the application starts. Without it the console would show a dead

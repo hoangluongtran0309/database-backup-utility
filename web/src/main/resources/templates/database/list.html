@@ -25,16 +25,23 @@
         <tr>
           <th scope="col">Name</th>
           <th scope="col">Address</th>
-          <th scope="col">User</th>
           <th scope="col">Last check</th>
+          <th scope="col">Last backup</th>
           <th scope="col"><span class="visually-hidden">Actions</span></th>
         </tr>
       </thead>
       <tbody>
         <tr th:each="target : ${targets}">
           <td data-label="Name"><strong th:text="${target.name}">prod</strong></td>
-          <td data-label="Address" class="mono" th:text="${target.address}">127.0.0.1:3306/shop</td>
-          <td data-label="User" class="mono" th:text="${target.username}">backup</td>
+          <!-- The user rides under the address rather than in a column of its
+               own: with Last backup added the row no longer fitted, and who a
+               target connects as is secondary to where it points. -->
+          <td data-label="Address">
+            <div class="cell-stack">
+              <span class="mono nowrap" th:text="${target.address}">127.0.0.1:3306/shop</span>
+              <span class="field-hint">as <span class="mono" th:text="${target.username}">backup</span></span>
+            </div>
+          </td>
 
           <td data-label="Last check" class="check-cell">
             <div>
@@ -58,18 +65,39 @@
             </div>
           </td>
 
+          <!-- The newest good copy, linked; plus, when the newest attempt did
+               not produce one, what it is doing instead. Timed by when the dump
+               started — that is the moment the snapshot describes. -->
+          <td data-label="Last backup"
+              th:with="latest=${latestBackups.get(target.id)},
+                       lastGood=${lastSuccessfulBackups.get(target.id)}">
+            <div class="cell-stack">
+              <a class="badge badge-warning" th:if="${latest != null and latest.status.name() == 'RUNNING'}"
+                 th:href="@{/executions/{id}(id=${latest.id})}">Running</a>
+              <a class="mono nowrap" th:if="${lastGood != null}"
+                 th:href="@{/executions/{id}(id=${lastGood.id})}"
+                 th:text="${#temporals.format(
+                             lastGood.startedAt.atOffset(T(java.time.ZoneOffset).UTC),
+                             'yyyy-MM-dd HH:mm')} + ' UTC'">2026-09-09 14:48 UTC</a>
+              <span class="badge badge-neutral"
+                    th:if="${lastGood == null and (latest == null or latest.status.name() != 'RUNNING')}">Never</span>
+              <a class="check-message nowrap" th:if="${latest != null and latest.status.name() == 'FAILED'}"
+                 th:href="@{/executions/{id}(id=${latest.id})}">Latest attempt failed</a>
+            </div>
+          </td>
+
           <td class="actions">
             <div class="row-actions">
               <form method="post" th:action="@{/databases/{id}/test(id=${target.id})}">
-                <button class="button button-small" type="submit">Test</button>
+                <button class="button button-small" type="submit" data-busy-label="Testing…">Test</button>
               </form>
               <form method="post" th:action="@{/databases/{id}/backup(id=${target.id})}">
-                <button class="button button-small button-primary" type="submit">Back up now</button>
+                <button class="button button-small button-primary" type="submit" data-busy-label="Starting…">Back up now</button>
               </form>
               <form method="post" th:action="@{/databases/{id}/delete(id=${target.id})}"
                     th:attr="data-confirm=|Remove target “${target.name}”? Its stored credentials are deleted. A target that still has backups cannot be removed.|"
                     data-confirm-title="Remove target" data-confirm-accept="Remove">
-                <button class="button button-small button-danger" type="submit">Remove</button>
+                <button class="button button-small button-danger" type="submit" data-busy-label="Removing…">Remove</button>
               </form>
             </div>
           </td>

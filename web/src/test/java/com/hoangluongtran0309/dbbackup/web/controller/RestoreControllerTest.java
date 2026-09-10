@@ -166,7 +166,23 @@ class RestoreControllerTest {
                 .andExpect(view().name("restore/detail"))
                 .andExpect(content().string(containsString("Why it failed")))
                 .andExpect(content().string(containsString("ERROR 1142 at line 40")))
-                .andExpect(content().string(containsString("production")));
+                .andExpect(content().string(containsString("production")))
+                .andExpect(content().string(containsString("data-live-active=\"false\"")));
+    }
+
+    /** Followed until it finishes, like a running backup (ADR-010). */
+    @Test
+    void detailOfARunningRestoreIsFollowed() throws Exception {
+        RestoreExecution restore = RestoreExecution.started(UUID.randomUUID(), BACKUP_ID, STARTED);
+        when(restores.findById(restore.getId())).thenReturn(Optional.of(restore));
+        when(backups.findById(BACKUP_ID)).thenReturn(Optional.of(backup()));
+        when(targets.listAll()).thenReturn(List.of(target()));
+
+        mockMvc.perform(get("/restores/{id}", restore.getId()))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("still running")))
+                .andExpect(content().string(containsString("data-live-active=\"true\"")))
+                .andExpect(content().string(containsString("data-live-announce=\"Restore running\"")));
     }
 
     private void givenBackupAndTarget() {

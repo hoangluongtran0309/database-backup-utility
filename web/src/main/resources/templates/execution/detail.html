@@ -2,7 +2,12 @@
 <html lang="en" xmlns:th="http://www.thymeleaf.org"
       th:replace="~{layout/base :: page('Backup', 'backups', ~{:: #content})}">
 <body>
-<div id="content">
+<!-- data-live: while the backup runs, app.js re-fetches this page and swaps
+     this block for the new one — see ADR-010. The server renders every state;
+     the script only moves markup. -->
+<div id="content" data-live
+     th:attr="data-live-active=${execution.status.name() == 'RUNNING'},
+              data-live-announce=|Backup ${#strings.toLowerCase(execution.status)}|">
 
   <div class="page-header">
     <div>
@@ -24,10 +29,9 @@
     </div>
   </div>
 
-  <!-- No auto-refresh: reloading is the operator's call, and a page that
-       reloads itself is a surprise when you are reading an error message. -->
-  <p class="alert alert-info" th:if="${execution.status.name() == 'RUNNING'}" role="status">
-    This backup is still running. Reload the page to see where it got to.
+  <p class="alert alert-info" th:if="${execution.status.name() == 'RUNNING'}">
+    This backup is still running. This page follows it and updates when it finishes.
+    <noscript>With JavaScript off, reload the page to see where it got to.</noscript>
   </p>
 
   <div class="panel">

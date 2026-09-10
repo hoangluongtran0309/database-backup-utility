@@ -113,6 +113,10 @@ are separate on purpose — see
    `<schema>_<timestamp>.sql.gz` — see
    [ADR-006](../adr/006-gzip-the-dump-as-it-is-written.md).
 
+Meanwhile the detail page follows the row: it re-fetches itself every two
+seconds and swaps in the part that changed, until the row reaches a finished
+state — see [ADR-010](../adr/010-the-detail-page-follows-a-running-job.md).
+
 The pool is bounded on both axes. A full queue is refused and recorded as a
 failed execution rather than growing without limit, because every running
 backup is a child process competing for the same disk.

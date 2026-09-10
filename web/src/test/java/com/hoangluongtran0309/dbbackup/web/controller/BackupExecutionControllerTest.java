@@ -116,7 +116,9 @@ class BackupExecutionControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(view().name("execution/detail"))
                 .andExpect(content().string(containsString("/backups/shop_20260909_100000.sql.gz")))
-                .andExpect(content().string(containsString("8192 bytes")));
+                .andExpect(content().string(containsString("8192 bytes")))
+                // Finished: nothing for the page to follow (ADR-010).
+                .andExpect(content().string(containsString("data-live-active=\"false\"")));
     }
 
     @Test
@@ -129,7 +131,11 @@ class BackupExecutionControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("still running")))
                 .andExpect(content().string(containsString("Running")))
-                .andExpect(content().string(not(containsString("Why it failed"))));
+                .andExpect(content().string(not(containsString("Why it failed"))))
+                // The page follows the run until it finishes (ADR-010), and
+                // says what to announce when it does.
+                .andExpect(content().string(containsString("data-live-active=\"true\"")))
+                .andExpect(content().string(containsString("data-live-announce=\"Backup running\"")));
     }
 
     /** mysqldump's own output, shown in full rather than summarised. */

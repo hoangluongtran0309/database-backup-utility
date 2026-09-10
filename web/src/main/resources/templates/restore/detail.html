@@ -2,7 +2,10 @@
 <html lang="en" xmlns:th="http://www.thymeleaf.org"
       th:replace="~{layout/base :: page('Restore', 'restores', ~{:: #content})}">
 <body>
-<div id="content">
+<!-- data-live: followed by app.js while running, as on the backup page (ADR-010). -->
+<div id="content" data-live
+     th:attr="data-live-active=${restore.status.name() == 'RUNNING'},
+              data-live-announce=|Restore ${#strings.toLowerCase(restore.status)}|">
 
   <div class="page-header">
     <div>
@@ -18,8 +21,9 @@
     </div>
   </div>
 
-  <p class="alert alert-info" th:if="${restore.status.name() == 'RUNNING'}" role="status">
-    This restore is still running. Reload the page to see where it got to.
+  <p class="alert alert-info" th:if="${restore.status.name() == 'RUNNING'}">
+    This restore is still running. This page follows it and updates when it finishes.
+    <noscript>With JavaScript off, reload the page to see where it got to.</noscript>
   </p>
 
   <div class="panel">
