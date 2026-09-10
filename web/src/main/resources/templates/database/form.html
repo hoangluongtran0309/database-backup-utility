@@ -1,53 +1,72 @@
 <!DOCTYPE html>
 <html lang="en" xmlns:th="http://www.thymeleaf.org"
-      th:replace="~{layout/base :: page('Add target', ~{:: #content})}">
+      th:replace="~{layout/base :: page('Add target', 'targets', ~{:: #content})}">
 <body>
 <div id="content">
 
-  <div class="page-head">
-    <h1>Add a backup target</h1>
+  <div class="page-header">
+    <div>
+      <div class="eyebrow">Setup</div>
+      <h1>Add a backup target</h1>
+      <p>A MySQL schema to back up. The connection is not tried until you press Test.</p>
+    </div>
   </div>
 
-  <form class="card" method="post" th:action="@{/databases}" th:object="${form}">
+  <form class="form-panel" method="post" th:action="@{/databases}" th:object="${form}">
 
     <div th:replace="~{fragments/form-errors :: formErrors}"></div>
 
-    <label for="name">Name</label>
-    <input id="name" type="text" th:field="*{name}" autofocus
-           aria-describedby="name-help" placeholder="production shop db">
-    <p class="help" id="name-help">How this target is listed. Must be unique.</p>
-    <div th:replace="~{fragments/field-error :: fieldError('name')}"></div>
+    <div class="form-grid">
+      <div class="form-group form-group-full">
+        <label for="name">Name</label>
+        <input id="name" type="text" th:field="*{name}" autofocus
+               aria-describedby="name-help" placeholder="production shop db"
+               th:attr="aria-invalid=${#fields.hasErrors('name')} ? 'true' : null">
+        <p class="field-hint" id="name-help">How this target is listed. Must be unique.</p>
+        <div th:replace="~{fragments/field-error :: fieldError('name')}"></div>
+      </div>
 
-    <div class="row">
-      <div class="grow">
+      <div class="form-group">
         <label for="host">Host</label>
-        <input id="host" type="text" th:field="*{host}" placeholder="127.0.0.1">
+        <input id="host" type="text" th:field="*{host}" placeholder="127.0.0.1"
+               th:attr="aria-invalid=${#fields.hasErrors('host')} ? 'true' : null">
         <div th:replace="~{fragments/field-error :: fieldError('host')}"></div>
       </div>
-      <div class="port">
+
+      <div class="form-group">
         <label for="port">Port</label>
-        <input id="port" type="number" min="1" max="65535" th:field="*{port}">
+        <input id="port" type="number" min="1" max="65535" th:field="*{port}"
+               th:attr="aria-invalid=${#fields.hasErrors('port')} ? 'true' : null">
         <div th:replace="~{fragments/field-error :: fieldError('port')}"></div>
+      </div>
+
+      <div class="form-group">
+        <label for="database">Database</label>
+        <input id="database" type="text" th:field="*{database}" placeholder="shop"
+               th:attr="aria-invalid=${#fields.hasErrors('database')} ? 'true' : null">
+        <div th:replace="~{fragments/field-error :: fieldError('database')}"></div>
+      </div>
+
+      <div class="form-group">
+        <label for="username">Username</label>
+        <input id="username" type="text" th:field="*{username}" autocomplete="off"
+               th:attr="aria-invalid=${#fields.hasErrors('username')} ? 'true' : null">
+        <div th:replace="~{fragments/field-error :: fieldError('username')}"></div>
+      </div>
+
+      <div class="form-group form-group-full">
+        <label for="password">Password</label>
+        <input id="password" type="password" th:field="*{password}"
+               autocomplete="new-password" aria-describedby="password-help"
+               th:attr="aria-invalid=${#fields.hasErrors('password')} ? 'true' : null">
+        <p class="field-hint" id="password-help">Encrypted before it is stored, and never shown again.</p>
+        <div th:replace="~{fragments/field-error :: fieldError('password')}"></div>
       </div>
     </div>
 
-    <label for="database">Database</label>
-    <input id="database" type="text" th:field="*{database}" placeholder="shop">
-    <div th:replace="~{fragments/field-error :: fieldError('database')}"></div>
-
-    <label for="username">Username</label>
-    <input id="username" type="text" th:field="*{username}" autocomplete="off">
-    <div th:replace="~{fragments/field-error :: fieldError('username')}"></div>
-
-    <label for="password">Password</label>
-    <input id="password" type="password" th:field="*{password}"
-           autocomplete="new-password" aria-describedby="password-help">
-    <p class="help" id="password-help">Encrypted before it is stored, and never shown again.</p>
-    <div th:replace="~{fragments/field-error :: fieldError('password')}"></div>
-
-    <div class="actions">
-      <button class="button primary" type="submit">Register target</button>
-      <a class="button subtle" th:href="@{/databases}">Cancel</a>
+    <div class="form-actions">
+      <button class="button button-primary" type="submit">Register target</button>
+      <a class="button button-ghost" th:href="@{/databases}">Cancel</a>
     </div>
   </form>
 

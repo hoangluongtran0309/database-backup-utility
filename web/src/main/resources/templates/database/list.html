@@ -1,68 +1,82 @@
 <!DOCTYPE html>
 <html lang="en" xmlns:th="http://www.thymeleaf.org"
-      th:replace="~{layout/base :: page('Targets', ~{:: #content})}">
+      th:replace="~{layout/base :: page('Targets', 'targets', ~{:: #content})}">
 <body>
 <div id="content">
 
-  <div class="page-head">
-    <h1>Backup targets</h1>
-    <a class="button" th:href="@{/databases/new}">Add target</a>
+  <div class="page-header">
+    <div>
+      <div class="eyebrow">Setup</div>
+      <h1>Backup targets</h1>
+      <p>The MySQL schemas this tool can back up and restore into.</p>
+    </div>
+    <div class="actions">
+      <a class="button button-primary" th:href="@{/databases/new}">Add target</a>
+    </div>
   </div>
 
-  <p class="empty" th:if="${targets.isEmpty()}">
-    No targets yet. Add one to get started.
+  <p class="empty-state panel" th:if="${targets.isEmpty()}">
+    No targets yet. <a th:href="@{/databases/new}">Add one</a> to get started.
   </p>
 
-  <table class="targets" th:unless="${targets.isEmpty()}">
-    <thead>
-      <tr>
-        <th scope="col">Name</th>
-        <th scope="col">Address</th>
-        <th scope="col">User</th>
-        <th scope="col">Last check</th>
-        <th scope="col"><span class="visually-hidden">Actions</span></th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr th:each="target : ${targets}">
-        <td th:text="${target.name}">prod</td>
-        <td class="mono" th:text="${target.address}">127.0.0.1:3306/shop</td>
-        <td class="mono" th:text="${target.username}">backup</td>
+  <div class="table-wrap responsive-cards" th:unless="${targets.isEmpty()}">
+    <table>
+      <thead>
+        <tr>
+          <th scope="col">Name</th>
+          <th scope="col">Address</th>
+          <th scope="col">User</th>
+          <th scope="col">Last check</th>
+          <th scope="col"><span class="visually-hidden">Actions</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr th:each="target : ${targets}">
+          <td data-label="Name"><strong th:text="${target.name}">prod</strong></td>
+          <td data-label="Address" class="mono" th:text="${target.address}">127.0.0.1:3306/shop</td>
+          <td data-label="User" class="mono" th:text="${target.username}">backup</td>
 
-        <td class="check">
-          <span class="badge untested" th:unless="${target.hasBeenTested()}">Never tested</span>
-          <th:block th:if="${target.hasBeenTested()}">
-            <span class="badge ok" th:if="${target.lastConnectionCheck.successful}">Connected</span>
-            <!-- MySQL's own words, shown in full rather than summarised: they
-                 are what tells an operator which thing to go and fix. -->
-            <span class="badge failed" th:unless="${target.lastConnectionCheck.successful}"
-                  th:title="${target.lastConnectionCheck.message}">Failed</span>
-            <!-- atOffset(UTC) is not optional. #temporals.format renders an
-                 Instant in the JVM's default zone, so without it the label
-                 says UTC while the digits are the server's local time. -->
-            <span class="checked-at"
-                  th:text="${#temporals.format(
-                              target.lastConnectionCheck.checkedAt.atOffset(T(java.time.ZoneOffset).UTC),
-                              'yyyy-MM-dd HH:mm')} + ' UTC'">…</span>
-            <p class="check-message" th:unless="${target.lastConnectionCheck.successful}"
-               th:text="${target.lastConnectionCheck.message}"></p>
-          </th:block>
-        </td>
+          <td data-label="Last check" class="check-cell">
+            <div>
+              <span class="badge badge-neutral" th:unless="${target.hasBeenTested()}">Never tested</span>
+              <th:block th:if="${target.hasBeenTested()}">
+                <span class="badge badge-success" th:if="${target.lastConnectionCheck.successful}">Connected</span>
+                <span class="badge badge-danger" th:unless="${target.lastConnectionCheck.successful}"
+                      th:title="${target.lastConnectionCheck.message}">Failed</span>
+                <!-- atOffset(UTC) is not optional. #temporals.format renders an
+                     Instant in the JVM's default zone, so without it the label
+                     says UTC while the digits are the server's local time. -->
+                <span class="checked-at"
+                      th:text="${#temporals.format(
+                                  target.lastConnectionCheck.checkedAt.atOffset(T(java.time.ZoneOffset).UTC),
+                                  'yyyy-MM-dd HH:mm')} + ' UTC'">…</span>
+                <!-- MySQL's own words, shown in full rather than summarised: they
+                     are what tells an operator which thing to go and fix. -->
+                <p class="check-message" th:unless="${target.lastConnectionCheck.successful}"
+                   th:text="${target.lastConnectionCheck.message}"></p>
+              </th:block>
+            </div>
+          </td>
 
-        <td class="row-actions">
-          <form method="post" th:action="@{/databases/{id}/test(id=${target.id})}">
-            <button class="button" type="submit">Test</button>
-          </form>
-          <form method="post" th:action="@{/databases/{id}/backup(id=${target.id})}">
-            <button class="button primary" type="submit">Back up now</button>
-          </form>
-          <form method="post" th:action="@{/databases/{id}/delete(id=${target.id})}">
-            <button class="button danger" type="submit">Remove</button>
-          </form>
-        </td>
-      </tr>
-    </tbody>
-  </table>
+          <td class="actions">
+            <div class="row-actions">
+              <form method="post" th:action="@{/databases/{id}/test(id=${target.id})}">
+                <button class="button button-small" type="submit">Test</button>
+              </form>
+              <form method="post" th:action="@{/databases/{id}/backup(id=${target.id})}">
+                <button class="button button-small button-primary" type="submit">Back up now</button>
+              </form>
+              <form method="post" th:action="@{/databases/{id}/delete(id=${target.id})}"
+                    th:attr="data-confirm=|Remove target “${target.name}”? Its stored credentials are deleted. A target that still has backups cannot be removed.|"
+                    data-confirm-title="Remove target" data-confirm-accept="Remove">
+                <button class="button button-small button-danger" type="submit">Remove</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
 
 </div>
 </body>

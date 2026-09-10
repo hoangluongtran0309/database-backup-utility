@@ -1,0 +1,9 @@
+database-backup-utility
+
+This product bundles the Inter typeface, licensed under the SIL Open Font
+License 1.1. The variable-weight web font subsets are served by the web console
+from web/src/main/resources/static/fonts/, alongside a copy of the licence in
+that same directory (OFL.txt).
+
+  Inter — Copyright 2016 The Inter Project Authors
+  https://github.com/rsms/inter — SIL OFL 1.1

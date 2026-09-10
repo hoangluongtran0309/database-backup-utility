@@ -1,14 +1,18 @@
 <!DOCTYPE html>
 <html lang="en" xmlns:th="http://www.thymeleaf.org"
-      th:replace="~{layout/base :: page('Restore', ~{:: #content})}">
+      th:replace="~{layout/base :: page('Confirm restore', 'restores', ~{:: #content})}">
 <body>
 <div id="content">
 
-  <div class="page-head">
-    <h1>Restore this backup</h1>
+  <div class="page-header">
+    <div>
+      <div class="eyebrow">Restore</div>
+      <h1>Restore this backup</h1>
+      <p>Read what is about to happen, then confirm by typing the target's name.</p>
+    </div>
   </div>
 
-  <div class="danger-box" role="alert">
+  <div class="alert alert-danger" role="alert">
     <p><strong>This overwrites live data.</strong></p>
     <p>
       Every table in the backup will be dropped and recreated in
@@ -22,33 +26,35 @@
     </p>
   </div>
 
-  <dl class="detail">
-    <dt>Backup taken</dt>
-    <dd class="mono"
-        th:text="${#temporals.format(
-                    backup.startedAt.atOffset(T(java.time.ZoneOffset).UTC),
-                    'yyyy-MM-dd HH:mm:ss')} + ' UTC'">…</dd>
-    <dt>Artifact</dt>
-    <dd class="mono break" th:text="${backup.artifactPath}">…</dd>
-    <dt>Target</dt>
-    <dd th:text="${target.name}">production</dd>
-  </dl>
+  <div class="panel">
+    <dl class="detail-grid">
+      <dt>Backup taken</dt>
+      <dd class="mono"
+          th:text="${#temporals.format(
+                      backup.startedAt.atOffset(T(java.time.ZoneOffset).UTC),
+                      'yyyy-MM-dd HH:mm:ss')} + ' UTC'">…</dd>
+      <dt>Artifact</dt>
+      <dd class="mono break" th:text="${backup.artifactPath}">…</dd>
+      <dt>Target</dt>
+      <dd th:text="${target.name}">production</dd>
+    </dl>
+  </div>
 
-  <form class="card" method="post" th:action="@{/restores}">
+  <form class="form-panel" method="post" th:action="@{/restores}">
     <input type="hidden" name="backup" th:value="${backup.id}">
 
-    <label for="confirmation">
-      Type <strong th:text="${target.name}">production</strong> to confirm
-    </label>
-    <input id="confirmation" name="confirmation" type="text" autocomplete="off"
-           aria-describedby="confirmation-help">
-    <p class="help" id="confirmation-help">
-      Typing the name is deliberate: it is the last chance to notice the wrong target.
-    </p>
+    <div class="form-group">
+      <label for="confirmation">Type <strong th:text="${target.name}">production</strong> to confirm</label>
+      <input id="confirmation" name="confirmation" type="text" autocomplete="off"
+             spellcheck="false" aria-describedby="confirmation-help">
+      <p class="field-hint" id="confirmation-help">
+        Typing the name is deliberate: it is the last chance to notice the wrong target.
+      </p>
+    </div>
 
-    <div class="actions">
-      <button class="button danger-solid" type="submit">Restore, overwriting the schema</button>
-      <a class="button subtle" th:href="@{/executions/{id}(id=${backup.id})}">Cancel</a>
+    <div class="form-actions">
+      <button class="button button-danger-solid" type="submit">Restore, overwriting the schema</button>
+      <a class="button button-ghost" th:href="@{/executions/{id}(id=${backup.id})}">Cancel</a>
     </div>
   </form>
 

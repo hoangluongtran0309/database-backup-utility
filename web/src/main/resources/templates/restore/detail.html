@@ -1,50 +1,61 @@
 <!DOCTYPE html>
 <html lang="en" xmlns:th="http://www.thymeleaf.org"
-      th:replace="~{layout/base :: page('Restore', ~{:: #content})}">
+      th:replace="~{layout/base :: page('Restore', 'restores', ~{:: #content})}">
 <body>
 <div id="content">
 
-  <div class="page-head">
-    <h1>Restore</h1>
-    <a class="button subtle" th:href="@{/restores}">All restores</a>
+  <div class="page-header">
+    <div>
+      <div class="eyebrow">Restore</div>
+      <h1 th:text="${targetName != null ? targetName : '(removed)'}">production</h1>
+      <p class="mono"
+         th:text="${#temporals.format(
+                     restore.startedAt.atOffset(T(java.time.ZoneOffset).UTC),
+                     'yyyy-MM-dd HH:mm:ss')} + ' UTC'">…</p>
+    </div>
+    <div class="actions">
+      <a class="button" th:href="@{/restores}">All restores</a>
+    </div>
   </div>
 
-  <p class="flash" th:if="${restore.status.name() == 'RUNNING'}" role="status">
+  <p class="alert alert-info" th:if="${restore.status.name() == 'RUNNING'}" role="status">
     This restore is still running. Reload the page to see where it got to.
   </p>
 
-  <dl class="detail">
-    <dt>Status</dt>
-    <dd th:insert="~{fragments/execution-status :: statusBadge(${restore.status})}"></dd>
+  <div class="panel">
+    <dl class="detail-grid">
+      <dt>Status</dt>
+      <dd th:insert="~{fragments/execution-status :: statusBadge(${restore.status})}"></dd>
 
-    <dt>Into target</dt>
-    <dd th:text="${targetName != null ? targetName : '(removed)'}">production</dd>
+      <dt>Into target</dt>
+      <dd th:text="${targetName != null ? targetName : '(removed)'}">production</dd>
 
-    <dt>From backup</dt>
-    <dd th:if="${backup == null}">(removed)</dd>
-    <dd th:unless="${backup == null}">
-      <a th:href="@{/executions/{id}(id=${backup.id})}"
-         th:text="${#temporals.format(
-                     backup.startedAt.atOffset(T(java.time.ZoneOffset).UTC),
-                     'yyyy-MM-dd HH:mm:ss')} + ' UTC'">…</a>
-    </dd>
+      <dt>From backup</dt>
+      <dd th:if="${backup == null}">(removed)</dd>
+      <dd class="mono" th:unless="${backup == null}">
+        <a th:href="@{/executions/{id}(id=${backup.id})}"
+           th:text="${#temporals.format(
+                       backup.startedAt.atOffset(T(java.time.ZoneOffset).UTC),
+                       'yyyy-MM-dd HH:mm:ss')} + ' UTC'">…</a>
+      </dd>
 
-    <dt>Started</dt>
-    <dd class="mono"
-        th:text="${#temporals.format(
-                    restore.startedAt.atOffset(T(java.time.ZoneOffset).UTC),
-                    'yyyy-MM-dd HH:mm:ss')} + ' UTC'">…</dd>
+      <dt>Started</dt>
+      <dd class="mono"
+          th:text="${#temporals.format(
+                      restore.startedAt.atOffset(T(java.time.ZoneOffset).UTC),
+                      'yyyy-MM-dd HH:mm:ss')} + ' UTC'">…</dd>
 
-    <dt>Finished</dt>
-    <dd class="mono" th:if="${restore.finishedAt == null}">—</dd>
-    <dd class="mono" th:unless="${restore.finishedAt == null}"
-        th:text="${#temporals.format(
-                    restore.finishedAt.atOffset(T(java.time.ZoneOffset).UTC),
-                    'yyyy-MM-dd HH:mm:ss')} + ' UTC'">…</dd>
-  </dl>
+      <dt>Finished</dt>
+      <dd class="mono" th:if="${restore.finishedAt == null}">—</dd>
+      <dd class="mono" th:unless="${restore.finishedAt == null}"
+          th:text="${#temporals.format(
+                      restore.finishedAt.atOffset(T(java.time.ZoneOffset).UTC),
+                      'yyyy-MM-dd HH:mm:ss')} + ' UTC'">…</dd>
+    </dl>
+  </div>
 
   <div th:if="${restore.errorMessage != null}">
-    <h2>Why it failed</h2>
+    <div class="section-heading"><h2>Why it failed</h2></div>
     <!-- Where it stopped matters more here than anywhere else in the tool: the
          schema may be half old and half new. -->
     <pre class="error-output" th:text="${restore.errorMessage}"></pre>
