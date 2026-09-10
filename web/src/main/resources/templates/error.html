@@ -20,7 +20,8 @@
 <html lang="en" xmlns:th="http://www.thymeleaf.org"
       th:replace="~{layout/base :: page(${status == 404 ? 'Page not found'
                                          : (status == 400 ? 'That request could not be read'
-                                         : (status != null and status >= 500 ? 'Something went wrong' : 'That did not work'))},
+                                         : (status == 403 ? 'That form had gone stale'
+                                         : (status != null and status >= 500 ? 'Something went wrong' : 'That did not work')))},
                                         'error', ~{:: #content})}">
 <body>
 <div id="content">
@@ -30,11 +31,16 @@
       <div class="eyebrow" th:text="${status != null ? 'Error ' + status : 'Error'}">Error 500</div>
       <h1 th:text="${status == 404 ? 'Page not found'
                     : (status == 400 ? 'That request could not be read'
-                    : (status != null and status >= 500 ? 'Something went wrong' : 'That did not work'))}">Something went wrong</h1>
+                    : (status == 403 ? 'That form had gone stale'
+                    : (status != null and status >= 500 ? 'Something went wrong' : 'That did not work')))}">Something went wrong</h1>
       <p th:if="${status == 404}">Nothing lives at this address. It may have been mistyped, or point at something since deleted.</p>
       <p th:if="${status == 400}">Part of the address is not in a form this console understands — often an id that has been cut short.</p>
+      <!-- Every page needs a sign-in, so the one thing left that answers 403
+           is a form whose CSRF token no longer matches the session — typically
+           a page left open across a sign-out and a sign-in. -->
+      <p th:if="${status == 403}">Nothing was changed. The page you sent it from is older than your current sign-in — go back, reload it, and try again.</p>
       <p th:if="${status != null and status >= 500}">The console could not finish this request. The details are in the application log.</p>
-      <p th:if="${status != null and status != 404 and status != 400 and status < 500}" th:text="${error}">Forbidden</p>
+      <p th:if="${status != null and status != 404 and status != 400 and status != 403 and status < 500}" th:text="${error}">Forbidden</p>
     </div>
   </div>
 

@@ -185,7 +185,8 @@
      * state, badges and buttons included, exactly as a reload would.
      *
      * Stops at the first finished state, so an error message is never
-     * replaced while someone is reading it.
+     * replaced while someone is reading it. Each poll is a signed-in request,
+     * so a followed job keeps its session alive until it finishes (ADR-011).
      */
     function initLiveRegion() {
         var region = document.querySelector('[data-live]');
@@ -229,7 +230,20 @@
                     return response.text();
                 })
                 .then(function (html) {
-                    var next = new DOMParser().parseFromString(html, 'text/html').querySelector('[data-live]');
+                    var doc = new DOMParser().parseFromString(html, 'text/html');
+                    if (doc.querySelector('[data-sign-in]')) {
+                        // Answered with the sign-in page: the session ended —
+                        // timed out, or signed out from another tab. Asking
+                        // again will not change that, so stop and say so. The
+                        // link comes back here once signed in.
+                        warn('You have been signed out. ');
+                        var again = document.createElement('a');
+                        again.href = window.location.href;
+                        again.textContent = 'Sign in again to keep following this job.';
+                        warning.appendChild(again);
+                        return;
+                    }
+                    var next = doc.querySelector('[data-live]');
                     if (!next) {
                         // Redirected somewhere else — the job was deleted, most
                         // likely. Say so rather than keep asking.

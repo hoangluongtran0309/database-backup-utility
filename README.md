@@ -15,6 +15,10 @@ logical backup of it, restoring one of those backups, downloading or deleting
 its artifact, and reading the history of all of it. The target's
 password is encrypted with AES-256-GCM before it is stored.
 
+The console asks you to sign in first. There is one operator account, set from
+the environment with a bcrypt hash, and every form carries a CSRF token. See
+[ADR-011](docs/adr/011-one-operator-account-from-the-environment.md).
+
 Backups run in the background: starting one redirects to its detail page, which
 follows it and updates when it finishes — restores likewise. See
 [ADR-010](docs/adr/010-the-detail-page-follows-a-running-job.md). The target
@@ -39,11 +43,24 @@ policy, so the backup directory grows until somebody prunes it. See
 
 ```bash
 echo "ENCRYPTION_SECRET_KEY=$(openssl rand -base64 32)" > .env
+docker run --rm -it httpd:2.4-alpine htpasswd -nBC 12 ""   # type a console password twice
+```
+
+That prints the password's bcrypt hash as `:$2y$12$…`. Add it to `.env`
+without the leading colon and **in single quotes**, or compose will read each
+`$` in it as a variable:
+
+```bash
+OPERATOR_PASSWORD_HASH='$2y$12$…'
+```
+
+```bash
 docker compose up --build
 ```
 
-Then open <http://localhost:8080>. The image carries the MySQL client tools, so
-the host needs only Docker.
+Then open <http://localhost:8080> and sign in as `admin` with that password
+(`OPERATOR_USERNAME` changes the name). The image carries the MySQL client
+tools, so the host needs only Docker.
 
 Keep that key. Passwords encrypted under one key cannot be read back under
 another, and there is no recovery path.
@@ -66,6 +83,7 @@ start if it cannot find them, see
 ```bash
 docker compose up -d postgres
 export ENCRYPTION_SECRET_KEY=$(openssl rand -base64 32)
+export OPERATOR_PASSWORD_HASH='$2y$12$…'   # as above; single quotes here too
 mvn -DskipTests install
 mvn -pl web spring-boot:run
 ```
@@ -78,6 +96,10 @@ would also try to run the parent pom, which has no main class.)
 | Environment variable | Default | Purpose |
 | --- | --- | --- |
 | `ENCRYPTION_SECRET_KEY` | *none — required* | Base64 of 32 random bytes, the AES-256-GCM key for stored passwords |
+| `OPERATOR_PASSWORD_HASH` | *none — required* | bcrypt hash (cost ≥ 10) of the console password; anything else stops startup |
+| `OPERATOR_USERNAME` | `admin` | The one account that can sign in to the console |
+| `SESSION_TIMEOUT` | `30m` | A signed-in console left idle this long signs out |
+| `SESSION_COOKIE_SECURE` | `false` | Send the session cookie over HTTPS only; set `true` behind a TLS proxy, see [deployment](docs/deployment.md) |
 | `DB_URL` | `jdbc:postgresql://localhost:5432/dbbackup` | Metadata store |
 | `DB_USERNAME` | `dbbackup` | Metadata store user |
 | `DB_PASSWORD` | `dbbackup` | Metadata store password |

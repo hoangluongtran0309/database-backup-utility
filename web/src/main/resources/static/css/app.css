@@ -126,12 +126,26 @@ code { color: var(--text); font-family: var(--mono); font-size: .88em; overflow-
 .sidebar-tagline { padding: 0 .45rem; color: var(--muted); font-size: .75rem; }
 .theme-toggle { display: flex; align-items: center; gap: .75rem; min-height: 44px; padding: .55rem .7rem; border: 1px solid var(--border); border-radius: 9px; background: transparent; color: var(--text); cursor: pointer; }
 .theme-toggle:hover { border-color: var(--primary); }
+.signed-in { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem; padding: 0 .45rem; }
+/* A username is one unbroken token; it wraps rather than widening the sidebar. */
+.signed-in-label { min-width: 0; color: var(--muted); font-size: .8rem; overflow-wrap: anywhere; }
+.signed-in-label strong { color: var(--text); font-weight: 650; }
 .content-shell { min-height: 100vh; margin-left: var(--sidebar-width); }
 .page { width: min(1240px, 100%); margin: 0 auto; padding: 1.35rem clamp(1.25rem, 3vw, 2.4rem) 4rem; }
 .page:focus { outline: none; box-shadow: none; }
 .breadcrumb { display: flex; align-items: center; gap: .55rem; margin-bottom: 1.5rem; color: var(--muted); font-size: .82rem; }
 .breadcrumb a { color: var(--muted); }
 .mobile-header, .drawer-overlay { display: none; }
+
+/* --- sign-in: no shell, one form in the middle of the screen --- */
+
+.sign-in-page { display: grid; place-items: center; min-height: 100vh; padding: 1.5rem 1rem; }
+.sign-in-page:focus { outline: none; box-shadow: none; }
+.sign-in { width: min(400px, 100%); }
+.sign-in-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.1rem; }
+.sign-in h1 { margin: 0 0 .35rem; font-size: 1.4rem; }
+.sign-in .form-panel > p { margin: 0 0 1.1rem; color: var(--muted); }
+.sign-in .button-primary { width: 100%; margin-top: .4rem; }
 
 /* --- page furniture --- */
 

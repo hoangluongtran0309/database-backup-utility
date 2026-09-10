@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -21,6 +22,8 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Import;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -32,8 +35,12 @@ import com.hoangluongtran0309.dbbackup.core.model.DatabaseTarget;
 import com.hoangluongtran0309.dbbackup.core.model.RestoreExecution;
 import com.hoangluongtran0309.dbbackup.core.port.BackupExecutionRepository;
 import com.hoangluongtran0309.dbbackup.core.port.RestoreExecutionRepository;
+import com.hoangluongtran0309.dbbackup.web.security.SecurityConfig;
 
 @WebMvcTest(RestoreController.class)
+// The console's real rules: signed in, and every POST carries a CSRF token.
+@Import(SecurityConfig.class)
+@WithMockUser
 class RestoreControllerTest {
 
     private static final Instant STARTED = Instant.parse("2026-09-09T10:00:00Z");
@@ -75,7 +82,7 @@ class RestoreControllerTest {
         UUID restoreId = UUID.randomUUID();
         when(restoreService.start(BACKUP_ID)).thenReturn(restoreId);
 
-        mockMvc.perform(post("/restores")
+        mockMvc.perform(post("/restores").with(csrf())
                         .param("backup", BACKUP_ID.toString())
                         .param("confirmation", "production"))
                 .andExpect(status().is3xxRedirection())
@@ -87,7 +94,7 @@ class RestoreControllerTest {
         givenBackupAndTarget();
         when(restoreService.start(BACKUP_ID)).thenReturn(UUID.randomUUID());
 
-        mockMvc.perform(post("/restores")
+        mockMvc.perform(post("/restores").with(csrf())
                         .param("backup", BACKUP_ID.toString())
                         .param("confirmation", "  production  "))
                 .andExpect(status().is3xxRedirection());
@@ -99,7 +106,7 @@ class RestoreControllerTest {
     void refusesAConfirmationThatDoesNotMatchTheTargetName() throws Exception {
         givenBackupAndTarget();
 
-        mockMvc.perform(post("/restores")
+        mockMvc.perform(post("/restores").with(csrf())
                         .param("backup", BACKUP_ID.toString())
                         .param("confirmation", "Production"))
                 .andExpect(status().is3xxRedirection())
@@ -113,7 +120,7 @@ class RestoreControllerTest {
     void refusesAnEmptyConfirmation() throws Exception {
         givenBackupAndTarget();
 
-        mockMvc.perform(post("/restores").param("backup", BACKUP_ID.toString()))
+        mockMvc.perform(post("/restores").with(csrf()).param("backup", BACKUP_ID.toString()))
                 .andExpect(status().is3xxRedirection());
 
         verify(restoreService, never()).start(any());
@@ -125,7 +132,7 @@ class RestoreControllerTest {
         when(restoreService.start(BACKUP_ID))
                 .thenThrow(new RestoreFailedException("That backup is FAILED, so there is nothing to restore"));
 
-        mockMvc.perform(post("/restores")
+        mockMvc.perform(post("/restores").with(csrf())
                         .param("backup", BACKUP_ID.toString())
                         .param("confirmation", "production"))
                 .andExpect(status().is3xxRedirection())

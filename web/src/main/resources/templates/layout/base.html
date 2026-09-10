@@ -9,24 +9,22 @@
   flash. Spring's error model carries an `error` attribute of its own (the
   reason phrase), which the flash below would otherwise print as a red banner
   repeating the page's own heading.
+
+  The <head> is a fragment of its own, `head(title)`, so that the sign-in page
+  — which has no sidebar and so does not use this shell — loads exactly the
+  same theme, styles and script.
 -->
 <html lang="en" xmlns:th="http://www.thymeleaf.org" th:fragment="page(title, section, content)"
       th:with="sectionLabel=${section == 'targets' ? 'Targets' : (section == 'backups' ? 'Backups' : (section == 'restores' ? 'Restores' : null))},
                sectionUrl=${section == 'backups' ? '/executions' : (section == 'restores' ? '/restores' : '/databases')},
                showFlash=${section != 'error'}">
-<head>
+<head th:fragment="head(title)">
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title th:text="|${title} · dbbackup|">dbbackup</title>
-  <!-- Before the stylesheet, so the first paint is already in the right theme. -->
-  <script>
-    (function () {
-      var saved = null;
-      try { saved = localStorage.getItem('dbbackup-theme'); } catch (e) { /* private mode */ }
-      var preferred = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
-      document.documentElement.dataset.theme = saved || preferred;
-    }());
-  </script>
+  <!-- Before the stylesheet and without defer, so the first paint is already
+       in the right theme. -->
+  <script th:src="@{/js/theme.js}"></script>
   <link rel="icon" type="image/svg+xml" th:href="@{/svg/brand-mark.svg}">
   <link rel="icon" type="image/x-icon" sizes="48x48 32x32 16x16" th:href="@{/favicon.ico}">
   <link rel="stylesheet" th:href="@{/css/app.css}">
@@ -66,6 +64,13 @@
       </div>
     </nav>
     <div class="sidebar-footer">
+      <!-- A form, not a link: signing out is a POST, so that another site
+           cannot sign the operator out with an <img> tag. th:action is what
+           puts the CSRF token in it. -->
+      <form class="signed-in" method="post" th:action="@{/logout}" th:if="${operatorName != null}">
+        <span class="signed-in-label">Signed in as <strong th:text="${operatorName}">admin</strong></span>
+        <button class="button button-small button-ghost" type="submit" data-busy-label="Signing out…">Sign out</button>
+      </form>
       <span class="sidebar-tagline">MySQL logical backup</span>
       <button class="theme-toggle" type="button" data-theme-toggle>
         <span data-theme-icon aria-hidden="true">☀</span><span data-theme-label>Light theme</span>

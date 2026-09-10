@@ -2,6 +2,11 @@
 # keeps its own metadata in. Nothing on the host but Docker.
 #
 #   echo "ENCRYPTION_SECRET_KEY=$(openssl rand -base64 32)" > .env
+#   docker run --rm -it httpd:2.4-alpine htpasswd -nBC 12 ""
+#     (type the console password twice; it prints ":$2y$12$…")
+#   echo "OPERATOR_PASSWORD_HASH='\$2y\$12\$…'" >> .env
+#     (the printed hash without its leading colon, in single quotes —
+#      unquoted, compose reads every $ in it as the start of a variable)
 #   docker compose up --build
 #
 # For local development against a Maven-run application, `docker compose up -d
@@ -39,6 +44,10 @@ services:
       # outcome: a default key would mean every stored password is protected by
       # a secret published in this repository.
       ENCRYPTION_SECRET_KEY: ${ENCRYPTION_SECRET_KEY}
+      # The one account that can sign in to the console. The hash likewise has
+      # no default: without it the application refuses to start. See ADR-011.
+      OPERATOR_USERNAME: ${OPERATOR_USERNAME:-admin}
+      OPERATOR_PASSWORD_HASH: ${OPERATOR_PASSWORD_HASH}
     ports:
       - "8080:8080"
     volumes:

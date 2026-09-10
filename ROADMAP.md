@@ -24,6 +24,10 @@ that needs it.
 That is the whole of the first round. What comes next is a decision, not a
 plan: cut `release/0.1.0`, or keep going on `develop`.
 
+- [x] **8. Sign in.** One operator account from the environment (bcrypt hash),
+      session sign-in, CSRF tokens on every form, security headers; the
+      healthcheck moves to `/actuator/health`. See ADR-011.
+
 ## Deliberately out of scope
 
 Not "later" — absent, and not to be reintroduced without a decision that
