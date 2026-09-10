@@ -1,8 +1,11 @@
 package com.hoangluongtran0309.dbbackup.web.controller;
 
+import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.UUID;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -20,8 +23,11 @@ import com.hoangluongtran0309.dbbackup.application.target.TestTargetConnectionSe
 import com.hoangluongtran0309.dbbackup.core.exception.DuplicateTargetNameException;
 import com.hoangluongtran0309.dbbackup.core.exception.InvalidTargetException;
 import com.hoangluongtran0309.dbbackup.core.exception.TargetInUseException;
+import com.hoangluongtran0309.dbbackup.core.model.BackupExecution;
 import com.hoangluongtran0309.dbbackup.core.model.ConnectionCheck;
 import com.hoangluongtran0309.dbbackup.core.model.DatabaseTarget;
+import com.hoangluongtran0309.dbbackup.core.model.ExecutionStatus;
+import com.hoangluongtran0309.dbbackup.core.port.BackupExecutionRepository;
 import com.hoangluongtran0309.dbbackup.web.dto.DatabaseTargetForm;
 
 import jakarta.validation.Valid;
@@ -53,10 +59,20 @@ public class DatabaseTargetController {
     private final ManageDatabaseTargetService service;
     private final TestTargetConnectionService connectionTest;
     private final RunBackupService backups;
+    private final BackupExecutionRepository executions;
 
+    /**
+     * Beside each target, its newest backup attempt and its newest successful
+     * one — "when was this last backed up?" is the question the page exists to
+     * answer, and a failed attempt must not hide the good copy before it.
+     */
     @GetMapping
     String list(Model model) {
+        List<BackupExecution> newestFirst = executions.findAllNewestFirst();
         model.addAttribute("targets", service.listAll());
+        model.addAttribute("latestBackups", firstPerTarget(newestFirst.stream()));
+        model.addAttribute("lastSuccessfulBackups", firstPerTarget(newestFirst.stream()
+                .filter(e -> e.getStatus() == ExecutionStatus.SUCCEEDED)));
         return "database/list";
     }
 
@@ -135,6 +151,12 @@ public class DatabaseTargetController {
             flash.addFlashAttribute("error", e.getMessage());
         }
         return "redirect:/databases";
+    }
+
+    /** Relies on the repository's newest-first order: the first seen is kept. */
+    private static Map<UUID, BackupExecution> firstPerTarget(Stream<BackupExecution> newestFirst) {
+        return newestFirst.collect(Collectors.toMap(
+                BackupExecution::getTargetId, e -> e, (newer, older) -> newer));
     }
 
     private static void rejectOnForm(BindingResult binding, InvalidTargetException e) {

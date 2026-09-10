@@ -177,7 +177,7 @@ code { color: var(--text); font-family: var(--mono); font-size: .88em; overflow-
 .table-wrap { width: 100%; overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
 table { width: 100%; border-collapse: collapse; }
 th, td { padding: .72rem .85rem; border-bottom: 1px solid var(--border); text-align: left; vertical-align: middle; }
-th { color: var(--muted); background: var(--surface-raised); font-size: .72rem; font-weight: 750; letter-spacing: .055em; text-transform: uppercase; }
+th { color: var(--muted); background: var(--surface-raised); font-size: .72rem; font-weight: 750; letter-spacing: .055em; text-transform: uppercase; white-space: nowrap; }
 tbody tr:last-child td { border-bottom: 0; }
 tbody tr:hover { background: var(--surface-hover); }
 /* An address is one token; wrapping it mid-host helps nobody. */
@@ -203,10 +203,15 @@ td.actions { display: table-cell; width: 1%; }
 .badge-neutral { color: var(--muted); }
 
 /* A connection check: badge, when it ran, and MySQL's own error text. */
-.check-cell { min-width: 17rem; }
+.check-cell { min-width: 15rem; }
+/* A timestamp is one token; broken over four lines it is unreadable. */
+.nowrap { white-space: nowrap; }
 .checked-at { margin-left: .45rem; color: var(--muted); font-size: .75rem; white-space: nowrap; }
 /* Shown in full rather than truncated: MySQL's words are what tell an operator
    which thing to go and fix. Allowed to wrap, never to widen the table. */
+/* Several short facts about one thing, one per line, none stretched. */
+.cell-stack { display: grid; gap: .3rem; justify-items: start; }
+.cell-stack .check-message { margin: 0; }
 .check-message { max-width: 30rem; margin: .35rem 0 0; color: var(--danger); font-family: var(--mono); font-size: .75rem; overflow-wrap: anywhere; }
 
 /* --- messages --- */
@@ -278,6 +283,8 @@ input[aria-invalid="true"] { border-color: var(--danger); }
     /* overflow-wrap because an address is one long token: nowrap is right in a
        wide table and pushes a card sideways off a phone. */
     .responsive-cards td { display: grid; grid-template-columns: minmax(90px, 36%) minmax(0, 1fr); gap: .7rem; padding: .42rem 0; border: 0; white-space: normal; overflow-wrap: anywhere; }
+    /* On a card there is no wider column to give it; wrapping beats overflowing. */
+    .responsive-cards .nowrap { white-space: normal; }
     /* A badge is a grid item here; without this it stretches to the column. */
     .responsive-cards td > .badge { justify-self: start; }
     .responsive-cards td::before { content: attr(data-label); color: var(--muted); font-size: .72rem; font-weight: 720; letter-spacing: .04em; text-transform: uppercase; }
