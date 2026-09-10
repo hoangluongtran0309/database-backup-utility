@@ -53,7 +53,7 @@
     </div>
 
     <div class="form-actions">
-      <button class="button button-danger-solid" type="submit">Restore, overwriting the schema</button>
+      <button class="button button-danger-solid" type="submit" data-busy-label="Starting restore…">Restore, overwriting the schema</button>
       <a class="button button-ghost" th:href="@{/executions/{id}(id=${backup.id})}">Cancel</a>
     </div>
   </form>

@@ -61,15 +61,15 @@
           <td class="actions">
             <div class="row-actions">
               <form method="post" th:action="@{/databases/{id}/test(id=${target.id})}">
-                <button class="button button-small" type="submit">Test</button>
+                <button class="button button-small" type="submit" data-busy-label="Testing…">Test</button>
               </form>
               <form method="post" th:action="@{/databases/{id}/backup(id=${target.id})}">
-                <button class="button button-small button-primary" type="submit">Back up now</button>
+                <button class="button button-small button-primary" type="submit" data-busy-label="Starting…">Back up now</button>
               </form>
               <form method="post" th:action="@{/databases/{id}/delete(id=${target.id})}"
                     th:attr="data-confirm=|Remove target “${target.name}”? Its stored credentials are deleted. A target that still has backups cannot be removed.|"
                     data-confirm-title="Remove target" data-confirm-accept="Remove">
-                <button class="button button-small button-danger" type="submit">Remove</button>
+                <button class="button button-small button-danger" type="submit" data-busy-label="Removing…">Remove</button>
               </form>
             </div>
           </td>

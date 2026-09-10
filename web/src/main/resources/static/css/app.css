@@ -155,6 +155,10 @@ code { color: var(--text); font-family: var(--mono); font-size: .88em; overflow-
 .button-danger-solid:hover { border-color: var(--danger); filter: brightness(1.08); }
 .button-small { min-height: 36px; padding: .35rem .65rem; font-size: .82rem; }
 .button:disabled, .icon-button:disabled { opacity: .52; cursor: not-allowed; }
+/* A submit in flight (app.js): still readable, and visibly working. */
+.button[aria-busy="true"] { opacity: .8; cursor: progress; }
+.button[aria-busy="true"]::before { content: ""; width: .85em; height: .85em; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin .7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
 .icon-button { width: 42px; padding: 0; }
 /* After `.button, .icon-button`: the drawer's close button carries both
    classes, and at equal specificity the later rule wins. The 767px block below

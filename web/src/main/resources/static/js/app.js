@@ -1,6 +1,6 @@
 /*
  * The console's only script, and everything in it is a convenience: every page
- * works with it switched off. Plain DOM, no framework — there are four
+ * works with it switched off. Plain DOM, no framework — there are a handful of
  * behaviours here, not an application.
  */
 (function () {
@@ -132,11 +132,57 @@
         });
     }
 
+    /*
+     * One submit per page. Every form here either starts something on the
+     * server (a backup, a restore, a connection test) or destroys something,
+     * and a second click while the first request is in flight used to start
+     * a second backup. Once a form submits, its button shows what is happening
+     * — a connection test can take the whole connect timeout — and every other
+     * submit on the page is refused until the browser navigates away.
+     *
+     * Must be registered after initConfirmDialog(): both listen on document,
+     * and a submit the dialog intercepted (defaultPrevented) has not happened.
+     */
+    function initSubmitGuard() {
+        var busy = false;
+
+        document.addEventListener('submit', function (event) {
+            if (event.defaultPrevented) return;
+            if (busy) { event.preventDefault(); return; }
+            busy = true;
+            var form = event.target;
+            // requestSubmit() from the confirm dialog carries no submitter.
+            var button = event.submitter || form.querySelector('[type="submit"]');
+            if (!button) return;
+            // Disabled after the event, not during it: a disabled submitter is
+            // left out of the form data, and one of them may one day carry a value.
+            setTimeout(function () {
+                button.dataset.idleLabel = button.textContent;
+                if (button.dataset.busyLabel) button.textContent = button.dataset.busyLabel;
+                button.setAttribute('aria-busy', 'true');
+                button.disabled = true;
+            }, 0);
+        });
+
+        // Back/forward cache restores the page exactly as it was left — with the
+        // button still disabled and nothing in flight. Put it back.
+        window.addEventListener('pageshow', function (event) {
+            if (!event.persisted) return;
+            busy = false;
+            document.querySelectorAll('[aria-busy="true"]').forEach(function (button) {
+                if (button.dataset.idleLabel) button.textContent = button.dataset.idleLabel;
+                button.removeAttribute('aria-busy');
+                button.disabled = false;
+            });
+        });
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
         renderThemeToggles();
         document.querySelectorAll('[data-theme-toggle]').forEach(function (b) { b.addEventListener('click', toggleTheme); });
         initDrawer();
         initConfirmDialog();
+        initSubmitGuard();
         // A flash reports the navigation that rendered this page; once read it
         // can go. Removed rather than hidden so the layout closes up.
         document.querySelectorAll('[data-flash-dismiss]').forEach(function (button) {
