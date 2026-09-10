@@ -177,12 +177,91 @@
         });
     }
 
+    /*
+     * Follows a running backup or restore (ADR-010). The page marks the block
+     * that can change with data-live, and data-live-active="true" while the
+     * job runs; this re-fetches the same URL, and swaps the block for the one
+     * in the response. Nothing is derived here: the server renders every
+     * state, badges and buttons included, exactly as a reload would.
+     *
+     * Stops at the first finished state, so an error message is never
+     * replaced while someone is reading it.
+     */
+    function initLiveRegion() {
+        var region = document.querySelector('[data-live]');
+        if (!region || region.dataset.liveActive !== 'true' || !window.fetch) return;
+        var announcer = document.querySelector('[data-live-announcer]');
+        var INTERVAL = 2000, MAX_BACKOFF = 30000;
+        var delay = INTERVAL;
+        var warning = null;
+
+        function warn(text) {
+            if (!warning) {
+                warning = document.createElement('p');
+                warning.className = 'alert alert-warning';
+                warning.setAttribute('role', 'status');
+                region.parentNode.insertBefore(warning, region);
+            }
+            warning.textContent = text;
+        }
+
+        function clearWarning() {
+            if (warning) { warning.remove(); warning = null; }
+        }
+
+        function schedule() { setTimeout(poll, delay); }
+
+        function poll() {
+            // A background tab has nobody to show it to. Rather than keep
+            // waking up to check, wait to be looked at — then ask at once, not
+            // at the end of however long the backoff had grown to.
+            if (document.hidden) {
+                document.addEventListener('visibilitychange', function resume() {
+                    if (document.hidden) return;
+                    document.removeEventListener('visibilitychange', resume);
+                    poll();
+                });
+                return;
+            }
+            fetch(window.location.href, { headers: { Accept: 'text/html' }, cache: 'no-store' })
+                .then(function (response) {
+                    if (!response.ok) throw new Error('HTTP ' + response.status);
+                    return response.text();
+                })
+                .then(function (html) {
+                    var next = new DOMParser().parseFromString(html, 'text/html').querySelector('[data-live]');
+                    if (!next) {
+                        // Redirected somewhere else — the job was deleted, most
+                        // likely. Say so rather than keep asking.
+                        warn('This page can no longer follow the job. Reload to see what happened.');
+                        return;
+                    }
+                    clearWarning();
+                    delay = INTERVAL;
+                    // Swapped only when something changed, so focus and text
+                    // selection survive the polls that find nothing new.
+                    if (next.innerHTML !== region.innerHTML) region.innerHTML = next.innerHTML;
+                    if (next.dataset.liveActive === 'true') { schedule(); return; }
+                    region.dataset.liveActive = 'false';
+                    if (announcer) announcer.textContent = next.dataset.liveAnnounce || '';
+                })
+                .catch(function () {
+                    warn('Lost contact with the console. The job is unaffected; still trying…');
+                    delay = Math.min(delay * 2, MAX_BACKOFF);
+                    schedule();
+                });
+        }
+
+        schedule();
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
         renderThemeToggles();
         document.querySelectorAll('[data-theme-toggle]').forEach(function (b) { b.addEventListener('click', toggleTheme); });
         initDrawer();
         initConfirmDialog();
         initSubmitGuard();
+        initLiveRegion();
         // A flash reports the navigation that rendered this page; once read it
         // can go. Removed rather than hidden so the layout closes up.
         document.querySelectorAll('[data-flash-dismiss]').forEach(function (button) {

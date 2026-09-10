@@ -16,10 +16,11 @@ its artifact, and reading the history of all of it. The target's
 password is encrypted with AES-256-GCM before it is stored.
 
 Backups run in the background: starting one redirects to its detail page, which
-shows `RUNNING` until you reload it. The target list shows each target's
-newest good backup, and flags a newer attempt that failed. Artifacts are
-gzipped and named `<schema>_<timestamp>.sql.gz`, readable with `zcat` like any
-other archive.
+follows it and updates when it finishes — restores likewise. See
+[ADR-010](docs/adr/010-the-detail-page-follows-a-running-job.md). The target
+list shows each target's newest good backup, and flags a newer attempt that
+failed. Artifacts are gzipped and named `<schema>_<timestamp>.sql.gz`, readable
+with `zcat` like any other archive.
 
 Restoring overwrites live data, so it asks: the confirmation page names the
 schema and you type the target's name to proceed. It applies the dump rather

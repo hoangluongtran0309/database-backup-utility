@@ -95,6 +95,10 @@
       </div>
 
       <th:block th:replace="${content}"></th:block>
+      <!-- Where app.js says "Backup succeeded" when a followed job finishes.
+           Outside the swapped block, so it exists before the text changes —
+           a live region inserted with its text already in it is not announced. -->
+      <div class="visually-hidden" role="status" data-live-announcer></div>
     </main>
   </div>
 </div>
