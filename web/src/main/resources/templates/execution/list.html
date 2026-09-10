@@ -1,45 +1,55 @@
 <!DOCTYPE html>
 <html lang="en" xmlns:th="http://www.thymeleaf.org"
-      th:replace="~{layout/base :: page('Backups', ~{:: #content})}">
+      th:replace="~{layout/base :: page('Backups', 'backups', ~{:: #content})}">
 <body>
 <div id="content">
 
-  <div class="page-head">
-    <h1>Backups</h1>
+  <div class="page-header">
+    <div>
+      <div class="eyebrow">Operations</div>
+      <h1>Backups</h1>
+      <p>Every backup taken, newest first. Gzipped dumps on local disk.</p>
+    </div>
   </div>
 
-  <p class="empty" th:if="${executions.isEmpty()}">
-    No backups yet. Start one from a target.
+  <p class="empty-state panel" th:if="${executions.isEmpty()}">
+    No backups yet. Start one from a <a th:href="@{/databases}">target</a>.
   </p>
 
-  <table class="targets" th:unless="${executions.isEmpty()}">
-    <thead>
-      <tr>
-        <th scope="col">Started</th>
-        <th scope="col">Target</th>
-        <th scope="col">Status</th>
-        <th scope="col">Size</th>
-        <th scope="col"><span class="visually-hidden">Actions</span></th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr th:each="execution : ${executions}">
-        <td class="mono"
-            th:text="${#temporals.format(
-                        execution.startedAt.atOffset(T(java.time.ZoneOffset).UTC),
-                        'yyyy-MM-dd HH:mm:ss')} + ' UTC'">…</td>
-        <!-- A target removed after the fact leaves its history readable. -->
-        <td th:text="${targetNames.getOrDefault(execution.targetId, '(removed)')}">production</td>
-        <td th:insert="~{fragments/execution-status :: statusBadge(${execution.status})}"></td>
-        <td class="mono" th:text="${execution.sizeBytes != null ? execution.sizeBytes + ' B' : '—'}">—</td>
-        <td class="row-actions">
-          <a class="button" th:if="${execution.status.name() == 'SUCCEEDED'}"
-             th:href="@{/executions/{id}/download(id=${execution.id})}">Download</a>
-          <a class="button" th:href="@{/executions/{id}(id=${execution.id})}">Details</a>
-        </td>
-      </tr>
-    </tbody>
-  </table>
+  <div class="table-wrap responsive-cards" th:unless="${executions.isEmpty()}">
+    <table>
+      <thead>
+        <tr>
+          <th scope="col">Started</th>
+          <th scope="col">Target</th>
+          <th scope="col">Status</th>
+          <th scope="col">Size</th>
+          <th scope="col"><span class="visually-hidden">Actions</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr th:each="execution : ${executions}">
+          <td data-label="Started" class="mono"
+              th:text="${#temporals.format(
+                          execution.startedAt.atOffset(T(java.time.ZoneOffset).UTC),
+                          'yyyy-MM-dd HH:mm:ss')} + ' UTC'">…</td>
+          <!-- A target removed after the fact leaves its history readable. -->
+          <td data-label="Target" th:text="${targetNames.getOrDefault(execution.targetId, '(removed)')}">production</td>
+          <!-- th:insert, not th:replace: replace would swap out the <td> itself
+               and leave the badge loose in the row. -->
+          <td data-label="Status" th:insert="~{fragments/execution-status :: statusBadge(${execution.status})}"></td>
+          <td data-label="Size" class="mono" th:text="${execution.sizeBytes != null ? execution.sizeBytes + ' B' : '—'}">—</td>
+          <td class="actions">
+            <div class="row-actions">
+              <a class="button button-small" th:if="${execution.status.name() == 'SUCCEEDED'}"
+                 th:href="@{/executions/{id}/download(id=${execution.id})}">Download</a>
+              <a class="button button-small" th:href="@{/executions/{id}(id=${execution.id})}">Details</a>
+            </div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
 
 </div>
 </body>

@@ -1,5 +1,5 @@
 <div xmlns:th="http://www.thymeleaf.org">
-  <div class="form-errors" role="alert"
+  <div class="alert alert-danger" role="alert"
        th:fragment="formErrors"
        th:if="${#fields.hasGlobalErrors()}">
     <p th:each="err : ${#fields.globalErrors()}" th:text="${err}"></p>

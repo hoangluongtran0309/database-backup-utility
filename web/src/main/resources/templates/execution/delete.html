@@ -1,14 +1,18 @@
 <!DOCTYPE html>
 <html lang="en" xmlns:th="http://www.thymeleaf.org"
-      th:replace="~{layout/base :: page('Delete backup', ~{:: #content})}">
+      th:replace="~{layout/base :: page('Delete backup', 'backups', ~{:: #content})}">
 <body>
 <div id="content">
 
-  <div class="page-head">
-    <h1>Delete this backup?</h1>
+  <div class="page-header">
+    <div>
+      <div class="eyebrow">Backup</div>
+      <h1>Delete this backup?</h1>
+      <p>Check what goes with it before you confirm.</p>
+    </div>
   </div>
 
-  <div class="danger-box" role="alert">
+  <div class="alert alert-danger" role="alert">
     <p><strong>The artifact is deleted from disk. There is no undo.</strong></p>
     <p th:if="${preview.restoreCount() > 0}">
       <!-- Said before the click, not discovered after it. -->
@@ -21,32 +25,34 @@
     </p>
   </div>
 
-  <dl class="detail">
-    <dt>Target</dt>
-    <dd th:text="${targetNames.getOrDefault(preview.execution().targetId, '(removed)')}">production</dd>
+  <div class="panel">
+    <dl class="detail-grid">
+      <dt>Target</dt>
+      <dd th:text="${targetNames.getOrDefault(preview.execution().targetId, '(removed)')}">production</dd>
 
-    <dt>Taken</dt>
-    <dd class="mono"
-        th:text="${#temporals.format(
-                    preview.execution().startedAt.atOffset(T(java.time.ZoneOffset).UTC),
-                    'yyyy-MM-dd HH:mm:ss')} + ' UTC'">…</dd>
+      <dt>Taken</dt>
+      <dd class="mono"
+          th:text="${#temporals.format(
+                      preview.execution().startedAt.atOffset(T(java.time.ZoneOffset).UTC),
+                      'yyyy-MM-dd HH:mm:ss')} + ' UTC'">…</dd>
 
-    <dt>Status</dt>
-    <dd th:insert="~{fragments/execution-status :: statusBadge(${preview.execution().status})}"></dd>
+      <dt>Status</dt>
+      <dd th:insert="~{fragments/execution-status :: statusBadge(${preview.execution().status})}"></dd>
 
-    <dt>Artifact</dt>
-    <dd class="mono break"
-        th:text="${preview.execution().artifactPath != null ? preview.execution().artifactPath : '—'}">—</dd>
+      <dt>Artifact</dt>
+      <dd class="mono break"
+          th:text="${preview.execution().artifactPath != null ? preview.execution().artifactPath : '—'}">—</dd>
 
-    <dt>Size</dt>
-    <dd class="mono"
-        th:text="${preview.execution().sizeBytes != null ? preview.execution().sizeBytes + ' bytes' : '—'}">—</dd>
-  </dl>
+      <dt>Size</dt>
+      <dd class="mono"
+          th:text="${preview.execution().sizeBytes != null ? preview.execution().sizeBytes + ' bytes' : '—'}">—</dd>
+    </dl>
+  </div>
 
   <form method="post" th:action="@{/executions/{id}/delete(id=${preview.execution().id})}">
-    <div class="actions">
-      <button class="button danger-solid" type="submit">Delete this backup</button>
-      <a class="button subtle"
+    <div class="form-actions">
+      <button class="button button-danger-solid" type="submit">Delete this backup</button>
+      <a class="button button-ghost"
          th:href="@{/executions/{id}(id=${preview.execution().id})}">Cancel</a>
     </div>
   </form>

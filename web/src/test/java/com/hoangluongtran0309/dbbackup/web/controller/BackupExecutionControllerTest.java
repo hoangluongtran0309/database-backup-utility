@@ -89,9 +89,10 @@ class BackupExecutionControllerTest {
         when(targets.listAll()).thenReturn(List.of(target("production")));
 
         mockMvc.perform(get("/executions"))
-                .andExpect(content().string(containsString("<td><span class=\"badge ok\">Succeeded</span></td>")))
+                .andExpect(content().string(containsString(
+                        "<td data-label=\"Status\"><span class=\"badge badge-success\">Succeeded</span></td>")))
                 // Which is also what keeps the size in the size column.
-                .andExpect(content().string(containsString("<td class=\"mono\">8192 B</td>")));
+                .andExpect(content().string(containsString("<td data-label=\"Size\" class=\"mono\">8192 B</td>")));
     }
 
     /** History outlives the target it refers to; it must still render. */

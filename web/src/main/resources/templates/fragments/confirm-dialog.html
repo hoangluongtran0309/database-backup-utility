@@ -1,0 +1,22 @@
+<!--
+  The one confirmation dialog for destructive actions that need no typed
+  confirmation — a form carrying data-confirm opens it instead of submitting
+  (see static/js/app.js). Rendered once per page by layout/base.
+
+  Without JavaScript the form simply submits, which is no worse than before the
+  dialog existed; the server still refuses anything it should refuse.
+  Restores and backup deletions keep their own confirmation pages: they ask for
+  more than one click, and say more than fits in a dialog.
+-->
+<div xmlns:th="http://www.thymeleaf.org" th:fragment="confirmDialog"
+     class="modal-backdrop" id="confirm-dialog" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="confirm-dialog-title"
+       aria-describedby="confirm-dialog-body" data-confirm-modal>
+    <h2 id="confirm-dialog-title" data-confirm-title>Confirm</h2>
+    <p id="confirm-dialog-body" data-confirm-body></p>
+    <div class="form-actions">
+      <button type="button" class="button" data-confirm-cancel>Go back</button>
+      <button type="button" class="button button-danger-solid" data-confirm-accept>Delete</button>
+    </div>
+  </div>
+</div>
