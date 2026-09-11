@@ -192,6 +192,18 @@ class RestoreControllerTest {
                 .andExpect(content().string(containsString("data-live-announce=\"Restore running\"")));
     }
 
+    /** Back to the list it was reached from, not to the backup list. */
+    @Test
+    void aMissingRestoreSendsTheOperatorBackToTheRestoreList() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(restores.findById(id)).thenReturn(Optional.empty());
+
+        mockMvc.perform(get("/restores/{id}", id))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/restores"))
+                .andExpect(flash().attribute("error", "That restore no longer exists"));
+    }
+
     private void givenBackupAndTarget() {
         when(backups.findById(BACKUP_ID)).thenReturn(Optional.of(backup()));
         when(targets.listAll()).thenReturn(List.of(target()));
