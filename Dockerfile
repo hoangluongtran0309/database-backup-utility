@@ -52,10 +52,12 @@ VOLUME ["/var/lib/dbbackup/backups"]
 USER dbbackup
 EXPOSE 8080
 
-# Hits a real page, so it goes green only once Flyway has run and the metadata
-# store is actually reachable — which is what compose waits on.
+# Goes green only once the application is up and its metadata store answers —
+# which is what compose waits on. The health endpoint rather than a console
+# page: every page now needs a sign-in, and the redirect to it would be a 302
+# that curl accepts without anything having touched the database.
 HEALTHCHECK --interval=10s --timeout=3s --start-period=40s --retries=5 \
-    CMD curl -fsS http://localhost:8080/databases || exit 1
+    CMD curl -fsS http://localhost:8080/actuator/health || exit 1
 
 # sh -c to expand JAVA_OPTS, exec so the JVM is PID 1 and receives SIGTERM.
 ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar /app/app.jar"]

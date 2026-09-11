@@ -5,6 +5,18 @@ server:
       # ;jsessionid= for the first request of a session, which puts the session
       # identifier into browser history, logs and Referer headers.
       tracking-modes: cookie
+      # How long a signed-in console stays signed in while nobody uses it. A
+      # detail page following a running job keeps its session alive until the
+      # job finishes — see ADR-011.
+      timeout: ${SESSION_TIMEOUT:30m}
+      cookie:
+        http-only: true
+        # Not sent on a cross-site POST, which is a second line behind the CSRF
+        # token rather than a replacement for it.
+        same-site: lax
+        # Off by default because this application does not speak TLS itself.
+        # Behind a TLS-terminating proxy, turn it on.
+        secure: ${SESSION_COOKIE_SECURE:false}
 
 spring:
   application:
@@ -24,7 +36,31 @@ spring:
       # matches it, and refuses to start when a migration is missing.
       ddl-auto: validate
 
+management:
+  endpoints:
+    web:
+      # The healthcheck's endpoint and nothing else. It is reachable without
+      # signing in, so it says UP or DOWN and never why.
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+      # Kubernetes' liveness and readiness groups, on by default in Boot 4.
+      # Nothing here runs on Kubernetes, and each group is one more public URL.
+      probes:
+        enabled: false
+
 dbbackup:
+  operator:
+    # The one account that can sign in to the console — see ADR-011.
+    username: ${OPERATOR_USERNAME:admin}
+    # A bcrypt hash, never the password itself:
+    #   docker run --rm -it httpd:2.4-alpine htpasswd -nBC 12 ""
+    # (drop the leading colon). No default, for the same reason as the
+    # encryption key below: starting without one must fail loudly.
+    password-hash: ${OPERATOR_PASSWORD_HASH:}
+
   mysql:
     # The tool drives the MySQL client binaries directly. A wrong path here
     # stops startup rather than surfacing later as a puzzling connection

@@ -1,4 +1,8 @@
-target/
+# Maven's build output, and only that. Anchored on purpose: an unanchored
+# `target/` also matched the source package application/.../target/, which
+# kept the target use cases out of the repository without anyone noticing.
+/target/
+/*/target/
 !.mvn/wrapper/maven-wrapper.jar
 
 .idea/

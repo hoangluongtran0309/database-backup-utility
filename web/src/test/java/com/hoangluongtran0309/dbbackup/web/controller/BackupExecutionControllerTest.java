@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -26,6 +27,8 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Import;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -34,8 +37,12 @@ import com.hoangluongtran0309.dbbackup.application.target.ManageDatabaseTargetSe
 import com.hoangluongtran0309.dbbackup.core.model.BackupExecution;
 import com.hoangluongtran0309.dbbackup.core.model.DatabaseTarget;
 import com.hoangluongtran0309.dbbackup.core.port.BackupExecutionRepository;
+import com.hoangluongtran0309.dbbackup.web.security.SecurityConfig;
 
 @WebMvcTest(BackupExecutionController.class)
+// The console's real rules: signed in, and every POST carries a CSRF token.
+@Import(SecurityConfig.class)
+@WithMockUser
 class BackupExecutionControllerTest {
 
     private static final Instant STARTED = Instant.parse("2026-09-09T10:00:00Z");
@@ -221,7 +228,7 @@ class BackupExecutionControllerTest {
     void deletesABackupAndSaysSo() throws Exception {
         UUID id = UUID.randomUUID();
 
-        mockMvc.perform(post("/executions/{id}/delete", id))
+        mockMvc.perform(post("/executions/{id}/delete", id).with(csrf()))
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrl("/executions"))
                 .andExpect(flash().attribute("message", "Backup deleted, along with its artifact"));
@@ -236,7 +243,7 @@ class BackupExecutionControllerTest {
                         "This backup is still running. Wait for it to finish before deleting it."))
                 .when(artifacts).delete(id);
 
-        mockMvc.perform(post("/executions/{id}/delete", id))
+        mockMvc.perform(post("/executions/{id}/delete", id).with(csrf()))
                 .andExpect(status().is3xxRedirection())
                 .andExpect(flash().attribute("error",
                         org.hamcrest.Matchers.containsString("still running")));
@@ -247,7 +254,7 @@ class BackupExecutionControllerTest {
         UUID id = UUID.randomUUID();
         org.mockito.Mockito.doThrow(new NoSuchElementException("gone")).when(artifacts).delete(id);
 
-        mockMvc.perform(post("/executions/{id}/delete", id))
+        mockMvc.perform(post("/executions/{id}/delete", id).with(csrf()))
                 .andExpect(status().is3xxRedirection())
                 .andExpect(flash().attribute("error", "That backup no longer exists"));
     }

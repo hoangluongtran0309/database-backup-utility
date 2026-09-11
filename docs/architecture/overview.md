@@ -21,7 +21,7 @@ core        no dependencies at all — plain Java and Lombok
 | `core` | Domain model, ports, domain exceptions | nothing |
 | `adapters` | Outbound adapters — persistence, encryption, Flyway migrations | `core` |
 | `application` | Use case orchestration | `core` |
-| `web` | HTTP controllers, forms, templates, `main()` | `application`, `adapters` |
+| `web` | HTTP controllers, forms, templates, sign-in and CSRF (`web.security`), `main()` | `application`, `adapters` |
 
 Two consequences are worth stating plainly, because they are the reason for the
 split rather than side effects of it:
@@ -40,6 +40,11 @@ split rather than side effects of it:
   values are sane. Services do not check first.
 - **Use case logic is in `application`, never in `web`.** Controllers translate
   HTTP into a use case call and a view name.
+- **Who may use the console is decided in `web`, and only there.** Signing in,
+  sessions and CSRF tokens are HTTP concerns: `web.security.SecurityConfig`
+  guards every request before a controller sees it, and nothing in
+  `application` or `core` knows that an operator exists
+  ([ADR-011](../adr/011-one-operator-account-from-the-environment.md)).
 - **Only `application` calls `EncryptionPort`.** Adapters never hold the key, so
   there is exactly one place in the system where a secret is unwrapped, and one
   place to review. `DatabaseTarget.passwordCiphertext` holds ciphertext at every

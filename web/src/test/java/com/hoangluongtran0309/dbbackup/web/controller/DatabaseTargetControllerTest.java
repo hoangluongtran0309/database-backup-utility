@@ -4,6 +4,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -21,6 +22,8 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Import;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -33,8 +36,12 @@ import com.hoangluongtran0309.dbbackup.core.model.BackupExecution;
 import com.hoangluongtran0309.dbbackup.core.model.ConnectionCheck;
 import com.hoangluongtran0309.dbbackup.core.model.DatabaseTarget;
 import com.hoangluongtran0309.dbbackup.core.port.BackupExecutionRepository;
+import com.hoangluongtran0309.dbbackup.web.security.SecurityConfig;
 
 @WebMvcTest(DatabaseTargetController.class)
+// The console's real rules: signed in, and every POST carries a CSRF token.
+@Import(SecurityConfig.class)
+@WithMockUser
 class DatabaseTargetControllerTest {
 
     private static final Instant CHECKED_AT = Instant.parse("2026-09-09T11:00:00Z");
@@ -64,6 +71,20 @@ class DatabaseTargetControllerTest {
                 .andExpect(view().name("database/list"))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("production")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("127.0.0.1:3306/shop")));
+    }
+
+    /**
+     * Also the proof that th:action puts the CSRF token in a form — every form
+     * in the console relies on it, and a form without one is refused.
+     */
+    @Test
+    void saysWhoIsSignedInAndOffersToSignOut() throws Exception {
+        when(service.listAll()).thenReturn(List.of(target("production")));
+
+        mockMvc.perform(get("/databases"))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Signed in as <strong>user</strong>")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("action=\"/logout\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("name=\"_csrf\"")));
     }
 
     @Test
@@ -133,7 +154,7 @@ class DatabaseTargetControllerTest {
     void registersAValidTargetAndRedirects() throws Exception {
         when(service.register(any())).thenReturn(target("production"));
 
-        mockMvc.perform(post("/databases")
+        mockMvc.perform(post("/databases").with(csrf())
                         .param("name", "production")
                         .param("host", "127.0.0.1")
                         .param("port", "3306")
@@ -148,7 +169,7 @@ class DatabaseTargetControllerTest {
 
     @Test
     void redisplaysTheFormWithTheTypedValuesWhenAFieldIsInvalid() throws Exception {
-        mockMvc.perform(post("/databases")
+        mockMvc.perform(post("/databases").with(csrf())
                         .param("name", "")
                         .param("host", "db.internal")
                         .param("port", "3306")
@@ -168,7 +189,7 @@ class DatabaseTargetControllerTest {
     void reportsADuplicateNameOnTheNameField() throws Exception {
         when(service.register(any())).thenThrow(new DuplicateTargetNameException("production"));
 
-        mockMvc.perform(post("/databases")
+        mockMvc.perform(post("/databases").with(csrf())
                         .param("name", "production")
                         .param("host", "127.0.0.1")
                         .param("port", "3306")
@@ -183,7 +204,7 @@ class DatabaseTargetControllerTest {
 
     @Test
     void neverRendersTheSubmittedPasswordBackIntoThePage() throws Exception {
-        mockMvc.perform(post("/databases")
+        mockMvc.perform(post("/databases").with(csrf())
                         .param("name", "")
                         .param("host", "127.0.0.1")
                         .param("port", "3306")
@@ -227,7 +248,7 @@ class DatabaseTargetControllerTest {
         UUID id = UUID.randomUUID();
         when(connectionTest.test(id)).thenReturn(ConnectionCheck.passed(CHECKED_AT));
 
-        mockMvc.perform(post("/databases/{id}/test", id))
+        mockMvc.perform(post("/databases/{id}/test", id).with(csrf()))
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrl("/databases"))
                 .andExpect(flash().attribute("message", "Connection succeeded"));
@@ -239,7 +260,7 @@ class DatabaseTargetControllerTest {
         when(connectionTest.test(id)).thenReturn(
                 ConnectionCheck.failed("ERROR 1045 (28000): Access denied", CHECKED_AT));
 
-        mockMvc.perform(post("/databases/{id}/test", id))
+        mockMvc.perform(post("/databases/{id}/test", id).with(csrf()))
                 .andExpect(status().is3xxRedirection())
                 .andExpect(flash().attribute("error",
                         "Connection failed: ERROR 1045 (28000): Access denied"));
@@ -250,7 +271,7 @@ class DatabaseTargetControllerTest {
         UUID id = UUID.randomUUID();
         when(connectionTest.test(id)).thenThrow(new NoSuchElementException("gone"));
 
-        mockMvc.perform(post("/databases/{id}/test", id))
+        mockMvc.perform(post("/databases/{id}/test", id).with(csrf()))
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrl("/databases"))
                 .andExpect(flash().attribute("error", "That target no longer exists"));
@@ -266,7 +287,7 @@ class DatabaseTargetControllerTest {
         UUID executionId = UUID.randomUUID();
         when(backups.start(targetId)).thenReturn(executionId);
 
-        mockMvc.perform(post("/databases/{id}/backup", targetId))
+        mockMvc.perform(post("/databases/{id}/backup", targetId).with(csrf()))
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrl("/executions/" + executionId));
     }
@@ -276,7 +297,7 @@ class DatabaseTargetControllerTest {
         UUID targetId = UUID.randomUUID();
         when(backups.start(targetId)).thenThrow(new NoSuchElementException("gone"));
 
-        mockMvc.perform(post("/databases/{id}/backup", targetId))
+        mockMvc.perform(post("/databases/{id}/backup", targetId).with(csrf()))
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrl("/databases"))
                 .andExpect(flash().attribute("error", "That target no longer exists"));
@@ -288,7 +309,7 @@ class DatabaseTargetControllerTest {
         org.mockito.Mockito.doThrow(new TargetInUseException("production"))
                 .when(service).delete(targetId);
 
-        mockMvc.perform(post("/databases/{id}/delete", targetId))
+        mockMvc.perform(post("/databases/{id}/delete", targetId).with(csrf()))
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrl("/databases"))
                 .andExpect(flash().attribute("error",
@@ -299,7 +320,7 @@ class DatabaseTargetControllerTest {
     void deletesATarget() throws Exception {
         UUID id = UUID.randomUUID();
 
-        mockMvc.perform(post("/databases/{id}/delete", id))
+        mockMvc.perform(post("/databases/{id}/delete", id).with(csrf()))
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrl("/databases"));
 
