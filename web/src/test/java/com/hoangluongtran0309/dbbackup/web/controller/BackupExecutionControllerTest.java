@@ -1,6 +1,7 @@
 package com.hoangluongtran0309.dbbackup.web.controller;
 
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.matchesPattern;
 import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
@@ -47,6 +48,10 @@ class BackupExecutionControllerTest {
 
     private static final Instant STARTED = Instant.parse("2026-09-09T10:00:00Z");
     private static final UUID TARGET_ID = UUID.randomUUID();
+
+    /** How the artifact at /backups/shop_20260909_100000.sql.gz is rendered. */
+    private static final String ARTIFACT_FILE_NAME = "<span class=\"mono break\">shop_20260909_100000.sql.gz</span>";
+    private static final String ARTIFACT_DIRECTORY = "in <span class=\"mono break\">/backups</span>";
 
     @Autowired
     private MockMvc mockMvc;
@@ -113,8 +118,12 @@ class BackupExecutionControllerTest {
                 .andExpect(content().string(containsString("(removed)")));
     }
 
+    /**
+     * The file name leads; the directory is a secondary line under it. And the
+     * fragment is the grid's own {@code <dd>}, not something nested in one.
+     */
     @Test
-    void detailShowsTheArtifactPathAndSize() throws Exception {
+    void detailShowsTheArtifactFileNameItsDirectoryAndSize() throws Exception {
         BackupExecution execution = succeeded();
         when(executions.findById(execution.getId())).thenReturn(Optional.of(execution));
         when(targets.listAll()).thenReturn(List.of(target("production")));
@@ -122,7 +131,10 @@ class BackupExecutionControllerTest {
         mockMvc.perform(get("/executions/{id}", execution.getId()))
                 .andExpect(status().isOk())
                 .andExpect(view().name("execution/detail"))
-                .andExpect(content().string(containsString("/backups/shop_20260909_100000.sql.gz")))
+                .andExpect(content().string(containsString(ARTIFACT_FILE_NAME)))
+                .andExpect(content().string(containsString(ARTIFACT_DIRECTORY)))
+                .andExpect(content().string(not(containsString("/backups/shop_20260909_100000.sql.gz"))))
+                .andExpect(content().string(matchesPattern("(?s).*<dt>Artifact</dt>\\s*<dd>\\s*<div class=\"cell-stack\">.*")))
                 .andExpect(content().string(containsString("8192 bytes")))
                 // Finished: nothing for the page to follow (ADR-010).
                 .andExpect(content().string(containsString("data-live-active=\"false\"")));
@@ -207,7 +219,8 @@ class BackupExecutionControllerTest {
                 .andExpect(view().name("execution/delete"))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("There is no undo")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("restore record(s)")))
-                .andExpect(content().string(org.hamcrest.Matchers.containsString("/backups/shop_20260909_100000.sql.gz")));
+                .andExpect(content().string(containsString(ARTIFACT_FILE_NAME)))
+                .andExpect(content().string(containsString(ARTIFACT_DIRECTORY)));
     }
 
     @Test

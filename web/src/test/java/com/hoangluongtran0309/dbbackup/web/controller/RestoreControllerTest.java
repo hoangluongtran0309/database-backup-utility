@@ -63,7 +63,11 @@ class RestoreControllerTest {
                 .andExpect(view().name("restore/confirm"))
                 .andExpect(content().string(containsString("This overwrites live data")))
                 .andExpect(content().string(containsString("127.0.0.1:3306/shop")))
-                .andExpect(content().string(containsString("Type <strong>production</strong>")));
+                .andExpect(content().string(containsString("Type <strong>production</strong>")))
+                // Which file: its name, then the directory it is in.
+                .andExpect(content().string(containsString(
+                        "<span class=\"mono break\">shop_20260909_100000.sql.gz</span>")))
+                .andExpect(content().string(containsString("in <span class=\"mono break\">/backups</span>")));
     }
 
     /** The caveat people assume wrongly, so the page has to say it. */

@@ -47,8 +47,7 @@
       <dd th:insert="~{fragments/execution-status :: statusBadge(${preview.execution().status})}"></dd>
 
       <dt>Artifact</dt>
-      <dd class="mono break"
-          th:text="${preview.execution().artifactPath != null ? preview.execution().artifactPath : '—'}">—</dd>
+      <dd th:replace="~{fragments/artifact-path :: artifactPath(${preview.execution().artifactPath})}">—</dd>
 
       <dt>Size</dt>
       <dd class="mono"
