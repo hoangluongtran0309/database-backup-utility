@@ -218,7 +218,8 @@ class BackupExecutionControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(view().name("execution/delete"))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("There is no undo")))
-                .andExpect(content().string(org.hamcrest.Matchers.containsString("restore record(s)")))
+                .andExpect(content().string(containsString("<span>2</span>")))
+                .andExpect(content().string(containsString("restore records refer to this backup and are deleted with it")))
                 .andExpect(content().string(containsString(ARTIFACT_FILE_NAME)))
                 .andExpect(content().string(containsString(ARTIFACT_DIRECTORY)));
     }
@@ -236,7 +237,19 @@ class BackupExecutionControllerTest {
                 // Nothing left on disk to delete, so the page must not say it will.
                 .andExpect(content().string(not(containsString("deleted from disk"))))
                 .andExpect(content().string(
-                        org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("restore record(s)"))));
+                        org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("restore record"))));
+    }
+
+    @Test
+    void theDeletePageCountsASingleRestoreInTheSingular() throws Exception {
+        BackupExecution execution = succeeded();
+        when(artifacts.previewDeletion(execution.getId())).thenReturn(
+                new BackupArtifactService.DeletionPreview(execution, true, 1L));
+        when(targets.listAll()).thenReturn(List.of(target("production")));
+
+        mockMvc.perform(get("/executions/{id}/delete", execution.getId()))
+                .andExpect(content().string(containsString("1 restore record refers to this backup and is deleted with it")))
+                .andExpect(content().string(not(containsString("restore records"))));
     }
 
     /** A failed backup never had a file; nothing is "missing". */
