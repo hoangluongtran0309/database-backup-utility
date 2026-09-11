@@ -207,6 +207,8 @@ class DbBackupApplicationIT {
                 .contains("Backup Utility")
                 .contains("Go to targets")
                 .contains("Sign out")
+                // In UTC, like every other time the console shows.
+                .containsPattern("\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2} UTC")
                 .doesNotContain("Whitelabel Error Page");
     }
 
