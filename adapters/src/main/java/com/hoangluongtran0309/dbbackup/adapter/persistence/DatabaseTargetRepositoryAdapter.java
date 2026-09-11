@@ -37,8 +37,18 @@ class DatabaseTargetRepositoryAdapter implements DatabaseTargetRepository {
 
     private final DatabaseTargetJpaRepository jpaRepository;
 
+    /**
+     * A name already in use is checked for before the insert, so the ordinary
+     * case — an operator typing a taken name — never reaches the index. A
+     * violation there is logged by Hibernate at WARN, SQL state and all, as if
+     * something had gone wrong. The catch stays for the one case the check
+     * cannot see: two registrations of the same name racing each other.
+     */
     @Override
     public DatabaseTarget save(DatabaseTarget target) {
+        if (jpaRepository.existsByNameOtherThan(target.getName(), target.getId())) {
+            throw new DuplicateTargetNameException(target.getName());
+        }
         try {
             // saveAndFlush, not save: without the flush the constraint violation
             // would surface later at transaction commit, far from this catch.
@@ -64,6 +74,7 @@ class DatabaseTargetRepositoryAdapter implements DatabaseTargetRepository {
         return jpaRepository.findById(id).map(DatabaseTargetMapper::toDomain);
     }
 
+    /** Checked before the delete, for the same reason as the name in {@link #save}. */
     @Override
     public void deleteById(UUID id) {
         // The name is read before the delete so the failure can say which
@@ -71,6 +82,9 @@ class DatabaseTargetRepositoryAdapter implements DatabaseTargetRepository {
         String name = jpaRepository.findById(id)
                 .map(DatabaseTargetEntity::getName)
                 .orElse(null);
+        if (name != null && jpaRepository.hasBackups(id)) {
+            throw new TargetInUseException(name);
+        }
         try {
             jpaRepository.deleteById(id);
             jpaRepository.flush();
