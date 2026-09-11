@@ -88,8 +88,12 @@ public class BackupExecutionController {
     @PostMapping("/{id}/delete")
     String delete(@PathVariable UUID id, RedirectAttributes flash) {
         try {
-            artifacts.delete(id);
-            flash.addFlashAttribute("message", "Backup deleted, along with its artifact");
+            boolean hadArtifact = artifacts.delete(id);
+            flash.addFlashAttribute("message", hadArtifact
+                    ? "Backup deleted, along with its artifact"
+                    // A failed backup never wrote a file; saying one went
+                    // with it would be untrue.
+                    : "Backup record deleted — it had no artifact");
         } catch (NoSuchElementException e) {
             flash.addFlashAttribute("error", "That backup no longer exists");
         } catch (IllegalStateException e) {

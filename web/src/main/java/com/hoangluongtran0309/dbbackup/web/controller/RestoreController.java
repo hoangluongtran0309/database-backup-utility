@@ -105,10 +105,18 @@ public class RestoreController {
         }
     }
 
+    /**
+     * A restore that is not there sends the operator back to the restore list,
+     * not to the backup list {@code ExecutionErrorHandler} would pick: the list
+     * they came from is the one that answers "what happened to it?".
+     */
     @GetMapping("/{id}")
-    String detail(@PathVariable UUID id, Model model) {
-        RestoreExecution restore = restores.findById(id)
-                .orElseThrow(() -> new NoSuchElementException("No restore with id " + id));
+    String detail(@PathVariable UUID id, Model model, RedirectAttributes flash) {
+        RestoreExecution restore = restores.findById(id).orElse(null);
+        if (restore == null) {
+            flash.addFlashAttribute("error", "That restore no longer exists");
+            return "redirect:/restores";
+        }
         BackupExecution backup = backups.findById(restore.getBackupExecutionId()).orElse(null);
 
         model.addAttribute("restore", restore);

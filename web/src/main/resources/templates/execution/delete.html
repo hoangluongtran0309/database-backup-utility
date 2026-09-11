@@ -13,13 +13,23 @@
   </div>
 
   <div class="alert alert-danger" role="alert">
-    <p><strong>The artifact is deleted from disk. There is no undo.</strong></p>
-    <p th:if="${preview.restoreCount() > 0}">
-      <!-- Said before the click, not discovered after it. -->
-      <span th:text="${preview.restoreCount()}">2</span>
-      restore record(s) referring to this backup are deleted with it.
+    <!-- The file is only promised gone when there is a file to remove. -->
+    <p th:if="${preview.artifactPresent()}"><strong>The artifact is deleted from disk. There is no undo.</strong></p>
+    <p th:unless="${preview.artifactPresent()}"><strong>There is no undo.</strong></p>
+    <!-- Said before the click, not discovered after it. -->
+    <p th:if="${preview.restoreCount() == 1}">
+      1 restore record refers to this backup and is deleted with it.
     </p>
-    <p th:unless="${preview.artifactPresent()}">
+    <p th:if="${preview.restoreCount() > 1}">
+      <span th:text="${preview.restoreCount()}">2</span>
+      restore records refer to this backup and are deleted with it.
+    </p>
+    <!-- A backup that failed never wrote a file: nothing is missing, there
+         simply was never anything. -->
+    <p th:if="${preview.execution().artifactPath == null}">
+      This backup never produced a file, so only its record is deleted.
+    </p>
+    <p th:if="${preview.execution().artifactPath != null and !preview.artifactPresent()}">
       The file is already missing from disk. Deleting the record here is all
       that is left to do.
     </p>
@@ -40,8 +50,7 @@
       <dd th:insert="~{fragments/execution-status :: statusBadge(${preview.execution().status})}"></dd>
 
       <dt>Artifact</dt>
-      <dd class="mono break"
-          th:text="${preview.execution().artifactPath != null ? preview.execution().artifactPath : '—'}">—</dd>
+      <dd th:replace="~{fragments/artifact-path :: artifactPath(${preview.execution().artifactPath})}">—</dd>
 
       <dt>Size</dt>
       <dd class="mono"

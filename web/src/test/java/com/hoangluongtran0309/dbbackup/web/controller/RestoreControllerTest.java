@@ -63,7 +63,11 @@ class RestoreControllerTest {
                 .andExpect(view().name("restore/confirm"))
                 .andExpect(content().string(containsString("This overwrites live data")))
                 .andExpect(content().string(containsString("127.0.0.1:3306/shop")))
-                .andExpect(content().string(containsString("Type <strong>production</strong>")));
+                .andExpect(content().string(containsString("Type <strong>production</strong>")))
+                // Which file: its name, then the directory it is in.
+                .andExpect(content().string(containsString(
+                        "<span class=\"mono break\">shop_20260909_100000.sql.gz</span>")))
+                .andExpect(content().string(containsString("in <span class=\"mono break\">/backups</span>")));
     }
 
     /** The caveat people assume wrongly, so the page has to say it. */
@@ -190,6 +194,18 @@ class RestoreControllerTest {
                 .andExpect(content().string(containsString("still running")))
                 .andExpect(content().string(containsString("data-live-active=\"true\"")))
                 .andExpect(content().string(containsString("data-live-announce=\"Restore running\"")));
+    }
+
+    /** Back to the list it was reached from, not to the backup list. */
+    @Test
+    void aMissingRestoreSendsTheOperatorBackToTheRestoreList() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(restores.findById(id)).thenReturn(Optional.empty());
+
+        mockMvc.perform(get("/restores/{id}", id))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/restores"))
+                .andExpect(flash().attribute("error", "That restore no longer exists"));
     }
 
     private void givenBackupAndTarget() {

@@ -129,7 +129,7 @@ class BackupArtifactServiceTest {
     void deletesRestoreRecordsThenTheFileThenTheRow() {
         givenSucceeded();
 
-        service.delete(BACKUP_ID);
+        assertThat(service.delete(BACKUP_ID)).as("had an artifact").isTrue();
 
         InOrder order = inOrder(restores, storage, backups);
         order.verify(restores).deleteForBackup(BACKUP_ID);
@@ -157,7 +157,7 @@ class BackupArtifactServiceTest {
                 BackupExecution.started(BACKUP_ID, TARGET_ID, STARTED)
                         .failed("boom", STARTED.plusSeconds(1))));
 
-        service.delete(BACKUP_ID);
+        assertThat(service.delete(BACKUP_ID)).as("had an artifact").isFalse();
 
         verify(storage, never()).delete(any());
         verify(backups).deleteById(BACKUP_ID);

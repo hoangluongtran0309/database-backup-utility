@@ -1,6 +1,7 @@
 package com.hoangluongtran0309.dbbackup.web.controller;
 
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.matchesPattern;
 import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
@@ -47,6 +48,10 @@ class BackupExecutionControllerTest {
 
     private static final Instant STARTED = Instant.parse("2026-09-09T10:00:00Z");
     private static final UUID TARGET_ID = UUID.randomUUID();
+
+    /** How the artifact at /backups/shop_20260909_100000.sql.gz is rendered. */
+    private static final String ARTIFACT_FILE_NAME = "<span class=\"mono break\">shop_20260909_100000.sql.gz</span>";
+    private static final String ARTIFACT_DIRECTORY = "in <span class=\"mono break\">/backups</span>";
 
     @Autowired
     private MockMvc mockMvc;
@@ -113,8 +118,12 @@ class BackupExecutionControllerTest {
                 .andExpect(content().string(containsString("(removed)")));
     }
 
+    /**
+     * The file name leads; the directory is a secondary line under it. And the
+     * fragment is the grid's own {@code <dd>}, not something nested in one.
+     */
     @Test
-    void detailShowsTheArtifactPathAndSize() throws Exception {
+    void detailShowsTheArtifactFileNameItsDirectoryAndSize() throws Exception {
         BackupExecution execution = succeeded();
         when(executions.findById(execution.getId())).thenReturn(Optional.of(execution));
         when(targets.listAll()).thenReturn(List.of(target("production")));
@@ -122,7 +131,10 @@ class BackupExecutionControllerTest {
         mockMvc.perform(get("/executions/{id}", execution.getId()))
                 .andExpect(status().isOk())
                 .andExpect(view().name("execution/detail"))
-                .andExpect(content().string(containsString("/backups/shop_20260909_100000.sql.gz")))
+                .andExpect(content().string(containsString(ARTIFACT_FILE_NAME)))
+                .andExpect(content().string(containsString(ARTIFACT_DIRECTORY)))
+                .andExpect(content().string(not(containsString("/backups/shop_20260909_100000.sql.gz"))))
+                .andExpect(content().string(matchesPattern("(?s).*<dt>Artifact</dt>\\s*<dd>\\s*<div class=\"cell-stack\">.*")))
                 .andExpect(content().string(containsString("8192 bytes")))
                 // Finished: nothing for the page to follow (ADR-010).
                 .andExpect(content().string(containsString("data-live-active=\"false\"")));
@@ -206,8 +218,10 @@ class BackupExecutionControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(view().name("execution/delete"))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("There is no undo")))
-                .andExpect(content().string(org.hamcrest.Matchers.containsString("restore record(s)")))
-                .andExpect(content().string(org.hamcrest.Matchers.containsString("/backups/shop_20260909_100000.sql.gz")));
+                .andExpect(content().string(containsString("<span>2</span>")))
+                .andExpect(content().string(containsString("restore records refer to this backup and are deleted with it")))
+                .andExpect(content().string(containsString(ARTIFACT_FILE_NAME)))
+                .andExpect(content().string(containsString(ARTIFACT_DIRECTORY)));
     }
 
     @Test
@@ -220,13 +234,43 @@ class BackupExecutionControllerTest {
         mockMvc.perform(get("/executions/{id}/delete", execution.getId()))
                 .andExpect(content().string(
                         org.hamcrest.Matchers.containsString("already missing from disk")))
+                // Nothing left on disk to delete, so the page must not say it will.
+                .andExpect(content().string(not(containsString("deleted from disk"))))
                 .andExpect(content().string(
-                        org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("restore record(s)"))));
+                        org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("restore record"))));
+    }
+
+    @Test
+    void theDeletePageCountsASingleRestoreInTheSingular() throws Exception {
+        BackupExecution execution = succeeded();
+        when(artifacts.previewDeletion(execution.getId())).thenReturn(
+                new BackupArtifactService.DeletionPreview(execution, true, 1L));
+        when(targets.listAll()).thenReturn(List.of(target("production")));
+
+        mockMvc.perform(get("/executions/{id}/delete", execution.getId()))
+                .andExpect(content().string(containsString("1 restore record refers to this backup and is deleted with it")))
+                .andExpect(content().string(not(containsString("restore records"))));
+    }
+
+    /** A failed backup never had a file; nothing is "missing". */
+    @Test
+    void theDeletePageOfAFailedBackupSaysThereWasNeverAFile() throws Exception {
+        BackupExecution execution = failed();
+        when(artifacts.previewDeletion(execution.getId())).thenReturn(
+                new BackupArtifactService.DeletionPreview(execution, false, 0L));
+        when(targets.listAll()).thenReturn(List.of(target("production")));
+
+        mockMvc.perform(get("/executions/{id}/delete", execution.getId()))
+                .andExpect(content().string(containsString("There is no undo")))
+                .andExpect(content().string(containsString("never produced a file")))
+                .andExpect(content().string(not(containsString("deleted from disk"))))
+                .andExpect(content().string(not(containsString("already missing from disk"))));
     }
 
     @Test
     void deletesABackupAndSaysSo() throws Exception {
         UUID id = UUID.randomUUID();
+        when(artifacts.delete(id)).thenReturn(true);
 
         mockMvc.perform(post("/executions/{id}/delete", id).with(csrf()))
                 .andExpect(status().is3xxRedirection())
@@ -234,6 +278,16 @@ class BackupExecutionControllerTest {
                 .andExpect(flash().attribute("message", "Backup deleted, along with its artifact"));
 
         verify(artifacts).delete(id);
+    }
+
+    @Test
+    void deletingABackupThatHadNoArtifactSaysOnlyTheRecordWent() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(artifacts.delete(id)).thenReturn(false);
+
+        mockMvc.perform(post("/executions/{id}/delete", id).with(csrf()))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(flash().attribute("message", "Backup record deleted — it had no artifact"));
     }
 
     @Test
@@ -276,6 +330,11 @@ class BackupExecutionControllerTest {
     private static BackupExecution succeeded() {
         return BackupExecution.started(UUID.randomUUID(), TARGET_ID, STARTED)
                 .succeeded("/backups/shop_20260909_100000.sql.gz", 8192L, STARTED.plusSeconds(90));
+    }
+
+    private static BackupExecution failed() {
+        return BackupExecution.started(UUID.randomUUID(), TARGET_ID, STARTED)
+                .failed("mysqldump exited with 2", STARTED.plusSeconds(3));
     }
 
     private static DatabaseTarget target(String name) {

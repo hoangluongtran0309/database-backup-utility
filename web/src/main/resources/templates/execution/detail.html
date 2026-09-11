@@ -56,7 +56,7 @@
                       'yyyy-MM-dd HH:mm:ss')} + ' UTC'">…</dd>
 
       <dt>Artifact</dt>
-      <dd class="mono break" th:text="${execution.artifactPath != null ? execution.artifactPath : '—'}">—</dd>
+      <dd th:replace="~{fragments/artifact-path :: artifactPath(${execution.artifactPath})}">—</dd>
 
       <dt>Size</dt>
       <dd class="mono" th:text="${execution.sizeBytes != null ? execution.sizeBytes + ' bytes' : '—'}">—</dd>

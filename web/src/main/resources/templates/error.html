@@ -50,9 +50,14 @@
       <dd class="mono break" th:text="${path != null ? path : '—'}">/no-such-page</dd>
       <dt>Status</dt>
       <dd class="mono" th:text="${status != null ? status + ' ' + error : '—'}">500 Internal Server Error</dd>
-      <!-- For matching this page to the log line. -->
+      <!-- For matching this page to the log line. In UTC like every other
+           time in the console; the log line carries its own offset. -->
       <dt>When</dt>
-      <dd class="mono" th:text="${timestamp != null ? #dates.formatISO(timestamp) : '—'}">2026-09-10T06:24:29.000+00:00</dd>
+      <dd class="mono" th:if="${timestamp == null}">—</dd>
+      <dd class="mono" th:unless="${timestamp == null}"
+          th:text="${#temporals.format(
+                      timestamp.toInstant().atOffset(T(java.time.ZoneOffset).UTC),
+                      'yyyy-MM-dd HH:mm:ss')} + ' UTC'">2026-09-10 06:24:29 UTC</dd>
     </dl>
     <div class="form-actions">
       <a class="button button-primary" th:href="@{/databases}">Go to targets</a>

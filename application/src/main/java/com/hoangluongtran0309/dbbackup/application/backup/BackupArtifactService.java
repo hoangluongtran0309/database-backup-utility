@@ -70,21 +70,25 @@ public class BackupArtifactService {
      * by hand. This way a failure leaves a visible row whose file is already
      * gone, which the operator can simply delete again.
      *
+     * @return whether the backup had an artifact — false for one that failed
+     *         before producing a file, so that only its record went
      * @throws IllegalStateException if the backup is still running
      */
-    public void delete(UUID executionId) {
+    public boolean delete(UUID executionId) {
         BackupExecution execution = require(executionId);
         if (execution.getStatus() == ExecutionStatus.RUNNING) {
             throw new IllegalStateException(
                     "This backup is still running. Wait for it to finish before deleting it.");
         }
 
+        boolean hadArtifact = execution.getArtifactPath() != null;
         restores.deleteForBackup(executionId);
-        if (execution.getArtifactPath() != null) {
+        if (hadArtifact) {
             storage.delete(Path.of(execution.getArtifactPath()));
         }
         backups.deleteById(executionId);
         log.info("Deleted backup {} and its artifact {}", executionId, execution.getArtifactPath());
+        return hadArtifact;
     }
 
     private BackupExecution require(UUID executionId) {

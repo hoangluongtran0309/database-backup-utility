@@ -34,7 +34,7 @@
                       backup.startedAt.atOffset(T(java.time.ZoneOffset).UTC),
                       'yyyy-MM-dd HH:mm:ss')} + ' UTC'">…</dd>
       <dt>Artifact</dt>
-      <dd class="mono break" th:text="${backup.artifactPath}">…</dd>
+      <dd th:replace="~{fragments/artifact-path :: artifactPath(${backup.artifactPath})}">…</dd>
       <dt>Target</dt>
       <dd th:text="${target.name}">production</dd>
     </dl>

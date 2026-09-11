@@ -11,6 +11,21 @@ import org.springframework.data.repository.query.Param;
 interface DatabaseTargetJpaRepository extends JpaRepository<DatabaseTargetEntity, UUID> {
 
     /**
+     * Whether a target other than {@code id} already has this name, compared
+     * the way the unique index in V1 compares it: {@code lower(btrim(name))}.
+     */
+    @Query("""
+            select count(t) > 0 from DatabaseTargetEntity t
+             where lower(trim(t.name)) = lower(trim(:name))
+               and t.id <> :id
+            """)
+    boolean existsByNameOtherThan(@Param("name") String name, @Param("id") UUID id);
+
+    /** Whether any backup execution still refers to the target — the V3 foreign key. */
+    @Query("select count(e) > 0 from BackupExecutionEntity e where e.targetId = :id")
+    boolean hasBackups(@Param("id") UUID id);
+
+    /**
      * Writes only the probe columns.
      *
      * <p>A bulk update rather than load-modify-save, so that recording a check
