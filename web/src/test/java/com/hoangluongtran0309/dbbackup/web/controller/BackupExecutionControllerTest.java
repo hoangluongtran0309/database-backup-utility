@@ -220,13 +220,31 @@ class BackupExecutionControllerTest {
         mockMvc.perform(get("/executions/{id}/delete", execution.getId()))
                 .andExpect(content().string(
                         org.hamcrest.Matchers.containsString("already missing from disk")))
+                // Nothing left on disk to delete, so the page must not say it will.
+                .andExpect(content().string(not(containsString("deleted from disk"))))
                 .andExpect(content().string(
                         org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("restore record(s)"))));
+    }
+
+    /** A failed backup never had a file; nothing is "missing". */
+    @Test
+    void theDeletePageOfAFailedBackupSaysThereWasNeverAFile() throws Exception {
+        BackupExecution execution = failed();
+        when(artifacts.previewDeletion(execution.getId())).thenReturn(
+                new BackupArtifactService.DeletionPreview(execution, false, 0L));
+        when(targets.listAll()).thenReturn(List.of(target("production")));
+
+        mockMvc.perform(get("/executions/{id}/delete", execution.getId()))
+                .andExpect(content().string(containsString("There is no undo")))
+                .andExpect(content().string(containsString("never produced a file")))
+                .andExpect(content().string(not(containsString("deleted from disk"))))
+                .andExpect(content().string(not(containsString("already missing from disk"))));
     }
 
     @Test
     void deletesABackupAndSaysSo() throws Exception {
         UUID id = UUID.randomUUID();
+        when(artifacts.delete(id)).thenReturn(true);
 
         mockMvc.perform(post("/executions/{id}/delete", id).with(csrf()))
                 .andExpect(status().is3xxRedirection())
@@ -234,6 +252,16 @@ class BackupExecutionControllerTest {
                 .andExpect(flash().attribute("message", "Backup deleted, along with its artifact"));
 
         verify(artifacts).delete(id);
+    }
+
+    @Test
+    void deletingABackupThatHadNoArtifactSaysOnlyTheRecordWent() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(artifacts.delete(id)).thenReturn(false);
+
+        mockMvc.perform(post("/executions/{id}/delete", id).with(csrf()))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(flash().attribute("message", "Backup record deleted — it had no artifact"));
     }
 
     @Test
@@ -276,6 +304,11 @@ class BackupExecutionControllerTest {
     private static BackupExecution succeeded() {
         return BackupExecution.started(UUID.randomUUID(), TARGET_ID, STARTED)
                 .succeeded("/backups/shop_20260909_100000.sql.gz", 8192L, STARTED.plusSeconds(90));
+    }
+
+    private static BackupExecution failed() {
+        return BackupExecution.started(UUID.randomUUID(), TARGET_ID, STARTED)
+                .failed("mysqldump exited with 2", STARTED.plusSeconds(3));
     }
 
     private static DatabaseTarget target(String name) {

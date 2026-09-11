@@ -13,13 +13,20 @@
   </div>
 
   <div class="alert alert-danger" role="alert">
-    <p><strong>The artifact is deleted from disk. There is no undo.</strong></p>
+    <!-- The file is only promised gone when there is a file to remove. -->
+    <p th:if="${preview.artifactPresent()}"><strong>The artifact is deleted from disk. There is no undo.</strong></p>
+    <p th:unless="${preview.artifactPresent()}"><strong>There is no undo.</strong></p>
     <p th:if="${preview.restoreCount() > 0}">
       <!-- Said before the click, not discovered after it. -->
       <span th:text="${preview.restoreCount()}">2</span>
       restore record(s) referring to this backup are deleted with it.
     </p>
-    <p th:unless="${preview.artifactPresent()}">
+    <!-- A backup that failed never wrote a file: nothing is missing, there
+         simply was never anything. -->
+    <p th:if="${preview.execution().artifactPath == null}">
+      This backup never produced a file, so only its record is deleted.
+    </p>
+    <p th:if="${preview.execution().artifactPath != null and !preview.artifactPresent()}">
       The file is already missing from disk. Deleting the record here is all
       that is left to do.
     </p>
