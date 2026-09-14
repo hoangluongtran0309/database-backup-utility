@@ -178,6 +178,23 @@
     }
 
     /*
+     * A select marked data-autosubmit submits its form as soon as it changes —
+     * the restore page's choice of target, which reloads the page so the
+     * warning describes the target chosen. The form's own button, marked
+     * data-autosubmit-fallback, is what does this with the script off, so it
+     * is hidden only once the script is known to be running.
+     */
+    function initAutoSubmit() {
+        document.querySelectorAll('select[data-autosubmit]').forEach(function (select) {
+            var fallback = select.form && select.form.querySelector('[data-autosubmit-fallback]');
+            if (fallback) fallback.hidden = true;
+            select.addEventListener('change', function () {
+                if (select.form.requestSubmit) select.form.requestSubmit(); else select.form.submit();
+            });
+        });
+    }
+
+    /*
      * Follows a running backup or restore (ADR-010). The page marks the block
      * that can change with data-live, and data-live-active="true" while the
      * job runs; this re-fetches the same URL, and swaps the block for the one
@@ -275,6 +292,7 @@
         initDrawer();
         initConfirmDialog();
         initSubmitGuard();
+        initAutoSubmit();
         initLiveRegion();
         // A flash reports the navigation that rendered this page; once read it
         // can go. Removed rather than hidden so the layout closes up.

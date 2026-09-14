@@ -58,6 +58,10 @@ history — in PostgreSQL. That is the only reason `org.postgresql` appears in t
 build and the only reason the Flyway migrations are written in PostgreSQL's
 dialect.
 
+Queries lean on that where it helps: the target list finds each target's newest
+backup with `DISTINCT ON`, one row per target however long the history, rather
+than reading every backup to find the first of each.
+
 **PostgreSQL is not a database this tool can back up.** There is no PostgreSQL
 engine adapter, no `POSTGRESQL` enum value, and no plan for one in the current
 roadmap. MySQL is the only engine, which is also why `database_targets` has no
@@ -129,7 +133,11 @@ backup is a child process competing for the same disk.
 A restore follows the same two-step shape and shares the same pool, so the bound
 is on total heavy work rather than on each kind separately. What a restore
 actually does — and what it deliberately does not — is in
-[ADR-007](../adr/007-restore-applies-a-dump-and-asks-first.md).
+[ADR-007](../adr/007-restore-applies-a-dump-and-asks-first.md). It can go into
+any registered target ([ADR-014](../adr/014-restore-into-any-registered-target.md)),
+and before the client starts, the job thread checks the artifact against the
+checksum recorded when it was written
+([ADR-013](../adr/013-a-checksum-for-every-artifact.md)).
 
 Any row still RUNNING when the application starts belongs to a process that is
 gone — jobs run here and nowhere else — so startup marks them failed.
@@ -141,7 +149,11 @@ a target cannot go while it has backups, and a backup cannot go while restore
 records refer to it. Deleting a backup removes those records, then its file,
 then its row — in that order, so a failure never strands a file on disk with
 nothing pointing at it. See
-[ADR-008](../adr/008-deleting-a-backup-takes-its-history-with-it.md).
+[ADR-008](../adr/008-deleting-a-backup-takes-its-history-with-it.md). Removing
+a target likewise removes the records of restores into it, in the use case and
+only after checking it has no backups
+([ADR-014](../adr/014-restore-into-any-registered-target.md)). Every foreign
+key is `RESTRICT`: the schema never removes history by itself.
 
 `StoragePort` refuses to read or delete anything outside its configured root.
 Every path it receives was read back from the database, and a value in a

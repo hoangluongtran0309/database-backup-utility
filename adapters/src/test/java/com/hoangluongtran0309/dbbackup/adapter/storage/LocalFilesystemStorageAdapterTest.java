@@ -35,6 +35,44 @@ class LocalFilesystemStorageAdapterTest {
                 .isAbsolute();
     }
 
+    /** The value sha256sum prints for the same bytes, so the two can be compared by eye. */
+    @Test
+    void checksumsAnArtifactAsSha256sumWould() throws Exception {
+        Path artifact = storage.locationFor("shop.sql.gz");
+        Files.writeString(artifact, "test");
+
+        assertThat(storage.sha256Of(artifact))
+                .isEqualTo("9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08");
+    }
+
+    /** Bigger than one read buffer, so the digest has to be fed in pieces. */
+    @Test
+    void checksumsAFileLargerThanOneBufferTheSameAsAllAtOnce() throws Exception {
+        Path artifact = storage.locationFor("big.sql.gz");
+        byte[] content = new byte[200_000];
+        new java.util.Random(7).nextBytes(content);
+        Files.write(artifact, content);
+
+        String expected = java.util.HexFormat.of().formatHex(
+                java.security.MessageDigest.getInstance("SHA-256").digest(content));
+        assertThat(storage.sha256Of(artifact)).isEqualTo(expected);
+    }
+
+    @Test
+    void refusesToChecksumAFileOutsideTheStore(@TempDir Path elsewhere) throws Exception {
+        Path outside = Files.writeString(elsewhere.resolve("secret"), "x");
+
+        assertThatThrownBy(() -> storage.sha256Of(outside))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("outside the backup directory");
+    }
+
+    @Test
+    void checksummingAMissingArtifactFails() {
+        assertThatThrownBy(() -> storage.sha256Of(storage.locationFor("gone.sql.gz")))
+                .isInstanceOf(java.io.UncheckedIOException.class);
+    }
+
     @Test
     void createsTheRootIfItDoesNotExist() {
         Path nested = root.resolve("does/not/exist/yet");

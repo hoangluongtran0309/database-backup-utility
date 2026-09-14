@@ -12,8 +12,12 @@
     </div>
   </div>
 
-  <p class="empty-state panel" th:if="${executions.isEmpty()}">
+  <p class="empty-state panel" th:if="${executions.isEmpty() and !history.hasNewer()}">
     No backups yet. Start one from a <a th:href="@{/databases}">target</a>.
+  </p>
+
+  <p class="empty-state panel" th:if="${executions.isEmpty() and history.hasNewer()}">
+    Nothing this far back. <a th:href="@{/executions}">Back to the newest</a>.
   </p>
 
   <div class="table-wrap responsive-cards" th:unless="${executions.isEmpty()}">
@@ -50,6 +54,8 @@
       </tbody>
     </table>
   </div>
+
+  <nav th:replace="~{fragments/pager :: pager(${history}, '/executions')}"></nav>
 
 </div>
 </body>

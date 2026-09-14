@@ -15,18 +15,27 @@ class RestoreExecutionTest {
     private static final Instant FINISHED = Instant.parse("2026-09-09T10:04:00Z");
 
     private static RestoreExecution running() {
-        return RestoreExecution.started(UUID.randomUUID(), UUID.randomUUID(), STARTED);
+        return RestoreExecution.started(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), STARTED);
     }
 
     @Test
-    void startsRunningAgainstOneBackup() {
+    void startsRunningAgainstOneBackupIntoOneTarget() {
         UUID backupId = UUID.randomUUID();
-        RestoreExecution execution = RestoreExecution.started(UUID.randomUUID(), backupId, STARTED);
+        UUID targetId = UUID.randomUUID();
+        RestoreExecution execution = RestoreExecution.started(UUID.randomUUID(), backupId, targetId, STARTED);
 
         assertThat(execution.getStatus()).isEqualTo(ExecutionStatus.RUNNING);
         assertThat(execution.getBackupExecutionId()).isEqualTo(backupId);
+        assertThat(execution.getTargetId()).isEqualTo(targetId);
         assertThat(execution.getFinishedAt()).isNull();
         assertThat(execution.getErrorMessage()).isNull();
+    }
+
+    @Test
+    void aRestoreMustSayWhereItsDataGoes() {
+        assertThatThrownBy(() -> RestoreExecution.started(UUID.randomUUID(), UUID.randomUUID(), null, STARTED))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Target id");
     }
 
     @Test
@@ -37,6 +46,7 @@ class RestoreExecutionTest {
 
         assertThat(done.getId()).isEqualTo(started.getId());
         assertThat(done.getBackupExecutionId()).isEqualTo(started.getBackupExecutionId());
+        assertThat(done.getTargetId()).isEqualTo(started.getTargetId());
         assertThat(done.getStatus()).isEqualTo(ExecutionStatus.SUCCEEDED);
         assertThat(done.getFinishedAt()).isEqualTo(FINISHED);
         assertThat(done.getErrorMessage()).isNull();
@@ -70,14 +80,14 @@ class RestoreExecutionTest {
     @Test
     void refusesAStatusThatDisagreesWithTheFinishTimestamp() {
         assertThatThrownBy(() -> RestoreExecution.builder()
-                .id(UUID.randomUUID()).backupExecutionId(UUID.randomUUID())
+                .id(UUID.randomUUID()).backupExecutionId(UUID.randomUUID()).targetId(UUID.randomUUID())
                 .status(ExecutionStatus.SUCCEEDED).startedAt(STARTED)
                 .build())
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("needs a finish timestamp");
 
         assertThatThrownBy(() -> RestoreExecution.builder()
-                .id(UUID.randomUUID()).backupExecutionId(UUID.randomUUID())
+                .id(UUID.randomUUID()).backupExecutionId(UUID.randomUUID()).targetId(UUID.randomUUID())
                 .status(ExecutionStatus.RUNNING).startedAt(STARTED).finishedAt(FINISHED)
                 .build())
                 .isInstanceOf(IllegalArgumentException.class);

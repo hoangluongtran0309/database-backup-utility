@@ -126,6 +126,51 @@ class DatabaseTargetRepositoryAdapterIT {
     }
 
     @Test
+    void savingAnEditedTargetUpdatesItInPlace() {
+        DatabaseTarget saved = repository.save(target("production", "shop"));
+
+        repository.save(saved.edited("production", "10.0.0.5", 3307, "reader", "bmV3"));
+
+        assertThat(repository.findAll()).hasSize(1);
+        DatabaseTarget found = repository.findById(saved.getId()).orElseThrow();
+        assertThat(found.address()).isEqualTo("10.0.0.5:3307/shop");
+        assertThat(found.getUsername()).isEqualTo("reader");
+        assertThat(found.getPasswordCiphertext()).isEqualTo("bmV3");
+        assertThat(found.getCreatedAt()).isEqualTo(saved.getCreatedAt());
+    }
+
+    /** The name check excludes the target itself, so recasing its own name is not a clash. */
+    @Test
+    void aTargetMayKeepOrRecaseItsOwnName() {
+        DatabaseTarget saved = repository.save(target("production", "shop"));
+
+        repository.save(saved.edited("Production", "127.0.0.1", 3306, "backup", null));
+
+        assertThat(repository.findById(saved.getId()).orElseThrow().getName()).isEqualTo("Production");
+    }
+
+    @Test
+    void renamingOntoAnotherTargetsNameIsRefused() {
+        repository.save(target("production", "shop"));
+        DatabaseTarget staging = repository.save(target("staging", "shop"));
+
+        assertThatThrownBy(() -> repository.save(staging.edited("PRODUCTION", "127.0.0.1", 3306, "backup", null)))
+                .isInstanceOf(DuplicateTargetNameException.class);
+        assertThat(repository.findById(staging.getId()).orElseThrow().getName()).isEqualTo("staging");
+    }
+
+    @Test
+    void anEditThatChangesTheConnectionClearsTheStoredCheck() {
+        DatabaseTarget saved = repository.save(target("production", "shop"));
+        repository.recordConnectionCheck(saved.getId(), ConnectionCheck.passed(Instant.parse("2026-09-09T11:00:00Z")));
+        DatabaseTarget tested = repository.findById(saved.getId()).orElseThrow();
+
+        repository.save(tested.edited("production", "10.0.0.5", 3306, "backup", null));
+
+        assertThat(repository.findById(saved.getId()).orElseThrow().hasBeenTested()).isFalse();
+    }
+
+    @Test
     void aNewTargetHasNoConnectionCheck() {
         DatabaseTarget saved = repository.save(target("production", "shop"));
 
@@ -215,7 +260,7 @@ class DatabaseTargetRepositoryAdapterIT {
     @org.junit.jupiter.api.BeforeEach
     void clearTable() {
         // Backups first: a target that still has one cannot be deleted.
-        backups.findAllNewestFirst().forEach(backup -> backups.deleteById(backup.getId()));
+        backups.findNewestFirst(1, 1000).items().forEach(backup -> backups.deleteById(backup.getId()));
         List<DatabaseTarget> existing = repository.findAll();
         existing.forEach(target -> repository.deleteById(target.getId()));
     }

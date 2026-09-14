@@ -5,7 +5,6 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.UUID;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -26,9 +25,9 @@ import com.hoangluongtran0309.dbbackup.core.exception.TargetInUseException;
 import com.hoangluongtran0309.dbbackup.core.model.BackupExecution;
 import com.hoangluongtran0309.dbbackup.core.model.ConnectionCheck;
 import com.hoangluongtran0309.dbbackup.core.model.DatabaseTarget;
-import com.hoangluongtran0309.dbbackup.core.model.ExecutionStatus;
 import com.hoangluongtran0309.dbbackup.core.port.BackupExecutionRepository;
 import com.hoangluongtran0309.dbbackup.web.dto.DatabaseTargetForm;
+import com.hoangluongtran0309.dbbackup.web.dto.EditTargetForm;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -65,14 +64,14 @@ public class DatabaseTargetController {
      * Beside each target, its newest backup attempt and its newest successful
      * one — "when was this last backed up?" is the question the page exists to
      * answer, and a failed attempt must not hide the good copy before it.
+     * Asked of the database per target, rather than by reading the whole
+     * history to find the first of each.
      */
     @GetMapping
     String list(Model model) {
-        List<BackupExecution> newestFirst = executions.findAllNewestFirst();
         model.addAttribute("targets", service.listAll());
-        model.addAttribute("latestBackups", firstPerTarget(newestFirst.stream()));
-        model.addAttribute("lastSuccessfulBackups", firstPerTarget(newestFirst.stream()
-                .filter(e -> e.getStatus() == ExecutionStatus.SUCCEEDED)));
+        model.addAttribute("latestBackups", byTarget(executions.findLatestPerTarget()));
+        model.addAttribute("lastSuccessfulBackups", byTarget(executions.findLatestSucceededPerTarget()));
         return "database/list";
     }
 
@@ -105,6 +104,51 @@ public class DatabaseTargetController {
             rejectOnForm(binding, e);
             return FORM_VIEW;
         }
+    }
+
+    @GetMapping("/{id}/edit")
+    String editForm(@PathVariable UUID id, Model model, RedirectAttributes flash) {
+        DatabaseTarget target;
+        try {
+            target = service.get(id);
+        } catch (NoSuchElementException e) {
+            return targetGone(flash);
+        }
+        model.addAttribute("form", EditTargetForm.of(target));
+        return editView(model, target);
+    }
+
+    @PostMapping("/{id}")
+    String update(
+            @PathVariable UUID id,
+            @Valid @ModelAttribute("form") EditTargetForm form,
+            BindingResult binding,
+            Model model,
+            RedirectAttributes flash) {
+
+        // Read even when the form is invalid: the page shows the schema, which
+        // is not a field the operator sends.
+        DatabaseTarget current;
+        try {
+            current = service.get(id);
+        } catch (NoSuchElementException e) {
+            return targetGone(flash);
+        }
+        if (binding.hasErrors()) {
+            return editView(model, current);
+        }
+        try {
+            DatabaseTarget saved = service.edit(id, form.toCommand());
+            flash.addFlashAttribute("message", "Saved target '%s'".formatted(saved.getName()));
+            return "redirect:/databases";
+        } catch (DuplicateTargetNameException e) {
+            binding.rejectValue("name", "target.duplicate", e.getMessage());
+        } catch (InvalidTargetException e) {
+            rejectOnForm(binding, e);
+        } catch (NoSuchElementException e) {
+            return targetGone(flash);
+        }
+        return editView(model, current);
     }
 
     /**
@@ -153,10 +197,20 @@ public class DatabaseTargetController {
         return "redirect:/databases";
     }
 
-    /** Relies on the repository's newest-first order: the first seen is kept. */
-    private static Map<UUID, BackupExecution> firstPerTarget(Stream<BackupExecution> newestFirst) {
-        return newestFirst.collect(Collectors.toMap(
-                BackupExecution::getTargetId, e -> e, (newer, older) -> newer));
+    /** The repository returns at most one per target; a duplicate would be a bug there, so it fails here. */
+    private static Map<UUID, BackupExecution> byTarget(List<BackupExecution> onePerTarget) {
+        return onePerTarget.stream().collect(Collectors.toMap(BackupExecution::getTargetId, e -> e));
+    }
+
+    /** The shared form page, in edit mode: {@code editing} is what switches it. */
+    private static String editView(Model model, DatabaseTarget target) {
+        model.addAttribute("editing", target);
+        return FORM_VIEW;
+    }
+
+    private static String targetGone(RedirectAttributes flash) {
+        flash.addFlashAttribute("error", "That target no longer exists");
+        return "redirect:/databases";
     }
 
     private static void rejectOnForm(BindingResult binding, InvalidTargetException e) {

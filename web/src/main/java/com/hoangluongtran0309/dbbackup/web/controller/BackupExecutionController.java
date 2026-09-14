@@ -1,7 +1,6 @@
 package com.hoangluongtran0309.dbbackup.web.controller;
 
 import java.io.InputStream;
-import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.UUID;
@@ -18,6 +17,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import com.hoangluongtran0309.dbbackup.application.backup.BackupArtifactService;
@@ -25,6 +25,7 @@ import com.hoangluongtran0309.dbbackup.application.target.ManageDatabaseTargetSe
 import com.hoangluongtran0309.dbbackup.core.model.BackupExecution;
 import com.hoangluongtran0309.dbbackup.core.model.DatabaseTarget;
 import com.hoangluongtran0309.dbbackup.core.port.BackupExecutionRepository;
+import com.hoangluongtran0309.dbbackup.core.port.HistoryPage;
 
 import lombok.RequiredArgsConstructor;
 
@@ -42,9 +43,11 @@ public class BackupExecutionController {
     private final BackupArtifactService artifacts;
 
     @GetMapping
-    String list(Model model) {
-        List<BackupExecution> all = executions.findAllNewestFirst();
-        model.addAttribute("executions", all);
+    String list(@RequestParam(name = "page", defaultValue = "1") int page, Model model) {
+        HistoryPage<BackupExecution> history =
+                executions.findNewestFirst(HistoryPaging.page(page), HistoryPaging.PAGE_SIZE);
+        model.addAttribute("history", history);
+        model.addAttribute("executions", history.items());
         model.addAttribute("targetNames", targetNames());
         return "execution/list";
     }
@@ -55,7 +58,31 @@ public class BackupExecutionController {
                 .orElseThrow(() -> new NoSuchElementException("No backup execution with id " + id));
         model.addAttribute("execution", execution);
         model.addAttribute("targetName", targetNames().get(execution.getTargetId()));
+        model.addAttribute("artifactOnDisk", artifacts.isOnDisk(execution));
         return "execution/detail";
+    }
+
+    /**
+     * Re-reads the artifact and compares it with the checksum recorded when it
+     * was written. Synchronous: it reads the file once, which is bounded by the
+     * disk in a way a dump is not.
+     */
+    @PostMapping("/{id}/verify")
+    String verify(@PathVariable UUID id, RedirectAttributes flash) {
+        BackupArtifactService.Verification result = artifacts.verify(id);
+        switch (result.integrity()) {
+            case INTACT -> flash.addFlashAttribute("message",
+                    "Verified: the artifact matches the checksum recorded when it was made");
+            case MISMATCH -> flash.addFlashAttribute("error",
+                    "The artifact does not match its checksum — recorded %s, now %s. It has changed since it "
+                            .formatted(result.recorded(), result.actual())
+                            + "was written, and a restore from it will be refused.");
+            case MISSING -> flash.addFlashAttribute("error", "The artifact is no longer on disk");
+            case NOT_RECORDED -> flash.addFlashAttribute("message",
+                    "This backup predates checksums, so there is nothing to compare with. Its SHA-256 now is "
+                            + result.actual());
+        }
+        return "redirect:/executions/" + id;
     }
 
     /**

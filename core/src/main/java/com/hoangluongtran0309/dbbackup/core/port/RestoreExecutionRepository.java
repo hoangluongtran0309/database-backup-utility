@@ -12,8 +12,13 @@ public interface RestoreExecutionRepository {
 
     Optional<RestoreExecution> findById(UUID id);
 
-    /** Most recent first. The order is part of the contract. */
-    List<RestoreExecution> findAllNewestFirst();
+    /**
+     * One page of the history, most recent first.
+     *
+     * @param page 1-based
+     * @see BackupExecutionRepository#findNewestFirst(int, int)
+     */
+    HistoryPage<RestoreExecution> findNewestFirst(int page, int pageSize);
 
     /** @see BackupExecutionRepository#findRunning() */
     List<RestoreExecution> findRunning();
@@ -29,4 +34,12 @@ public interface RestoreExecutionRepository {
      * no longer exists says less than nothing.
      */
     void deleteForBackup(UUID backupExecutionId);
+
+    /**
+     * Removes every restore record whose data went into this target.
+     *
+     * <p>Called only as part of removing the target itself, which the operator
+     * has confirmed. See ADR-014.
+     */
+    void deleteForTarget(UUID targetId);
 }

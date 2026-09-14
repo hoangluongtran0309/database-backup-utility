@@ -152,6 +152,8 @@ code { color: var(--text); font-family: var(--mono); font-size: .88em; overflow-
 .page-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 1.35rem; }
 .page-header p { color: var(--muted); margin: .4rem 0 0; }
 .actions, .form-actions { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+/* A POST button among the header's links lines up and stretches like them. */
+.page-header > .actions > form { display: contents; }
 .section-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin: 1.8rem 0 .8rem; }
 .eyebrow { margin-bottom: .35rem; color: var(--primary); font-size: .72rem; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; }
 
@@ -205,6 +207,7 @@ td.actions { display: table-cell; width: 1%; }
 .row-actions { display: flex; align-items: center; justify-content: flex-end; gap: .4rem; }
 .row-actions form { margin: 0; }
 .empty-state { margin: 0; padding: 2.8rem 1.2rem; text-align: center; color: var(--muted); }
+.pager { display: flex; align-items: center; justify-content: center; gap: .9rem; margin-top: 1.1rem; }
 /* Links inside a sentence get an underline: colour alone is not a cue. */
 .empty-state a, .alert a, .field-hint a { text-decoration: underline; }
 
@@ -255,6 +258,8 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); box-sh
 .field-error { margin: .15rem 0 0; color: var(--danger); font-size: .82rem; }
 .field-error span { display: block; }
 input[aria-invalid="true"] { border-color: var(--danger); }
+/* Shown for context, never sent: a target's schema, once it is registered. */
+input[readonly] { background: var(--surface); color: var(--muted); border-style: dashed; }
 .form-actions { margin-top: 1.4rem; }
 .alert ul { margin: .35rem 0 0; padding-left: 1.2rem; }
 

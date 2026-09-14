@@ -10,6 +10,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.junit.jupiter.Container;
@@ -23,12 +24,14 @@ import com.hoangluongtran0309.dbbackup.core.model.ExecutionStatus;
 import com.hoangluongtran0309.dbbackup.core.model.DatabaseTarget;
 import com.hoangluongtran0309.dbbackup.core.port.BackupExecutionRepository;
 import com.hoangluongtran0309.dbbackup.core.port.DatabaseTargetRepository;
+import com.hoangluongtran0309.dbbackup.core.port.HistoryPage;
 
 @SpringBootTest(classes = TestAdaptersApplication.class)
 @Testcontainers
 class BackupExecutionRepositoryAdapterIT {
 
     private static final Instant STARTED = Instant.parse("2026-09-09T10:00:00Z");
+    private static final String SHA256 = "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08";
 
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:17-alpine");
@@ -46,11 +49,14 @@ class BackupExecutionRepositoryAdapterIT {
     @Autowired
     private DatabaseTargetRepository targets;
 
+    @Autowired
+    private JdbcTemplate jdbc;
+
     private UUID targetId;
 
     @BeforeEach
     void reset() {
-        executions.findAllNewestFirst().forEach(e -> deleteExecution(e.getId()));
+        executions.findNewestFirst(1, 1000).items().forEach(e -> deleteExecution(e.getId()));
         targets.findAll().forEach(t -> targets.deleteById(t.getId()));
         targetId = targets.save(target("production")).getId();
     }
@@ -70,13 +76,27 @@ class BackupExecutionRepositoryAdapterIT {
     void savesAndReadsBackASucceededExecution() {
         BackupExecution running = executions.save(BackupExecution.started(UUID.randomUUID(), targetId, STARTED));
 
-        executions.save(running.succeeded("/backups/shop.sql", 4096L, STARTED.plusSeconds(90)));
+        executions.save(running.succeeded("/backups/shop.sql", 4096L, SHA256, STARTED.plusSeconds(90)));
 
         BackupExecution found = executions.findById(running.getId()).orElseThrow();
         assertThat(found.getStatus()).isEqualTo(ExecutionStatus.SUCCEEDED);
         assertThat(found.getArtifactPath()).isEqualTo("/backups/shop.sql");
         assertThat(found.getSizeBytes()).isEqualTo(4096L);
+        assertThat(found.getSha256()).isEqualTo(SHA256);
         assertThat(found.getFinishedAt()).isEqualTo(STARTED.plusSeconds(90));
+    }
+
+    /**
+     * V5's check, not only the model's: a row written by hand or by an older
+     * build must not be able to carry a checksum the console would trust.
+     */
+    @Test
+    void theSchemaRefusesAChecksumOnAnythingButASuccess() {
+        BackupExecution running = executions.save(BackupExecution.started(UUID.randomUUID(), targetId, STARTED));
+
+        assertThatThrownBy(() -> jdbc.update(
+                "update backup_executions set sha256 = ? where id = ?", SHA256, running.getId()))
+                .hasMessageContaining("ck_backup_executions_sha256");
     }
 
     @Test
@@ -97,16 +117,89 @@ class BackupExecutionRepositoryAdapterIT {
         executions.save(BackupExecution.started(UUID.randomUUID(), targetId, STARTED.plusSeconds(60)));
         executions.save(BackupExecution.started(UUID.randomUUID(), targetId, STARTED.minusSeconds(60)));
 
-        assertThat(executions.findAllNewestFirst())
+        assertThat(executions.findNewestFirst(1, 50).items())
                 .extracting(BackupExecution::getStartedAt)
                 .containsExactly(STARTED.plusSeconds(60), STARTED, STARTED.minusSeconds(60));
+    }
+
+    @Test
+    void pagesTheHistoryNewestFirstAndSaysWhetherThereIsMore() {
+        for (int i = 0; i < 5; i++) {
+            executions.save(BackupExecution.started(UUID.randomUUID(), targetId, STARTED.plusSeconds(i)));
+        }
+
+        HistoryPage<BackupExecution> first = executions.findNewestFirst(1, 2);
+        HistoryPage<BackupExecution> last = executions.findNewestFirst(3, 2);
+        HistoryPage<BackupExecution> beyond = executions.findNewestFirst(4, 2);
+
+        assertThat(first.items()).extracting(BackupExecution::getStartedAt)
+                .containsExactly(STARTED.plusSeconds(4), STARTED.plusSeconds(3));
+        assertThat(first.hasOlder()).isTrue();
+        assertThat(last.items()).extracting(BackupExecution::getStartedAt).containsExactly(STARTED);
+        assertThat(last.hasOlder()).isFalse();
+        assertThat(beyond.isEmpty()).isTrue();
+        assertThat(beyond.hasNewer()).isTrue();
+    }
+
+    /** Backups started in the same instant must neither repeat nor go missing across pages. */
+    @Test
+    void pagesThroughBackupsThatStartedAtTheSameInstantWithoutRepeatingAny() {
+        java.util.Set<UUID> saved = new java.util.HashSet<>();
+        for (int i = 0; i < 7; i++) {
+            saved.add(executions.save(BackupExecution.started(UUID.randomUUID(), targetId, STARTED)).getId());
+        }
+
+        java.util.List<UUID> seen = new java.util.ArrayList<>();
+        for (int page = 1; page <= 4; page++) {
+            executions.findNewestFirst(page, 2).items().forEach(e -> seen.add(e.getId()));
+        }
+
+        assertThat(seen).doesNotHaveDuplicates().containsExactlyInAnyOrderElementsOf(saved);
+    }
+
+    @Test
+    void findsEachTargetsNewestAttemptAndNewestSuccess() {
+        UUID other = targets.save(target("staging")).getId();
+        BackupExecution good = executions.save(
+                BackupExecution.started(UUID.randomUUID(), targetId, STARTED));
+        executions.save(good.succeeded("/backups/a.sql.gz", 1L, SHA256, STARTED.plusSeconds(1)));
+        BackupExecution failed = executions.save(
+                BackupExecution.started(UUID.randomUUID(), targetId, STARTED.plusSeconds(60)));
+        executions.save(failed.failed("denied", STARTED.plusSeconds(61)));
+        BackupExecution running = executions.save(
+                BackupExecution.started(UUID.randomUUID(), other, STARTED.plusSeconds(30)));
+
+        assertThat(executions.findLatestPerTarget())
+                .extracting(BackupExecution::getId)
+                .containsExactlyInAnyOrder(failed.getId(), running.getId());
+        assertThat(executions.findLatestSucceededPerTarget())
+                .extracting(BackupExecution::getId)
+                .containsExactly(good.getId());
+    }
+
+    /** DISTINCT ON keeps exactly one per target even when two share the newest instant. */
+    @Test
+    void theNewestPerTargetIsOneRowEvenWhenTwoStartedTogether() {
+        executions.save(BackupExecution.started(UUID.randomUUID(), targetId, STARTED));
+        executions.save(BackupExecution.started(UUID.randomUUID(), targetId, STARTED));
+
+        assertThat(executions.findLatestPerTarget()).hasSize(1);
+    }
+
+    @Test
+    void findsBackupsByIdSkippingUnknownOnes() {
+        BackupExecution one = executions.save(BackupExecution.started(UUID.randomUUID(), targetId, STARTED));
+
+        assertThat(executions.findAllById(java.util.List.of(one.getId(), UUID.randomUUID())))
+                .extracting(BackupExecution::getId)
+                .containsExactly(one.getId());
     }
 
     @Test
     void findsOnlyTheExecutionsStillRunning() {
         BackupExecution running = executions.save(BackupExecution.started(UUID.randomUUID(), targetId, STARTED));
         BackupExecution done = executions.save(BackupExecution.started(UUID.randomUUID(), targetId, STARTED));
-        executions.save(done.succeeded("/backups/shop.sql", 1L, STARTED.plusSeconds(1)));
+        executions.save(done.succeeded("/backups/shop.sql", 1L, SHA256, STARTED.plusSeconds(1)));
 
         assertThat(executions.findRunning())
                 .extracting(BackupExecution::getId)

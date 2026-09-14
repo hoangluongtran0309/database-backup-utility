@@ -2,18 +2,22 @@ package com.hoangluongtran0309.dbbackup.application.target;
 
 import java.time.Clock;
 import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.UUID;
 
 import org.springframework.stereotype.Service;
 
+import com.hoangluongtran0309.dbbackup.core.exception.TargetInUseException;
 import com.hoangluongtran0309.dbbackup.core.model.DatabaseTarget;
+import com.hoangluongtran0309.dbbackup.core.port.BackupExecutionRepository;
 import com.hoangluongtran0309.dbbackup.core.port.DatabaseTargetRepository;
 import com.hoangluongtran0309.dbbackup.core.port.EncryptionPort;
+import com.hoangluongtran0309.dbbackup.core.port.RestoreExecutionRepository;
 
 import lombok.RequiredArgsConstructor;
 
 /**
- * Registering, listing and removing backup targets.
+ * Registering, editing, listing and removing backup targets.
  *
  * <p>A concrete class, not an interface with one implementation: the web layer
  * calls it directly. The ports it depends on are interfaces because they sit
@@ -27,6 +31,8 @@ import lombok.RequiredArgsConstructor;
 public class ManageDatabaseTargetService {
 
     private final DatabaseTargetRepository repository;
+    private final BackupExecutionRepository backups;
+    private final RestoreExecutionRepository restores;
     private final EncryptionPort encryption;
     private final Clock clock;
 
@@ -51,11 +57,57 @@ public class ManageDatabaseTargetService {
         return repository.save(target);
     }
 
+    /**
+     * @throws NoSuchElementException if no target holds this id
+     */
+    public DatabaseTarget get(UUID id) {
+        return repository.findById(id)
+                .orElseThrow(() -> new NoSuchElementException("No database target with id " + id));
+    }
+
+    /**
+     * Changes how a target is reached. Its backups stay with it.
+     *
+     * @throws NoSuchElementException if no target holds this id
+     * @throws com.hoangluongtran0309.dbbackup.core.exception.InvalidTargetException
+     *         if a field is missing or out of range
+     * @throws com.hoangluongtran0309.dbbackup.core.exception.DuplicateTargetNameException
+     *         if the new name is taken by another target
+     */
+    public DatabaseTarget edit(UUID id, EditTargetCommand command) {
+        DatabaseTarget edited = get(id).edited(
+                command.name(),
+                command.host(),
+                command.port(),
+                command.username(),
+                command.changesPassword() ? encryption.encrypt(command.password()) : null);
+
+        return repository.save(edited);
+    }
+
     public List<DatabaseTarget> listAll() {
         return repository.findAll();
     }
 
+    /**
+     * Removes a target, and with it the records of restores that went into it.
+     *
+     * <p>Refused while backups of it exist: those are the valuable thing, and
+     * are removed one by one first (ADR-008). The restore records are checked
+     * for after that, so a refusal takes nothing with it. The restores go in
+     * the use case, not by cascade, for the reason ADR-008 gives — see ADR-014.
+     *
+     * @throws TargetInUseException if backups of this target still exist
+     */
     public void delete(UUID id) {
+        DatabaseTarget target = repository.findById(id).orElse(null);
+        if (target == null) {
+            return; // removing an absent target is not an error
+        }
+        if (backups.existsForTarget(id)) {
+            throw new TargetInUseException(target.getName());
+        }
+        restores.deleteForTarget(id);
         repository.deleteById(id);
     }
 }

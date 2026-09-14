@@ -92,9 +92,12 @@ public class RunBackupService {
                     MysqlConnection.to(target, encryption.decrypt(target.getPasswordCiphertext()));
 
             long sizeBytes = backupEngine.dumpTo(connection, destination);
-            executions.save(execution.succeeded(destination.toString(), sizeBytes, clock.instant()));
-            log.info("Backup {} of target {} succeeded: {} ({} bytes)",
-                    executionId, target.getName(), destination, sizeBytes);
+            // Read back from disk once the engine has closed the file, so the
+            // checksum describes what was stored rather than what was sent.
+            String sha256 = storage.sha256Of(destination);
+            executions.save(execution.succeeded(destination.toString(), sizeBytes, sha256, clock.instant()));
+            log.info("Backup {} of target {} succeeded: {} ({} bytes, sha256 {})",
+                    executionId, target.getName(), destination, sizeBytes, sha256);
 
         } catch (BackupFailedException e) {
             finish(execution, e.getMessage());

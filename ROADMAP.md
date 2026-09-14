@@ -21,12 +21,28 @@ that needs it.
       file, which is also what makes a used target removable.
 - [x] **7. Package.** One Dockerfile, one compose file, quickstart.
 
-That is the whole of the first round. What comes next is a decision, not a
-plan: cut `release/0.1.0`, or keep going on `develop`.
+That was the first round. One more slice went in before it was released:
 
 - [x] **8. Sign in.** One operator account from the environment (bcrypt hash),
       session sign-in, CSRF tokens on every form, security headers; the
       healthcheck moves to `/actuator/health`. See ADR-011.
+
+All eight shipped as **0.1.0** (tag `v0.1.0`).
+
+## Second round
+
+Gaps the first round's own ADRs recorded, closed without widening the scope
+below.
+
+- [x] **9. Edit a target.** Name, host, port, user and password; the schema is
+      fixed, and an empty password keeps the stored one. See ADR-012.
+- [x] **10. Checksum every artifact.** A SHA-256 recorded when the dump is
+      written, shown on the backup, and checked before a restore. See ADR-013.
+- [x] **11. Restore into another target.** Any registered target, confirmed by
+      typing its name — for restore drills that do not overwrite production.
+      See ADR-014.
+- [x] **12. Paginate the history.** Backup and restore lists a page at a time,
+      and the target list without reading every backup ever made.
 
 ## Deliberately out of scope
 

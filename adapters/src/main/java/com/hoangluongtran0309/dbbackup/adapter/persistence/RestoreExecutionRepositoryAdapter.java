@@ -4,12 +4,15 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Slice;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.hoangluongtran0309.dbbackup.core.model.ExecutionStatus;
 import com.hoangluongtran0309.dbbackup.core.model.RestoreExecution;
+import com.hoangluongtran0309.dbbackup.core.port.HistoryPage;
 import com.hoangluongtran0309.dbbackup.core.port.RestoreExecutionRepository;
 
 import lombok.RequiredArgsConstructor;
@@ -35,10 +38,12 @@ class RestoreExecutionRepositoryAdapter implements RestoreExecutionRepository {
     }
 
     @Override
-    public List<RestoreExecution> findAllNewestFirst() {
-        return jpaRepository.findAll(NEWEST_FIRST).stream()
-                .map(RestoreExecutionRepositoryAdapter::toDomain)
-                .toList();
+    public HistoryPage<RestoreExecution> findNewestFirst(int page, int pageSize) {
+        Slice<RestoreExecutionEntity> slice = jpaRepository.findAllBy(PageRequest.of(page - 1, pageSize, NEWEST_FIRST));
+        return new HistoryPage<>(
+                slice.getContent().stream().map(RestoreExecutionRepositoryAdapter::toDomain).toList(),
+                page,
+                slice.hasNext());
     }
 
     @Override
@@ -60,10 +65,18 @@ class RestoreExecutionRepositoryAdapter implements RestoreExecutionRepository {
         jpaRepository.flush();
     }
 
+    @Override
+    @Transactional
+    public void deleteForTarget(UUID targetId) {
+        jpaRepository.deleteByTargetId(targetId);
+        jpaRepository.flush();
+    }
+
     private static RestoreExecutionEntity toEntity(RestoreExecution execution) {
         RestoreExecutionEntity entity = new RestoreExecutionEntity();
         entity.setId(execution.getId());
         entity.setBackupExecutionId(execution.getBackupExecutionId());
+        entity.setTargetId(execution.getTargetId());
         entity.setStatus(execution.getStatus());
         entity.setStartedAt(execution.getStartedAt());
         entity.setFinishedAt(execution.getFinishedAt());
@@ -75,6 +88,7 @@ class RestoreExecutionRepositoryAdapter implements RestoreExecutionRepository {
         return RestoreExecution.builder()
                 .id(entity.getId())
                 .backupExecutionId(entity.getBackupExecutionId())
+                .targetId(entity.getTargetId())
                 .status(entity.getStatus())
                 .startedAt(entity.getStartedAt())
                 .finishedAt(entity.getFinishedAt())

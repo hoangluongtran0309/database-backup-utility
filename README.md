@@ -15,21 +15,41 @@ logical backup of it, restoring one of those backups, downloading or deleting
 its artifact, and reading the history of all of it. The target's
 password is encrypted with AES-256-GCM before it is stored.
 
+A target's connection details — name, host, port, user, password — can be
+edited without touching its backups, so a rotated MySQL password is an edit
+rather than a new target. Its schema is fixed once registered: a different
+schema is a different target. See
+[ADR-012](docs/adr/012-editing-a-target-keeps-its-schema.md).
+
 The console asks you to sign in first. There is one operator account, set from
 the environment with a bcrypt hash, and every form carries a CSRF token. See
 [ADR-011](docs/adr/011-one-operator-account-from-the-environment.md).
 
 Backups run in the background: starting one redirects to its detail page, which
-follows it and updates when it finishes — restores likewise. See
+follows it and updates when it finishes — restores likewise. The backup and
+restore lists show fifty at a time, newest first, with links to newer and older
+pages. See
 [ADR-010](docs/adr/010-the-detail-page-follows-a-running-job.md). The target
 list shows each target's newest good backup, and flags a newer attempt that
 failed. Artifacts are gzipped and named `<schema>_<timestamp>.sql.gz`, readable
 with `zcat` like any other archive.
 
+Each backup records the SHA-256 of its artifact — the same value `sha256sum`
+prints for the download. The backup's page can verify the file against it, and
+every restore checks it first: an artifact that has changed on disk is not
+applied. Backups made before 0.2.0 show "Not recorded". See
+[ADR-013](docs/adr/013-a-checksum-for-every-artifact.md).
+
 Restoring overwrites live data, so it asks: the confirmation page names the
 schema and you type the target's name to proceed. It applies the dump rather
 than resetting the schema — tables the backup does not contain are left alone.
 See [ADR-007](docs/adr/007-restore-applies-a-dump-and-asks-first.md).
+
+A backup can be restored into any registered target, not only the one it was
+taken from — so a restore drill can go into a scratch schema and leave
+production alone. The name to type is the destination's. Removing a target
+removes the records of restores into it. See
+[ADR-014](docs/adr/014-restore-into-any-registered-target.md).
 
 Deleting a backup removes its file, its row and any restore records that refer
 to it — the confirmation page counts them first. A target can be removed once
