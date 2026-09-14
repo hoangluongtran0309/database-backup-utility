@@ -2,6 +2,7 @@ package com.hoangluongtran0309.dbbackup.application.target;
 
 import java.time.Clock;
 import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.UUID;
 
 import org.springframework.stereotype.Service;
@@ -13,7 +14,7 @@ import com.hoangluongtran0309.dbbackup.core.port.EncryptionPort;
 import lombok.RequiredArgsConstructor;
 
 /**
- * Registering, listing and removing backup targets.
+ * Registering, editing, listing and removing backup targets.
  *
  * <p>A concrete class, not an interface with one implementation: the web layer
  * calls it directly. The ports it depends on are interfaces because they sit
@@ -49,6 +50,34 @@ public class ManageDatabaseTargetService {
                 .build();
 
         return repository.save(target);
+    }
+
+    /**
+     * @throws NoSuchElementException if no target holds this id
+     */
+    public DatabaseTarget get(UUID id) {
+        return repository.findById(id)
+                .orElseThrow(() -> new NoSuchElementException("No database target with id " + id));
+    }
+
+    /**
+     * Changes how a target is reached. Its backups stay with it.
+     *
+     * @throws NoSuchElementException if no target holds this id
+     * @throws com.hoangluongtran0309.dbbackup.core.exception.InvalidTargetException
+     *         if a field is missing or out of range
+     * @throws com.hoangluongtran0309.dbbackup.core.exception.DuplicateTargetNameException
+     *         if the new name is taken by another target
+     */
+    public DatabaseTarget edit(UUID id, EditTargetCommand command) {
+        DatabaseTarget edited = get(id).edited(
+                command.name(),
+                command.host(),
+                command.port(),
+                command.username(),
+                command.changesPassword() ? encryption.encrypt(command.password()) : null);
+
+        return repository.save(edited);
     }
 
     public List<DatabaseTarget> listAll() {

@@ -29,6 +29,7 @@ import com.hoangluongtran0309.dbbackup.core.model.DatabaseTarget;
 import com.hoangluongtran0309.dbbackup.core.model.ExecutionStatus;
 import com.hoangluongtran0309.dbbackup.core.port.BackupExecutionRepository;
 import com.hoangluongtran0309.dbbackup.web.dto.DatabaseTargetForm;
+import com.hoangluongtran0309.dbbackup.web.dto.EditTargetForm;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -107,6 +108,51 @@ public class DatabaseTargetController {
         }
     }
 
+    @GetMapping("/{id}/edit")
+    String editForm(@PathVariable UUID id, Model model, RedirectAttributes flash) {
+        DatabaseTarget target;
+        try {
+            target = service.get(id);
+        } catch (NoSuchElementException e) {
+            return targetGone(flash);
+        }
+        model.addAttribute("form", EditTargetForm.of(target));
+        return editView(model, target);
+    }
+
+    @PostMapping("/{id}")
+    String update(
+            @PathVariable UUID id,
+            @Valid @ModelAttribute("form") EditTargetForm form,
+            BindingResult binding,
+            Model model,
+            RedirectAttributes flash) {
+
+        // Read even when the form is invalid: the page shows the schema, which
+        // is not a field the operator sends.
+        DatabaseTarget current;
+        try {
+            current = service.get(id);
+        } catch (NoSuchElementException e) {
+            return targetGone(flash);
+        }
+        if (binding.hasErrors()) {
+            return editView(model, current);
+        }
+        try {
+            DatabaseTarget saved = service.edit(id, form.toCommand());
+            flash.addFlashAttribute("message", "Saved target '%s'".formatted(saved.getName()));
+            return "redirect:/databases";
+        } catch (DuplicateTargetNameException e) {
+            binding.rejectValue("name", "target.duplicate", e.getMessage());
+        } catch (InvalidTargetException e) {
+            rejectOnForm(binding, e);
+        } catch (NoSuchElementException e) {
+            return targetGone(flash);
+        }
+        return editView(model, current);
+    }
+
     /**
      * Runs synchronously: the client is given an explicit connect timeout, so
      * this is bounded in a way a backup is not. Backups will need the
@@ -157,6 +203,17 @@ public class DatabaseTargetController {
     private static Map<UUID, BackupExecution> firstPerTarget(Stream<BackupExecution> newestFirst) {
         return newestFirst.collect(Collectors.toMap(
                 BackupExecution::getTargetId, e -> e, (newer, older) -> newer));
+    }
+
+    /** The shared form page, in edit mode: {@code editing} is what switches it. */
+    private static String editView(Model model, DatabaseTarget target) {
+        model.addAttribute("editing", target);
+        return FORM_VIEW;
+    }
+
+    private static String targetGone(RedirectAttributes flash) {
+        flash.addFlashAttribute("error", "That target no longer exists");
+        return "redirect:/databases";
     }
 
     private static void rejectOnForm(BindingResult binding, InvalidTargetException e) {

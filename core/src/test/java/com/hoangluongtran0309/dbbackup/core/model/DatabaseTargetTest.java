@@ -100,6 +100,71 @@ class DatabaseTargetTest {
     }
 
     @Test
+    void anEditKeepsTheIdentitySchemaAndCreationTime() {
+        DatabaseTarget original = valid().build();
+
+        DatabaseTarget edited = original.edited("staging", "db.internal", 3307, "reader", null);
+
+        assertThat(edited.getId()).isEqualTo(original.getId());
+        assertThat(edited.getDatabaseName()).isEqualTo("shop");
+        assertThat(edited.getCreatedAt()).isEqualTo(original.getCreatedAt());
+        assertThat(edited.getName()).isEqualTo("staging");
+        assertThat(edited.address()).isEqualTo("db.internal:3307/shop");
+        assertThat(edited.getUsername()).isEqualTo("reader");
+    }
+
+    @Test
+    void anEditWithoutANewPasswordKeepsTheStoredOne() {
+        DatabaseTarget edited = valid().build().edited("production", "127.0.0.1", 3306, "backup", null);
+
+        assertThat(edited.getPasswordCiphertext()).isEqualTo("Zm9vYmFy");
+    }
+
+    @Test
+    void anEditWithANewPasswordReplacesIt() {
+        DatabaseTarget edited = valid().build().edited("production", "127.0.0.1", 3306, "backup", "bmV3");
+
+        assertThat(edited.getPasswordCiphertext()).isEqualTo("bmV3");
+    }
+
+    @Test
+    void aRenameAloneKeepsTheLastConnectionCheck() {
+        DatabaseTarget tested = valid().lastConnectionCheck(ConnectionCheck.passed(Instant.now())).build();
+
+        // Surrounding space on the unchanged fields is not a change either.
+        DatabaseTarget renamed = tested.edited("prod", " 127.0.0.1 ", 3306, "backup ", null);
+
+        assertThat(renamed.hasBeenTested()).isTrue();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"host", "port", "username", "password"})
+    void changingHowItConnectsDropsTheLastConnectionCheck(String changed) {
+        DatabaseTarget tested = valid().lastConnectionCheck(ConnectionCheck.passed(Instant.now())).build();
+
+        DatabaseTarget edited = tested.edited(
+                "production",
+                changed.equals("host") ? "10.0.0.5" : "127.0.0.1",
+                changed.equals("port") ? 3307 : 3306,
+                changed.equals("username") ? "reader" : "backup",
+                changed.equals("password") ? "bmV3" : null);
+
+        assertThat(edited.hasBeenTested()).isFalse();
+    }
+
+    @Test
+    void anEditIsValidatedLikeARegistration() {
+        DatabaseTarget original = valid().build();
+
+        assertThatThrownBy(() -> original.edited(" ", "127.0.0.1", 3306, "backup", null))
+                .isInstanceOf(InvalidTargetException.class)
+                .extracting("field").isEqualTo("name");
+        assertThatThrownBy(() -> original.edited("production", "127.0.0.1", 0, "backup", null))
+                .isInstanceOf(InvalidTargetException.class)
+                .extracting("field").isEqualTo("port");
+    }
+
+    @Test
     void rejectsMissingIdAndTimestamp() {
         assertThatThrownBy(() -> valid().id(null).build())
                 .isInstanceOf(InvalidTargetException.class);

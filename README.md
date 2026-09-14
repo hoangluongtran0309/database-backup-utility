@@ -15,6 +15,12 @@ logical backup of it, restoring one of those backups, downloading or deleting
 its artifact, and reading the history of all of it. The target's
 password is encrypted with AES-256-GCM before it is stored.
 
+A target's connection details — name, host, port, user, password — can be
+edited without touching its backups, so a rotated MySQL password is an edit
+rather than a new target. Its schema is fixed once registered: a different
+schema is a different target. See
+[ADR-012](docs/adr/012-editing-a-target-keeps-its-schema.md).
+
 The console asks you to sign in first. There is one operator account, set from
 the environment with a bcrypt hash, and every form carries a CSRF token. See
 [ADR-011](docs/adr/011-one-operator-account-from-the-environment.md).

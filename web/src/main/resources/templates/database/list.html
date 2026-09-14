@@ -94,6 +94,7 @@
               <form method="post" th:action="@{/databases/{id}/backup(id=${target.id})}">
                 <button class="button button-small button-primary" type="submit" data-busy-label="Starting…">Back up now</button>
               </form>
+              <a class="button button-small" th:href="@{/databases/{id}/edit(id=${target.id})}">Edit</a>
               <form method="post" th:action="@{/databases/{id}/delete(id=${target.id})}"
                     th:attr="data-confirm=|Remove target “${target.name}”? Its stored credentials are deleted. A target that still has backups cannot be removed.|"
                     data-confirm-title="Remove target" data-confirm-accept="Remove">
