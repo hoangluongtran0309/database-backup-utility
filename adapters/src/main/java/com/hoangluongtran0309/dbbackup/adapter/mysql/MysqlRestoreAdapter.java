@@ -8,7 +8,6 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import java.util.zip.GZIPInputStream;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -22,12 +21,12 @@ import com.hoangluongtran0309.dbbackup.core.port.MysqlLogicalRestorePort;
 /**
  * Loads a gzipped dump into a schema by feeding it to the {@code mysql} client.
  *
- * <p>The artifact is decompressed to a temporary file first and the client's
- * stdin is redirected from it. Streaming the gunzip straight into the child's
- * stdin from a Java thread would work right up until the child wrote enough to
- * fill its own output pipe: it would block on us, we would block on it, and
- * neither would move again. A temporary file costs disk that the artifact's own
- * directory already has, and removes the possibility.
+ * <p>The archive is decompressed as it is fed to the client's stdin, so a
+ * restore needs no disk beyond the archive itself (ADR-016). It is read twice:
+ * once to the end, discarding what it decompresses to, before the client is
+ * started; then again into the client. The first read is what finds a truncated
+ * or corrupt archive while the target is still untouched — once the client has
+ * started, every statement before the bad bytes has already been applied.
  */
 @Component
 class MysqlRestoreAdapter implements MysqlLogicalRestorePort {
@@ -55,31 +54,20 @@ class MysqlRestoreAdapter implements MysqlLogicalRestorePort {
             throw new RestoreFailedException(
                     "The backup artifact '%s' is missing or unreadable".formatted(artifact));
         }
+        checkArchive(artifact);
 
-        // Beside the artifact, not in /tmp: an uncompressed dump can be many
-        // times the archive, and this directory is the one already sized for
-        // backups. A random suffix keeps two concurrent restores of the same
-        // artifact apart.
-        Path sql = artifact.resolveSibling(
-                artifact.getFileName() + "." + UUID.randomUUID() + ".restore.sql");
-        try {
-            decompress(artifact, sql);
-            run(connection, sql);
-        } finally {
-            deleteQuietly(sql);
-        }
-    }
-
-    private void run(MysqlConnection connection, Path sql) {
         ProcessRunner.Result result;
+        InputStream sql = open(artifact);
         try {
-            result = processRunner.runWithInput(
+            result = processRunner.runFeeding(
                     command(connection),
                     Map.of("MYSQL_PWD", connection.password()),
                     timeout,
                     sql);
         } catch (ProcessRunner.ProcessFailedException e) {
             throw new RestoreFailedException(e.getMessage(), e);
+        } finally {
+            closeQuietly(sql);
         }
 
         if (!result.succeeded()) {
@@ -105,24 +93,42 @@ class MysqlRestoreAdapter implements MysqlLogicalRestorePort {
                 connection.database());
     }
 
-    private static void decompress(Path artifact, Path destination) {
-        try (InputStream in = new GZIPInputStream(Files.newInputStream(artifact));
-             OutputStream out = Files.newOutputStream(destination)) {
-            in.transferTo(out);
+    /**
+     * Decompresses the whole archive and throws the result away. Costs a read
+     * of the file and the CPU to inflate it; buys the guarantee that the client
+     * is never started on an archive that stops halfway.
+     */
+    private static void checkArchive(Path artifact) {
+        try (InputStream in = open(artifact)) {
+            in.transferTo(OutputStream.nullOutputStream());
         } catch (IOException e) {
-            throw new RestoreFailedException(
-                    "Could not read the backup artifact '%s': %s".formatted(artifact, e.getMessage()), e);
+            throw unreadable(artifact, e);
         }
     }
 
-    private static void deleteQuietly(Path path) {
+    /** Reads the gzip header, so a file that is not an archive at all fails here. */
+    private static InputStream open(Path artifact) {
         try {
-            Files.deleteIfExists(path);
+            return new GZIPInputStream(Files.newInputStream(artifact));
         } catch (IOException e) {
-            // The restore's own outcome is the thing worth reporting; a
-            // leftover temporary file is not worth masking it with.
-            org.slf4j.LoggerFactory.getLogger(MysqlRestoreAdapter.class)
-                    .warn("Could not remove the temporary file {}", path, e);
+            throw unreadable(artifact, e);
         }
+    }
+
+    private static void closeQuietly(InputStream in) {
+        try {
+            in.close();
+        } catch (IOException e) {
+            // A file that was only read: the restore's own outcome is the
+            // thing worth reporting, and it is already known.
+            org.slf4j.LoggerFactory.getLogger(MysqlRestoreAdapter.class)
+                    .warn("Could not close the backup artifact after restoring from it", e);
+        }
+    }
+
+    private static RestoreFailedException unreadable(Path artifact, IOException e) {
+        return new RestoreFailedException(
+                "Could not read the backup artifact '%s': %s. Nothing was restored."
+                        .formatted(artifact, e.getMessage()), e);
     }
 }

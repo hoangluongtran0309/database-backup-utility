@@ -5,7 +5,6 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -13,7 +12,11 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import org.springframework.stereotype.Component;
 
@@ -35,9 +38,23 @@ import org.springframework.stereotype.Component;
  *       per-process; {@code System.setProperty} is JVM-global and would leak
  *       between jobs running at the same time.</li>
  * </ol>
+ *
+ * <p>Every pipe gets a thread of its own, started for it and gone when it is
+ * done, never one borrowed from the common pool. Each blocks for as long as
+ * its child runs, and the common pool has one worker fewer than the machine
+ * has cores: two jobs at three pipes each would leave a pipe on a small host
+ * waiting for a worker that never frees up, and its child blocked on it until
+ * the timeout.
  */
 @Component
 public class ProcessRunner {
+
+    private static final int BUFFER_SIZE = 64 * 1024;
+
+    private static final ExecutorService PIPE_THREADS = Executors.newThreadPerTaskExecutor(
+            // Daemon: a pipe of a child still running at shutdown must not
+            // hold the JVM up, any more than the job thread waiting on it does.
+            Thread.ofPlatform().daemon().name("process-pipe-", 0).factory());
 
     /**
      * @param exitCode the child's exit status, 0 conventionally meaning success
@@ -86,23 +103,35 @@ public class ProcessRunner {
     }
 
     /**
-     * Runs a command whose stdin is the contents of a file.
+     * Runs a command whose stdin is too large to hold in memory, copying
+     * {@code stdinSource} into it and closing the child's stdin at the end.
      *
-     * <p>Redirected by the operating system rather than written from a thread
-     * of ours. Feeding a child's stdin from Java means a fourth stream to keep
-     * moving in lockstep with the other three, and a writer that blocks while
-     * the child is blocked writing output nobody is draining yet is the same
-     * deadlock this class exists to avoid — in a shape that is much harder to
-     * see. Letting the kernel do it removes the possibility.
+     * <p>The copy runs on a thread of its own, beside the two that drain
+     * stdout and stderr. None of the three waits on another, so a child that
+     * writes while it reads — a client echoing progress, or an error — cannot
+     * block us while we block on it (ADR-016).
+     *
+     * <p>If <strong>reading the source</strong> fails, the child is killed
+     * before its stdin is closed. Closing first would hand it a clean end of
+     * input, and a client applying a dump would take half of one for all of it.
+     *
+     * <p>If <strong>writing to the child</strong> fails, it has stopped reading
+     * — it exited, typically on an error of its own — and its exit code and
+     * stderr, returned as usual, say why.
+     *
+     * <p>The source is <strong>not closed</strong>: the caller opened it and
+     * owns it, as with {@link #runStreaming}'s sink.
+     *
+     * @throws ProcessFailedException also if the source could not be read
      */
-    public Result runWithInput(
+    public Result runFeeding(
             List<String> command,
             Map<String, String> environment,
             Duration timeout,
-            Path stdinFile) {
+            InputStream stdinSource) {
 
         return execute(command, environment, timeout, null,
-                Objects.requireNonNull(stdinFile, "stdinFile"));
+                Objects.requireNonNull(stdinSource, "stdinSource"));
     }
 
     /**
@@ -135,13 +164,10 @@ public class ProcessRunner {
             Map<String, String> environment,
             Duration timeout,
             OutputStream stdoutSink,
-            Path stdinFile) {
+            InputStream stdinSource) {
 
         ProcessBuilder builder = new ProcessBuilder(new ArrayList<>(command));
         builder.environment().putAll(environment);
-        if (stdinFile != null) {
-            builder.redirectInput(stdinFile.toFile());
-        }
 
         Process process;
         try {
@@ -158,6 +184,9 @@ public class ProcessRunner {
                 ? readAsync(process.getInputStream())
                 : copyAsync(process.getInputStream(), stdoutSink);
         CompletableFuture<String> stderr = readAsync(process.getErrorStream());
+        CompletableFuture<Void> stdin = stdinSource == null
+                ? CompletableFuture.completedFuture(null)
+                : feedAsync(stdinSource, process);
 
         // A sink that cannot be written to would otherwise leave the child
         // blocked on a full pipe until the timeout, minutes or hours later.
@@ -170,18 +199,95 @@ public class ProcessRunner {
         try {
             if (!process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
                 process.destroyForcibly();
+                settle(stdin);
                 throw new ProcessFailedException(
                         "'%s' did not finish within %ds and was killed"
                                 .formatted(command.getFirst(), timeout.toSeconds()));
             }
+            // The feeder first: if the source failed, that — not the exit
+            // status of a child we killed for it — is what went wrong.
+            joinFeeder(stdin, command);
             return new Result(process.exitValue(), join(stdout, command), join(stderr, command));
         } catch (InterruptedException e) {
             process.destroyForcibly();
+            settle(stdin);
             // Restore the flag: swallowing it strands whoever is trying to shut
             // this thread down.
             Thread.currentThread().interrupt();
             throw new ProcessFailedException(
                     "Interrupted while waiting for '%s'".formatted(command.getFirst()), e);
+        }
+    }
+
+    /**
+     * Copies the source into the child's stdin, then closes it. See
+     * {@link #runFeeding} for what each kind of failure means.
+     */
+    private static CompletableFuture<Void> feedAsync(InputStream source, Process process) {
+        return CompletableFuture.runAsync(() -> {
+            OutputStream stdin = process.getOutputStream();
+            byte[] buffer = new byte[BUFFER_SIZE];
+            try {
+                int read;
+                while ((read = readSource(source, buffer, process)) >= 0) {
+                    try {
+                        stdin.write(buffer, 0, read);
+                    } catch (IOException childStoppedReading) {
+                        return;
+                    }
+                }
+            } finally {
+                closeQuietly(stdin);
+            }
+        }, PIPE_THREADS);
+    }
+
+    /** Kills the child — and waits until it is gone — before its stdin can be closed. */
+    private static int readSource(InputStream source, byte[] buffer, Process process) {
+        try {
+            return source.read(buffer);
+        } catch (IOException e) {
+            process.destroyForcibly();
+            try {
+                process.waitFor(10, TimeUnit.SECONDS);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            }
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    private static void joinFeeder(CompletableFuture<Void> feeder, List<String> command) {
+        try {
+            feeder.join();
+        } catch (CompletionException e) {
+            Throwable cause = e.getCause() == null ? e : e.getCause();
+            throw new ProcessFailedException(
+                    "Failed while reading the input for '%s': %s"
+                            .formatted(command.getFirst(), cause.getMessage()), cause);
+        }
+    }
+
+    /**
+     * Waits for a feeder that is about to stop — its child is dead, so its
+     * next write fails — without caring how it ends. The caller closes the
+     * source next, and must not do so under a thread still reading it.
+     */
+    private static void settle(CompletableFuture<Void> feeder) {
+        try {
+            feeder.get(10, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } catch (ExecutionException | TimeoutException ignored) {
+            // The outcome that matters is already being reported.
+        }
+    }
+
+    private static void closeQuietly(OutputStream stream) {
+        try {
+            stream.close();
+        } catch (IOException ignored) {
+            // A child that has gone cannot be told the input ended; it knows.
         }
     }
 
@@ -210,7 +316,7 @@ public class ProcessRunner {
             } catch (IOException e) {
                 throw new UncheckedIOException(e);
             }
-        });
+        }, PIPE_THREADS);
     }
 
     private static CompletableFuture<String> readAsync(InputStream stream) {
@@ -220,6 +326,6 @@ public class ProcessRunner {
             } catch (IOException e) {
                 throw new UncheckedIOException(e);
             }
-        });
+        }, PIPE_THREADS);
     }
 }

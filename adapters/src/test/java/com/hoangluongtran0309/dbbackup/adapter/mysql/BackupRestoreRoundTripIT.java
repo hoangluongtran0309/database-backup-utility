@@ -206,25 +206,68 @@ class BackupRestoreRoundTripIT {
                 .hasMessageContaining("Could not read the backup artifact");
     }
 
-    /** The decompressed copy is large; it must not be left behind. */
+    /**
+     * A dump far larger than a pipe buffer goes through the client's stdin
+     * whole: the rows are all there, not the first 64 KiB of them.
+     */
     @Test
-    void removesItsTemporaryFileWhateverHappens() throws Exception {
+    void restoresADumpFarLargerThanAPipe() {
+        sql("""
+            SET SESSION cte_max_recursion_depth = 50000;
+            INSERT INTO items (order_id, sku)
+                WITH RECURSIVE seq (n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM seq WHERE n < 40000)
+                SELECT n, CONCAT('SKU-', n) FROM seq;
+            """);
+        Path artifact = artifacts.resolve("shop.sql.gz");
+        backup.dumpTo(connection("s3cr3t"), artifact);
+        sql("DROP TABLE items;");
+
+        restore.restore(connection("s3cr3t"), artifact);
+
+        assertThat(query("SELECT COUNT(*) FROM items")).isEqualTo("40003");
+        assertThat(query("SELECT sku FROM items ORDER BY id DESC LIMIT 1"))
+                .isEqualTo("SKU-40000");
+    }
+
+    /**
+     * What the temporary file used to guarantee, and the archive check now
+     * does: an archive that stops halfway is found out before the client
+     * starts, so not one statement of it reaches the target.
+     */
+    @Test
+    void refusesATruncatedArchiveWithoutTouchingTheTarget() throws Exception {
+        Path artifact = artifacts.resolve("shop.sql.gz");
+        backup.dumpTo(connection("s3cr3t"), artifact);
+        byte[] whole = Files.readAllBytes(artifact);
+        Files.write(artifact, java.util.Arrays.copyOf(whole, whole.length / 2));
+        sql("INSERT INTO orders (customer, total) VALUES ('Added later', 1.00);");
+
+        assertThatThrownBy(() -> restore.restore(connection("s3cr3t"), artifact))
+                .isInstanceOf(RestoreFailedException.class)
+                .hasMessageContaining("Could not read the backup artifact")
+                .hasMessageContaining("Nothing was restored");
+
+        // The dump would have recreated the table without this row.
+        assertThat(query("SELECT COUNT(*) FROM orders")).isEqualTo("4");
+    }
+
+    /** No decompressed copy is written anywhere beside the archive, whatever the outcome. */
+    @Test
+    void writesNothingBesideTheArtifact() throws Exception {
         Path artifact = artifacts.resolve("shop.sql.gz");
         backup.dumpTo(connection("s3cr3t"), artifact);
 
         restore.restore(connection("s3cr3t"), artifact);
-        assertThat(temporaryFiles()).isEmpty();
+        assertThat(filesBesideTheArtifact()).containsExactly("shop.sql.gz");
 
         assertThatThrownBy(() -> restore.restore(connection("wrong"), artifact))
                 .isInstanceOf(RestoreFailedException.class);
-        assertThat(temporaryFiles()).isEmpty();
+        assertThat(filesBesideTheArtifact()).containsExactly("shop.sql.gz");
     }
 
-    private List<String> temporaryFiles() throws Exception {
+    private List<String> filesBesideTheArtifact() throws Exception {
         try (var files = Files.list(artifacts)) {
-            return files.map(p -> p.getFileName().toString())
-                    .filter(name -> name.contains(".restore.sql"))
-                    .toList();
+            return files.map(p -> p.getFileName().toString()).toList();
         }
     }
 
