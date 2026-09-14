@@ -44,7 +44,9 @@ whatever already backs up that host should be pointed at the volume.
 
 **Nothing prunes them.** There is no retention policy
 ([ADR-008](adr/008-deleting-a-backup-takes-its-history-with-it.md)). The volume
-grows until somebody deletes backups through the console.
+grows until somebody deletes backups through the console — several at a time
+from the backup list, or all of a target's with the target
+([ADR-015](adr/015-deleting-many-backups-and-a-target-with-them.md)).
 
 **Reaching the databases to be backed up.** A MySQL on the Docker host is
 `host.docker.internal` from inside the container; compose maps that name

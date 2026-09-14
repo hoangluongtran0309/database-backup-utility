@@ -2,8 +2,14 @@ package com.hoangluongtran0309.dbbackup.application.backup;
 
 import java.io.InputStream;
 import java.nio.file.Path;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -11,6 +17,7 @@ import org.springframework.stereotype.Service;
 
 import com.hoangluongtran0309.dbbackup.core.model.BackupExecution;
 import com.hoangluongtran0309.dbbackup.core.model.ExecutionStatus;
+import com.hoangluongtran0309.dbbackup.core.model.RestoreExecution;
 import com.hoangluongtran0309.dbbackup.core.port.BackupExecutionRepository;
 import com.hoangluongtran0309.dbbackup.core.port.RestoreExecutionRepository;
 import com.hoangluongtran0309.dbbackup.core.port.StoragePort;
@@ -34,6 +41,39 @@ public class BackupArtifactService {
     /** What deleting a backup would take with it. */
     public record DeletionPreview(BackupExecution execution, boolean artifactPresent, long restoreCount) {
     }
+
+    /**
+     * What deleting several backups together would take with them.
+     *
+     * @param executions   the ones that still exist, newest first
+     * @param bytesOnDisk  the size of the artifacts still on disk, as stored
+     * @param refusal      why they cannot be deleted right now, or null if
+     *                     they can
+     */
+    public record BulkDeletionPreview(
+            List<BackupExecution> executions,
+            int artifactsOnDisk,
+            long bytesOnDisk,
+            long restoreCount,
+            String refusal) {
+
+        public boolean refused() {
+            return refusal != null;
+        }
+    }
+
+    /**
+     * What deleting several backups together did.
+     *
+     * @param alreadyGone asked for, but no longer there — deleted in another
+     *                    tab, say
+     */
+    public record BulkDeletion(int deleted, int artifactsRemoved, int alreadyGone) {
+    }
+
+    private static final Comparator<BackupExecution> NEWEST_FIRST = Comparator
+            .comparing(BackupExecution::getStartedAt).reversed()
+            .thenComparing(BackupExecution::getId, Comparator.reverseOrder());
 
     /** What a verification found. */
     public enum Integrity {
@@ -113,6 +153,31 @@ public class BackupArtifactService {
     }
 
     /**
+     * The backups among {@code executionIds} that still exist, and what
+     * deleting them together would take with them. Unknown ids are skipped.
+     */
+    public BulkDeletionPreview previewDeletions(Collection<UUID> executionIds) {
+        List<BackupExecution> found = backups.findAllById(new LinkedHashSet<>(executionIds)).stream()
+                .sorted(NEWEST_FIRST)
+                .toList();
+
+        int artifactsOnDisk = 0;
+        long bytesOnDisk = 0;
+        for (BackupExecution execution : found) {
+            if (isOnDisk(execution)) {
+                artifactsOnDisk++;
+                bytesOnDisk += execution.getSizeBytes() == null ? 0 : execution.getSizeBytes();
+            }
+        }
+        return new BulkDeletionPreview(
+                found,
+                artifactsOnDisk,
+                bytesOnDisk,
+                restores.countForBackups(found.stream().map(BackupExecution::getId).toList()),
+                refusal(found));
+    }
+
+    /**
      * Removes a backup: its restore records, then its file, then its row.
      *
      * <p>That order is deliberate. Deleting the row first and then failing to
@@ -123,23 +188,74 @@ public class BackupArtifactService {
      *
      * @return whether the backup had an artifact — false for one that failed
      *         before producing a file, so that only its record went
-     * @throws IllegalStateException if the backup is still running
+     * @throws IllegalStateException if the backup is still running, or is
+     *         being restored
      */
     public boolean delete(UUID executionId) {
         BackupExecution execution = require(executionId);
-        if (execution.getStatus() == ExecutionStatus.RUNNING) {
-            throw new IllegalStateException(
-                    "This backup is still running. Wait for it to finish before deleting it.");
-        }
+        refuseIfBusy(List.of(execution));
+        return remove(execution);
+    }
 
+    /**
+     * Removes several backups, each exactly as {@link #delete(UUID)} would.
+     *
+     * <p>All of them are checked before any is touched, so a refusal deletes
+     * nothing. After that they go one at a time: a failure partway leaves the
+     * rest, still listed, to be deleted again (ADR-015).
+     *
+     * @throws IllegalStateException if any of them is still running, or is
+     *         being restored
+     */
+    public BulkDeletion deleteAll(Collection<UUID> executionIds) {
+        Set<UUID> asked = new LinkedHashSet<>(executionIds);
+        List<BackupExecution> found = backups.findAllById(asked);
+        refuseIfBusy(found);
+
+        int artifactsRemoved = 0;
+        for (BackupExecution execution : found) {
+            if (remove(execution)) {
+                artifactsRemoved++;
+            }
+        }
+        return new BulkDeletion(found.size(), artifactsRemoved, asked.size() - found.size());
+    }
+
+    private boolean remove(BackupExecution execution) {
         boolean hadArtifact = execution.getArtifactPath() != null;
-        restores.deleteForBackup(executionId);
+        restores.deleteForBackup(execution.getId());
         if (hadArtifact) {
             storage.delete(Path.of(execution.getArtifactPath()));
         }
-        backups.deleteById(executionId);
-        log.info("Deleted backup {} and its artifact {}", executionId, execution.getArtifactPath());
+        backups.deleteById(execution.getId());
+        log.info("Deleted backup {} and its artifact {}", execution.getId(), execution.getArtifactPath());
         return hadArtifact;
+    }
+
+    private void refuseIfBusy(List<BackupExecution> executions) {
+        String refusal = refusal(executions);
+        if (refusal != null) {
+            throw new IllegalStateException(refusal);
+        }
+    }
+
+    /**
+     * Why these cannot be deleted now, or null if they can. A running backup
+     * is still writing its file; a running restore is still reading it, and
+     * would go on to record its outcome against a backup that is gone.
+     */
+    private String refusal(List<BackupExecution> executions) {
+        String which = executions.size() == 1 ? "This backup" : "One of these backups";
+        if (executions.stream().anyMatch(e -> e.getStatus() == ExecutionStatus.RUNNING)) {
+            return which + " is still running. Wait for it to finish before deleting it.";
+        }
+        Set<UUID> beingRestored = restores.findRunning().stream()
+                .map(RestoreExecution::getBackupExecutionId)
+                .collect(Collectors.toSet());
+        if (executions.stream().anyMatch(e -> beingRestored.contains(e.getId()))) {
+            return which + " is being restored right now. Wait for the restore to finish before deleting it.";
+        }
+        return null;
     }
 
     private BackupExecution require(UUID executionId) {

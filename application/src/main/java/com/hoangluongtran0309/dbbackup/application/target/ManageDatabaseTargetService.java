@@ -7,7 +7,10 @@ import java.util.UUID;
 
 import org.springframework.stereotype.Service;
 
+import com.hoangluongtran0309.dbbackup.application.backup.BackupArtifactService;
+import com.hoangluongtran0309.dbbackup.application.backup.BackupArtifactService.BulkDeletionPreview;
 import com.hoangluongtran0309.dbbackup.core.exception.TargetInUseException;
+import com.hoangluongtran0309.dbbackup.core.model.BackupExecution;
 import com.hoangluongtran0309.dbbackup.core.model.DatabaseTarget;
 import com.hoangluongtran0309.dbbackup.core.port.BackupExecutionRepository;
 import com.hoangluongtran0309.dbbackup.core.port.DatabaseTargetRepository;
@@ -30,9 +33,31 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class ManageDatabaseTargetService {
 
+    /**
+     * What removing a target would take with it.
+     *
+     * @param backups      its backups, and their files
+     * @param restoreCount every restore record that goes: those into it, and
+     *                     those made from its backups, each counted once
+     * @param refusal      why it cannot be removed right now, or null if it can
+     */
+    public record TargetRemovalPreview(
+            DatabaseTarget target, BulkDeletionPreview backups, long restoreCount, String refusal) {
+
+        /** Whether its backups go too — the case that needs the name typed. */
+        public boolean takesBackups() {
+            return !backups.executions().isEmpty();
+        }
+
+        public boolean refused() {
+            return refusal != null;
+        }
+    }
+
     private final DatabaseTargetRepository repository;
     private final BackupExecutionRepository backups;
     private final RestoreExecutionRepository restores;
+    private final BackupArtifactService artifacts;
     private final EncryptionPort encryption;
     private final Clock clock;
 
@@ -90,24 +115,64 @@ public class ManageDatabaseTargetService {
     }
 
     /**
-     * Removes a target, and with it the records of restores that went into it.
+     * What removing a target would take with it.
      *
-     * <p>Refused while backups of it exist: those are the valuable thing, and
-     * are removed one by one first (ADR-008). The restore records are checked
-     * for after that, so a refusal takes nothing with it. The restores go in
-     * the use case, not by cascade, for the reason ADR-008 gives — see ADR-014.
-     *
-     * @throws TargetInUseException if backups of this target still exist
+     * @throws NoSuchElementException if no target holds this id
      */
-    public void delete(UUID id) {
+    public TargetRemovalPreview previewRemoval(UUID id) {
+        DatabaseTarget target = get(id);
+        BulkDeletionPreview ownBackups = artifacts.previewDeletions(idsOf(backups.findAllForTarget(id)));
+        String refusal = ownBackups.refused() ? ownBackups.refusal() : restoreIntoRefusal(id);
+        return new TargetRemovalPreview(target, ownBackups, restores.countInvolvingTarget(id), refusal);
+    }
+
+    /**
+     * Removes a target, its backups and their files, and every restore record
+     * that mentions it.
+     *
+     * <p>The backups are the valuable thing, so they only go when the operator
+     * has said so — by typing the target's name (ADR-015). Everything that
+     * could refuse is checked before anything is deleted. The backups then go
+     * one at a time exactly as a single deletion does (ADR-008); the restores
+     * go in the use case, not by cascade (ADR-014).
+     *
+     * @param backupsConfirmed whether the operator confirmed that the target's
+     *        backups go too. Not needed for a target that has none.
+     * @throws TargetInUseException if it has backups and that was not confirmed
+     * @throws IllegalStateException if one of its backups is running, or a
+     *         restore from or into it is
+     */
+    public void delete(UUID id, boolean backupsConfirmed) {
         DatabaseTarget target = repository.findById(id).orElse(null);
         if (target == null) {
             return; // removing an absent target is not an error
         }
-        if (backups.existsForTarget(id)) {
+        List<UUID> backupIds = idsOf(backups.findAllForTarget(id));
+        if (!backupIds.isEmpty() && !backupsConfirmed) {
             throw new TargetInUseException(target.getName());
         }
+        String refusal = restoreIntoRefusal(id);
+        if (refusal != null) {
+            throw new IllegalStateException(refusal);
+        }
+        if (!backupIds.isEmpty()) {
+            artifacts.deleteAll(backupIds);
+        }
         restores.deleteForTarget(id);
+        // A backup started since the list was read still holds the row; the
+        // foreign key refuses, and the adapter says so as TargetInUseException.
         repository.deleteById(id);
+    }
+
+    /** A restore writing into the target would record its outcome against a target that is gone. */
+    private String restoreIntoRefusal(UUID targetId) {
+        boolean restoring = restores.findRunning().stream().anyMatch(r -> r.getTargetId().equals(targetId));
+        return restoring
+                ? "A restore into this target is running. Wait for it to finish before removing the target."
+                : null;
+    }
+
+    private static List<UUID> idsOf(List<BackupExecution> executions) {
+        return executions.stream().map(BackupExecution::getId).toList();
     }
 }

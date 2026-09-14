@@ -52,10 +52,12 @@ removes the records of restores into it. See
 [ADR-014](docs/adr/014-restore-into-any-registered-target.md).
 
 Deleting a backup removes its file, its row and any restore records that refer
-to it — the confirmation page counts them first. A target can be removed once
-its backups are gone. Nothing is deleted automatically: there is no retention
+to it — the confirmation page counts them first. Several can be ticked on the
+backup list and deleted together. A target can be removed with all its backups
+by typing its name. Nothing is deleted automatically: there is no retention
 policy, so the backup directory grows until somebody prunes it. See
-[ADR-008](docs/adr/008-deleting-a-backup-takes-its-history-with-it.md).
+[ADR-008](docs/adr/008-deleting-a-backup-takes-its-history-with-it.md) and
+[ADR-015](docs/adr/015-deleting-many-backups-and-a-target-with-them.md).
 
 ## Running it
 

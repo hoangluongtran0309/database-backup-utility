@@ -1,5 +1,6 @@
 package com.hoangluongtran0309.dbbackup.adapter.persistence;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -56,6 +57,17 @@ class RestoreExecutionRepositoryAdapter implements RestoreExecutionRepository {
     @Override
     public long countForBackup(UUID backupExecutionId) {
         return jpaRepository.countByBackupExecutionId(backupExecutionId);
+    }
+
+    @Override
+    public long countForBackups(Collection<UUID> backupExecutionIds) {
+        // An empty IN list is not something to trust every dialect with.
+        return backupExecutionIds.isEmpty() ? 0 : jpaRepository.countByBackupExecutionIdIn(backupExecutionIds);
+    }
+
+    @Override
+    public long countInvolvingTarget(UUID targetId) {
+        return jpaRepository.countInvolvingTarget(targetId);
     }
 
     @Override

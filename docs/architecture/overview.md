@@ -144,16 +144,21 @@ gone — jobs run here and nowhere else — so startup marks them failed.
 
 ## Removing things
 
-Nothing is removed automatically. The chain is strict and walked by hand:
-a target cannot go while it has backups, and a backup cannot go while restore
-records refer to it. Deleting a backup removes those records, then its file,
-then its row — in that order, so a failure never strands a file on disk with
-nothing pointing at it. See
+Nothing is removed automatically. The chain is strict and walked by the use
+cases, never by the schema: a target cannot go while it has backups, and a
+backup cannot go while restore records refer to it. Deleting a backup removes
+those records, then its file, then its row — in that order, so a failure never
+strands a file on disk with nothing pointing at it. See
 [ADR-008](../adr/008-deleting-a-backup-takes-its-history-with-it.md). Removing
-a target likewise removes the records of restores into it, in the use case and
-only after checking it has no backups
-([ADR-014](../adr/014-restore-into-any-registered-target.md)). Every foreign
-key is `RESTRICT`: the schema never removes history by itself.
+a target likewise removes the records of restores into it
+([ADR-014](../adr/014-restore-into-any-registered-target.md)).
+
+Several backups go together by the same steps, one after another, and a target
+can take its backups with it once its name is typed. Every check — a backup
+still running, a restore still reading one — is made for all of them before any
+is touched
+([ADR-015](../adr/015-deleting-many-backups-and-a-target-with-them.md)). Every
+foreign key is `RESTRICT`: the schema never removes history by itself.
 
 `StoragePort` refuses to read or delete anything outside its configured root.
 Every path it receives was read back from the database, and a value in a

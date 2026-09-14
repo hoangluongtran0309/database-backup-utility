@@ -14,7 +14,7 @@ interface BackupExecutionJpaRepository extends JpaRepository<BackupExecutionEnti
 
     List<BackupExecutionEntity> findByStatus(ExecutionStatus status);
 
-    boolean existsByTargetId(UUID targetId);
+    List<BackupExecutionEntity> findByTargetId(UUID targetId);
 
     /** A Slice, not a Page: it reads one row past the page instead of counting the table. */
     Slice<BackupExecutionEntity> findAllBy(Pageable pageable);
