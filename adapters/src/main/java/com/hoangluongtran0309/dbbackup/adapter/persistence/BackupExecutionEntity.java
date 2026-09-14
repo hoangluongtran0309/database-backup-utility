@@ -46,6 +46,9 @@ class BackupExecutionEntity {
     @Column(name = "size_bytes")
     private Long sizeBytes;
 
+    @Column(length = 64)
+    private String sha256;
+
     @Column(name = "error_message", length = 2000)
     private String errorMessage;
 }

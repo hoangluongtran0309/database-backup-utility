@@ -36,8 +36,8 @@ below.
 
 - [x] **9. Edit a target.** Name, host, port, user and password; the schema is
       fixed, and an empty password keeps the stored one. See ADR-012.
-- [ ] **10. Checksum every artifact.** A SHA-256 recorded when the dump is
-      written, shown on the backup, and checked before a restore.
+- [x] **10. Checksum every artifact.** A SHA-256 recorded when the dump is
+      written, shown on the backup, and checked before a restore. See ADR-013.
 - [ ] **11. Restore into another target.** Any registered target, confirmed by
       typing its name — for restore drills that do not overwrite production.
 - [ ] **12. Paginate the history.** Backup and restore lists a page at a time,

@@ -18,7 +18,8 @@ import com.hoangluongtran0309.dbbackup.core.port.StoragePort;
 import lombok.RequiredArgsConstructor;
 
 /**
- * Getting a backup artifact out of the tool, and getting rid of it.
+ * Getting a backup artifact out of the tool, checking it is still what was
+ * written, and getting rid of it.
  */
 @Service
 @RequiredArgsConstructor
@@ -32,6 +33,25 @@ public class BackupArtifactService {
 
     /** What deleting a backup would take with it. */
     public record DeletionPreview(BackupExecution execution, boolean artifactPresent, long restoreCount) {
+    }
+
+    /** What a verification found. */
+    public enum Integrity {
+        /** The file on disk has the checksum recorded when it was written. */
+        INTACT,
+        /** It does not: the file has changed since. */
+        MISMATCH,
+        /** The file is gone. */
+        MISSING,
+        /** The backup predates checksums, so there is nothing to compare with. */
+        NOT_RECORDED
+    }
+
+    /**
+     * @param recorded the checksum stored with the backup, or null if none was
+     * @param actual   the checksum of the file as it is now, or null if missing
+     */
+    public record Verification(Integrity integrity, String recorded, String actual) {
     }
 
     private final BackupExecutionRepository backups;
@@ -54,11 +74,42 @@ public class BackupArtifactService {
         return new ArtifactDownload(artifact.getFileName().toString(), storage.openForReading(artifact));
     }
 
+    /**
+     * Re-reads the artifact and compares it with the checksum recorded when it
+     * was written. Reads the whole file, so it takes as long as the disk does.
+     *
+     * <p>A backup without a recorded checksum still has its file read: the
+     * checksum it has now is worth showing, to compare against a copy kept
+     * elsewhere.
+     *
+     * @throws NoSuchElementException if the backup is not there, or never
+     *         produced an artifact
+     */
+    public Verification verify(UUID executionId) {
+        BackupExecution execution = require(executionId);
+        Path artifact = artifactOf(execution);
+
+        if (!storage.exists(artifact)) {
+            return new Verification(Integrity.MISSING, execution.getSha256(), null);
+        }
+        String actual = storage.sha256Of(artifact);
+        if (!execution.hasChecksum()) {
+            return new Verification(Integrity.NOT_RECORDED, null, actual);
+        }
+        return new Verification(
+                execution.getSha256().equals(actual) ? Integrity.INTACT : Integrity.MISMATCH,
+                execution.getSha256(),
+                actual);
+    }
+
+    /** Whether a backup's artifact is still on disk; false if it never had one. */
+    public boolean isOnDisk(BackupExecution execution) {
+        return execution.getArtifactPath() != null && storage.exists(Path.of(execution.getArtifactPath()));
+    }
+
     public DeletionPreview previewDeletion(UUID executionId) {
         BackupExecution execution = require(executionId);
-        boolean present = execution.getArtifactPath() != null
-                && storage.exists(Path.of(execution.getArtifactPath()));
-        return new DeletionPreview(execution, present, restores.countForBackup(executionId));
+        return new DeletionPreview(execution, isOnDisk(execution), restores.countForBackup(executionId));
     }
 
     /**

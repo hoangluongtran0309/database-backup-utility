@@ -23,6 +23,7 @@ import com.hoangluongtran0309.dbbackup.core.port.DatabaseTargetRepository;
 import com.hoangluongtran0309.dbbackup.core.port.EncryptionPort;
 import com.hoangluongtran0309.dbbackup.core.port.MysqlLogicalRestorePort;
 import com.hoangluongtran0309.dbbackup.core.port.RestoreExecutionRepository;
+import com.hoangluongtran0309.dbbackup.core.port.StoragePort;
 
 import lombok.RequiredArgsConstructor;
 
@@ -43,6 +44,7 @@ public class RestoreBackupService {
     private final RestoreExecutionRepository restores;
     private final DatabaseTargetRepository targets;
     private final MysqlLogicalRestorePort restoreEngine;
+    private final StoragePort storage;
     private final EncryptionPort encryption;
     private final Executor jobExecutor;
     private final Clock clock;
@@ -76,7 +78,7 @@ public class RestoreBackupService {
                 RestoreExecution.started(UUID.randomUUID(), backupExecutionId, clock.instant()));
 
         try {
-            jobExecutor.execute(() -> run(execution.getId(), target, Path.of(backup.getArtifactPath())));
+            jobExecutor.execute(() -> run(execution.getId(), target, backup));
         } catch (RejectedExecutionException e) {
             finish(execution, "Too many jobs are already running or queued. Try again shortly.");
         }
@@ -84,9 +86,12 @@ public class RestoreBackupService {
     }
 
     /** Runs one accepted restore. Called on a background thread; never throws. */
-    void run(UUID restoreId, DatabaseTarget target, Path artifact) {
+    void run(UUID restoreId, DatabaseTarget target, BackupExecution backup) {
         RestoreExecution execution = restores.findById(restoreId).orElseThrow();
+        Path artifact = Path.of(backup.getArtifactPath());
         try {
+            requireIntact(backup, artifact);
+
             MysqlConnection connection =
                     MysqlConnection.to(target, encryption.decrypt(target.getPasswordCiphertext()));
 
@@ -99,6 +104,32 @@ public class RestoreBackupService {
         } catch (RuntimeException e) {
             log.error("Restore {} into target {} failed unexpectedly", restoreId, target.getName(), e);
             finish(execution, e.toString());
+        }
+    }
+
+    /**
+     * Checked on the job thread, just before the client is started, rather than
+     * when the restore is accepted: the file could change in between, and the
+     * check reads the whole of it. See ADR-013.
+     *
+     * <p>A backup made before checksums were recorded is restored unchecked, as
+     * it always was.
+     */
+    private void requireIntact(BackupExecution backup, Path artifact) {
+        if (!storage.exists(artifact)) {
+            throw new RestoreFailedException(
+                    "The backup artifact '%s' is no longer on disk. Nothing was restored.".formatted(artifact));
+        }
+        if (!backup.hasChecksum()) {
+            return;
+        }
+        String actual = storage.sha256Of(artifact);
+        if (!backup.getSha256().equals(actual)) {
+            throw new RestoreFailedException((
+                    "The backup artifact '%s' does not match the checksum recorded when it was made "
+                            + "(recorded %s, now %s). It has changed since it was written, so it was not "
+                            + "restored and the target was not touched.")
+                    .formatted(artifact, backup.getSha256(), actual));
         }
     }
 

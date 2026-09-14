@@ -16,6 +16,7 @@ final class BackupExecutionMapper {
         entity.setFinishedAt(execution.getFinishedAt());
         entity.setArtifactPath(execution.getArtifactPath());
         entity.setSizeBytes(execution.getSizeBytes());
+        entity.setSha256(execution.getSha256());
         entity.setErrorMessage(execution.getErrorMessage());
         return entity;
     }
@@ -29,6 +30,7 @@ final class BackupExecutionMapper {
                 .finishedAt(entity.getFinishedAt())
                 .artifactPath(entity.getArtifactPath())
                 .sizeBytes(entity.getSizeBytes())
+                .sha256(entity.getSha256())
                 .errorMessage(entity.getErrorMessage())
                 .build();
     }
