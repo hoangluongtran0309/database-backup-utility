@@ -43,6 +43,12 @@ schema and you type the target's name to proceed. It applies the dump rather
 than resetting the schema — tables the backup does not contain are left alone.
 See [ADR-007](docs/adr/007-restore-applies-a-dump-and-asks-first.md).
 
+A backup can be restored into any registered target, not only the one it was
+taken from — so a restore drill can go into a scratch schema and leave
+production alone. The name to type is the destination's. Removing a target
+removes the records of restores into it. See
+[ADR-014](docs/adr/014-restore-into-any-registered-target.md).
+
 Deleting a backup removes its file, its row and any restore records that refer
 to it — the confirmation page counts them first. A target can be removed once
 its backups are gone. Nothing is deleted automatically: there is no retention

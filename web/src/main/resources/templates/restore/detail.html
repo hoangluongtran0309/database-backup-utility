@@ -43,6 +43,11 @@
                        'yyyy-MM-dd HH:mm:ss')} + ' UTC'">…</a>
       </dd>
 
+      <!-- Not always the target above: a restore can go into any target
+           (ADR-014), so where the backup was taken is said separately. -->
+      <dt>Taken from</dt>
+      <dd th:text="${backup == null ? '—' : (sourceName != null ? sourceName : '(removed)')}">production</dd>
+
       <dt>Started</dt>
       <dd class="mono"
           th:text="${#temporals.format(

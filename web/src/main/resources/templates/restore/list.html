@@ -34,12 +34,19 @@
                           restore.startedAt.atOffset(T(java.time.ZoneOffset).UTC),
                           'yyyy-MM-dd HH:mm:ss')} + ' UTC'">…</td>
           <td data-label="Into"
-              th:text="${backup == null ? '(unknown)'
-                        : targetNames.getOrDefault(backup.targetId, '(removed)')}">production</td>
-          <td data-label="From backup" class="mono"
-              th:text="${backup == null ? '—'
-                        : #temporals.format(backup.startedAt.atOffset(T(java.time.ZoneOffset).UTC),
-                                            'yyyy-MM-dd HH:mm')}">…</td>
+              th:text="${targetNames.getOrDefault(restore.targetId, '(removed)')}">production</td>
+          <!-- Which backup: when it was taken and, since a restore can go into
+               another target (ADR-014), of which. -->
+          <td data-label="From backup">
+            <span class="mono" th:if="${backup == null}">—</span>
+            <div class="cell-stack" th:unless="${backup == null}">
+              <span class="mono nowrap"
+                    th:text="${#temporals.format(backup.startedAt.atOffset(T(java.time.ZoneOffset).UTC),
+                                                 'yyyy-MM-dd HH:mm')}">…</span>
+              <span class="field-hint"
+                    th:text="|of ${targetNames.getOrDefault(backup.targetId, '(removed)')}|">of production</span>
+            </div>
+          </td>
           <td data-label="Status" th:insert="~{fragments/execution-status :: statusBadge(${restore.status})}"></td>
           <td class="actions">
             <div class="row-actions">

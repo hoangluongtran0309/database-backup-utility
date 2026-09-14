@@ -86,7 +86,7 @@ class RestoreBackupServiceTest {
         givenSaveEchoes();
         Executor executor = Mockito.mock(Executor.class);
 
-        newService(executor).start(BACKUP_ID);
+        newService(executor).start(BACKUP_ID, TARGET_ID);
 
         InOrder order = inOrder(restores, executor);
         order.verify(restores).save(any());
@@ -99,12 +99,13 @@ class RestoreBackupServiceTest {
         givenTarget();
         givenSaveEchoes();
 
-        UUID id = service.start(BACKUP_ID);
+        UUID id = service.start(BACKUP_ID, TARGET_ID);
 
         verify(restores).save(saved.capture());
         assertThat(id).isEqualTo(saved.getValue().getId());
         assertThat(saved.getValue().getStatus()).isEqualTo(ExecutionStatus.RUNNING);
         assertThat(saved.getValue().getBackupExecutionId()).isEqualTo(BACKUP_ID);
+        assertThat(saved.getValue().getTargetId()).isEqualTo(TARGET_ID);
         assertThat(saved.getValue().getStartedAt()).isEqualTo(NOW);
     }
 
@@ -115,7 +116,7 @@ class RestoreBackupServiceTest {
                 BackupExecution.started(BACKUP_ID, TARGET_ID, NOW.minusSeconds(600))
                         .failed("mysqldump exited with 2", NOW.minusSeconds(590))));
 
-        assertThatThrownBy(() -> service.start(BACKUP_ID))
+        assertThatThrownBy(() -> service.start(BACKUP_ID, TARGET_ID))
                 .isInstanceOf(RestoreFailedException.class)
                 .hasMessageContaining("FAILED")
                 .hasMessageContaining("nothing to restore");
@@ -128,7 +129,7 @@ class RestoreBackupServiceTest {
         when(backups.findById(BACKUP_ID)).thenReturn(Optional.of(
                 BackupExecution.started(BACKUP_ID, TARGET_ID, NOW)));
 
-        assertThatThrownBy(() -> service.start(BACKUP_ID))
+        assertThatThrownBy(() -> service.start(BACKUP_ID, TARGET_ID))
                 .isInstanceOf(RestoreFailedException.class)
                 .hasMessageContaining("RUNNING");
     }
@@ -137,17 +138,17 @@ class RestoreBackupServiceTest {
     void failsForAnUnknownBackup() {
         when(backups.findById(BACKUP_ID)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.start(BACKUP_ID))
+        assertThatThrownBy(() -> service.start(BACKUP_ID, TARGET_ID))
                 .isInstanceOf(NoSuchElementException.class);
         verifyNoInteractions(restores, restoreEngine);
     }
 
     @Test
-    void failsWhenTheTargetTheBackupCameFromIsGone() {
+    void failsWhenTheTargetToRestoreIntoIsGone() {
         givenSucceededBackup();
         when(targets.findById(TARGET_ID)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.start(BACKUP_ID))
+        assertThatThrownBy(() -> service.start(BACKUP_ID, TARGET_ID))
                 .isInstanceOf(NoSuchElementException.class)
                 .hasMessageContaining("no longer exists");
         verifyNoInteractions(restores);
@@ -161,7 +162,7 @@ class RestoreBackupServiceTest {
 
         newService(runnable -> {
             throw new RejectedExecutionException("queue full");
-        }).start(BACKUP_ID);
+        }).start(BACKUP_ID, TARGET_ID);
 
         verify(restores, Mockito.times(2)).save(saved.capture());
         assertThat(saved.getAllValues().get(1).getStatus()).isEqualTo(ExecutionStatus.FAILED);
@@ -174,7 +175,7 @@ class RestoreBackupServiceTest {
         givenTarget();
         givenSaveEchoes();
 
-        service.start(BACKUP_ID);
+        service.start(BACKUP_ID, TARGET_ID);
 
         verifyNoInteractions(encryption);
     }
@@ -189,7 +190,7 @@ class RestoreBackupServiceTest {
         givenArtifactIntact();
         when(encryption.decrypt("sealed")).thenReturn("s3cr3t");
 
-        runQueuedWork(service.start(BACKUP_ID));
+        runQueuedWork(service.start(BACKUP_ID, TARGET_ID));
 
         ArgumentCaptor<MysqlConnection> connection = ArgumentCaptor.forClass(MysqlConnection.class);
         verify(restoreEngine).restore(connection.capture(), eq(Path.of(ARTIFACT)));
@@ -209,7 +210,7 @@ class RestoreBackupServiceTest {
         Mockito.doThrow(new RestoreFailedException("mysql exited with 1: Access denied"))
                 .when(restoreEngine).restore(any(), any());
 
-        runQueuedWork(service.start(BACKUP_ID));
+        runQueuedWork(service.start(BACKUP_ID, TARGET_ID));
 
         assertThat(lastSaved().getStatus()).isEqualTo(ExecutionStatus.FAILED);
         assertThat(lastSaved().getErrorMessage()).isEqualTo("mysql exited with 1: Access denied");
@@ -223,10 +224,37 @@ class RestoreBackupServiceTest {
         givenArtifactIntact();
         when(encryption.decrypt(any())).thenThrow(new IllegalStateException("key rotated"));
 
-        runQueuedWork(service.start(BACKUP_ID));
+        runQueuedWork(service.start(BACKUP_ID, TARGET_ID));
 
         assertThat(lastSaved().getStatus()).isEqualTo(ExecutionStatus.FAILED);
         assertThat(lastSaved().getErrorMessage()).contains("key rotated");
+    }
+
+    /** ADR-014: the data goes where the operator chose, with that target's credentials. */
+    @Test
+    void restoresIntoAnotherTargetWithThatTargetsConnection() {
+        UUID otherId = UUID.randomUUID();
+        givenSucceededBackup();
+        when(targets.findById(otherId)).thenReturn(Optional.of(DatabaseTarget.builder()
+                .id(otherId).name("drill").host("scratch.internal").port(3306)
+                .databaseName("shop_restore_test").username("drill").passwordCiphertext("drill-sealed")
+                .createdAt(NOW).build()));
+        givenSaveEchoes();
+        givenArtifactIntact();
+        when(encryption.decrypt("drill-sealed")).thenReturn("dr1ll");
+
+        UUID restoreId = service.start(BACKUP_ID, otherId);
+        when(restores.findById(restoreId)).thenReturn(Optional.of(
+                RestoreExecution.started(restoreId, BACKUP_ID, otherId, NOW)));
+        queue.forEach(Runnable::run);
+
+        ArgumentCaptor<MysqlConnection> connection = ArgumentCaptor.forClass(MysqlConnection.class);
+        verify(restoreEngine).restore(connection.capture(), eq(Path.of(ARTIFACT)));
+        assertThat(connection.getValue().host()).isEqualTo("scratch.internal");
+        assertThat(connection.getValue().database()).isEqualTo("shop_restore_test");
+        assertThat(connection.getValue().password()).isEqualTo("dr1ll");
+        assertThat(lastSaved().getTargetId()).isEqualTo(otherId);
+        verify(targets, never()).findById(TARGET_ID);
     }
 
     // --- checking the artifact first ------------------------------------------
@@ -241,7 +269,7 @@ class RestoreBackupServiceTest {
         when(storage.sha256Of(Path.of(ARTIFACT)))
                 .thenReturn("60303ae22b998861bce3b28f33eec1be758a213c86c93c076dbe9f558c11c752");
 
-        runQueuedWork(service.start(BACKUP_ID));
+        runQueuedWork(service.start(BACKUP_ID, TARGET_ID));
 
         assertThat(lastSaved().getStatus()).isEqualTo(ExecutionStatus.FAILED);
         assertThat(lastSaved().getErrorMessage())
@@ -258,7 +286,7 @@ class RestoreBackupServiceTest {
         givenSaveEchoes();
         when(storage.exists(Path.of(ARTIFACT))).thenReturn(false);
 
-        runQueuedWork(service.start(BACKUP_ID));
+        runQueuedWork(service.start(BACKUP_ID, TARGET_ID));
 
         assertThat(lastSaved().getErrorMessage()).contains("no longer on disk");
         verifyNoInteractions(restoreEngine);
@@ -277,7 +305,7 @@ class RestoreBackupServiceTest {
         when(storage.exists(Path.of(ARTIFACT))).thenReturn(true);
         when(encryption.decrypt(any())).thenReturn("s3cr3t");
 
-        runQueuedWork(service.start(BACKUP_ID));
+        runQueuedWork(service.start(BACKUP_ID, TARGET_ID));
 
         assertThat(lastSaved().getStatus()).isEqualTo(ExecutionStatus.SUCCEEDED);
         verify(storage, never()).sha256Of(any());
@@ -288,7 +316,7 @@ class RestoreBackupServiceTest {
     @Test
     void marksRestoresLeftRunningByAPreviousProcessAsFailed() {
         RestoreExecution stranded =
-                RestoreExecution.started(UUID.randomUUID(), BACKUP_ID, NOW.minusSeconds(900));
+                RestoreExecution.started(UUID.randomUUID(), BACKUP_ID, TARGET_ID, NOW.minusSeconds(900));
         when(restores.findRunning()).thenReturn(List.of(stranded));
         givenSaveEchoes();
 
@@ -330,7 +358,7 @@ class RestoreBackupServiceTest {
 
     private void runQueuedWork(UUID restoreId) {
         when(restores.findById(restoreId)).thenReturn(Optional.of(
-                RestoreExecution.started(restoreId, BACKUP_ID, NOW)));
+                RestoreExecution.started(restoreId, BACKUP_ID, TARGET_ID, NOW)));
         queue.forEach(Runnable::run);
     }
 

@@ -47,30 +47,45 @@ public class RestoreController {
     /**
      * The confirmation step. Restoring overwrites a live schema, so it is not
      * something a single click should be able to do.
+     *
+     * <p>The destination defaults to the target the backup came from; any
+     * other registered target can be chosen instead (ADR-014). Choosing one
+     * reloads this page, so the warning and the name to type always describe
+     * the target that will actually be overwritten.
      */
     @GetMapping("/new")
-    String confirmForm(@RequestParam("backup") UUID backupExecutionId, Model model, RedirectAttributes flash) {
+    String confirmForm(
+            @RequestParam("backup") UUID backupExecutionId,
+            @RequestParam(value = "target", required = false) UUID targetId,
+            Model model,
+            RedirectAttributes flash) {
+
         BackupExecution backup = backups.findById(backupExecutionId).orElse(null);
         if (backup == null) {
             flash.addFlashAttribute("error", "That backup no longer exists");
             return "redirect:/executions";
         }
-        DatabaseTarget target = targets.listAll().stream()
-                .filter(t -> t.getId().equals(backup.getTargetId()))
-                .findFirst()
-                .orElse(null);
-        if (target == null) {
+        List<DatabaseTarget> all = targets.listAll();
+        DatabaseTarget destination = byId(all, targetId != null ? targetId : backup.getTargetId());
+        if (destination == null && targetId != null) {
+            flash.addFlashAttribute("error", "That target no longer exists");
+            return "redirect:/restores/new?backup=" + backupExecutionId;
+        }
+        if (destination == null) {
             flash.addFlashAttribute("error", "The target this backup came from no longer exists");
             return "redirect:/executions/" + backupExecutionId;
         }
         model.addAttribute("backup", backup);
-        model.addAttribute("target", target);
+        model.addAttribute("source", byId(all, backup.getTargetId()));
+        model.addAttribute("target", destination);
+        model.addAttribute("targets", all);
         return "restore/confirm";
     }
 
     @PostMapping
     String start(
             @RequestParam("backup") UUID backupExecutionId,
+            @RequestParam(value = "target", required = false) UUID targetId,
             @RequestParam(value = "confirmation", required = false) String confirmation,
             RedirectAttributes flash) {
 
@@ -79,26 +94,27 @@ public class RestoreController {
             flash.addFlashAttribute("error", "That backup no longer exists");
             return "redirect:/executions";
         }
+        UUID destinationId = targetId != null ? targetId : backup.getTargetId();
+        String back = "redirect:/restores/new?backup=" + backupExecutionId
+                + (targetId != null ? "&target=" + targetId : "");
 
-        // Typing the target's name, not ticking a box: it forces the operator
-        // to read which schema is about to be overwritten.
-        String expected = targets.listAll().stream()
-                .filter(t -> t.getId().equals(backup.getTargetId()))
-                .map(DatabaseTarget::getName)
-                .findFirst()
-                .orElse(null);
-        if (expected == null) {
-            flash.addFlashAttribute("error", "The target this backup came from no longer exists");
-            return "redirect:/executions/" + backupExecutionId;
+        // Typing the destination's name, not ticking a box: it forces the
+        // operator to read which schema is about to be overwritten — and with
+        // a choice of targets, that it is the one they meant.
+        DatabaseTarget destination = byId(targets.listAll(), destinationId);
+        if (destination == null) {
+            flash.addFlashAttribute("error", "The target to restore into no longer exists");
+            return "redirect:/restores/new?backup=" + backupExecutionId;
         }
+        String expected = destination.getName();
         if (confirmation == null || !expected.equals(confirmation.strip())) {
             flash.addFlashAttribute("error",
                     "Type the target's name exactly — '%s' — to confirm the overwrite".formatted(expected));
-            return "redirect:/restores/new?backup=" + backupExecutionId;
+            return back;
         }
 
         try {
-            return "redirect:/restores/" + restoreService.start(backupExecutionId);
+            return "redirect:/restores/" + restoreService.start(backupExecutionId, destinationId);
         } catch (NoSuchElementException | RestoreFailedException e) {
             flash.addFlashAttribute("error", e.getMessage());
             return "redirect:/executions/" + backupExecutionId;
@@ -119,16 +135,21 @@ public class RestoreController {
         }
         BackupExecution backup = backups.findById(restore.getBackupExecutionId()).orElse(null);
 
+        Map<UUID, String> names = targetNames();
         model.addAttribute("restore", restore);
         model.addAttribute("backup", backup);
-        model.addAttribute("targetName",
-                backup == null ? null : targetNames().get(backup.getTargetId()));
+        model.addAttribute("targetName", names.get(restore.getTargetId()));
+        model.addAttribute("sourceName", backup == null ? null : names.get(backup.getTargetId()));
         return "restore/detail";
     }
 
     private Map<UUID, BackupExecution> backupsById() {
         return backups.findAllNewestFirst().stream()
                 .collect(Collectors.toMap(BackupExecution::getId, b -> b));
+    }
+
+    private static DatabaseTarget byId(List<DatabaseTarget> all, UUID id) {
+        return all.stream().filter(t -> t.getId().equals(id)).findFirst().orElse(null);
     }
 
     private Map<UUID, String> targetNames() {

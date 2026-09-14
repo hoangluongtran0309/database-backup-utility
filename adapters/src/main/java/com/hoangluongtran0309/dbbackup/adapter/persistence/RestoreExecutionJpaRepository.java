@@ -14,4 +14,6 @@ interface RestoreExecutionJpaRepository extends JpaRepository<RestoreExecutionEn
     long countByBackupExecutionId(UUID backupExecutionId);
 
     void deleteByBackupExecutionId(UUID backupExecutionId);
+
+    void deleteByTargetId(UUID targetId);
 }

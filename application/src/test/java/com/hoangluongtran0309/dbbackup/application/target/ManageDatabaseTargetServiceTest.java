@@ -3,6 +3,7 @@ package com.hoangluongtran0309.dbbackup.application.target;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -20,13 +21,17 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.hoangluongtran0309.dbbackup.core.exception.InvalidTargetException;
+import com.hoangluongtran0309.dbbackup.core.exception.TargetInUseException;
 import com.hoangluongtran0309.dbbackup.core.model.DatabaseTarget;
+import com.hoangluongtran0309.dbbackup.core.port.BackupExecutionRepository;
 import com.hoangluongtran0309.dbbackup.core.port.DatabaseTargetRepository;
 import com.hoangluongtran0309.dbbackup.core.port.EncryptionPort;
+import com.hoangluongtran0309.dbbackup.core.port.RestoreExecutionRepository;
 
 /**
  * Plain JUnit with mocked ports: no Spring context, no Docker. That this is
@@ -42,6 +47,12 @@ class ManageDatabaseTargetServiceTest {
     private DatabaseTargetRepository repository;
 
     @Mock
+    private BackupExecutionRepository backups;
+
+    @Mock
+    private RestoreExecutionRepository restores;
+
+    @Mock
     private EncryptionPort encryption;
 
     @Captor
@@ -52,7 +63,7 @@ class ManageDatabaseTargetServiceTest {
     @BeforeEach
     void setUp() {
         service = new ManageDatabaseTargetService(
-                repository, encryption, Clock.fixed(NOW, ZoneOffset.UTC));
+                repository, backups, restores, encryption, Clock.fixed(NOW, ZoneOffset.UTC));
     }
 
     @Test
@@ -174,13 +185,44 @@ class ManageDatabaseTargetServiceTest {
         verify(repository, never()).save(any());
     }
 
+    /** ADR-014: a drill target goes, and the records of restores into it go with it. */
     @Test
-    void deleteDelegatesToTheRepository() {
+    void removingATargetRemovesTheRestoresIntoItFirst() {
+        DatabaseTarget target = stored();
+        when(repository.findById(target.getId())).thenReturn(Optional.of(target));
+        when(backups.existsForTarget(target.getId())).thenReturn(false);
+
+        service.delete(target.getId());
+
+        InOrder order = inOrder(restores, repository);
+        order.verify(restores).deleteForTarget(target.getId());
+        order.verify(repository).deleteById(target.getId());
+    }
+
+    /** Refused before anything is touched, so a refusal takes no history with it. */
+    @Test
+    void aTargetWithBackupsIsRefusedAndKeepsItsRestoreRecords() {
+        DatabaseTarget target = stored();
+        when(repository.findById(target.getId())).thenReturn(Optional.of(target));
+        when(backups.existsForTarget(target.getId())).thenReturn(true);
+
+        assertThatThrownBy(() -> service.delete(target.getId()))
+                .isInstanceOf(TargetInUseException.class)
+                .hasMessageContaining("production");
+
+        verify(restores, never()).deleteForTarget(any());
+        verify(repository, never()).deleteById(any());
+    }
+
+    @Test
+    void removingAnAbsentTargetIsNotAnError() {
         UUID id = UUID.randomUUID();
+        when(repository.findById(id)).thenReturn(Optional.empty());
 
         service.delete(id);
 
-        verify(repository).deleteById(id);
+        verify(restores, never()).deleteForTarget(any());
+        verify(repository, never()).deleteById(any());
     }
 
     private static RegisterTargetCommand command() {

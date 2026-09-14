@@ -142,6 +142,33 @@ class BackupRestoreRoundTripIT {
         assertThat(query("SELECT COUNT(*) FROM audit")).isEqualTo("1");
     }
 
+    /**
+     * What ADR-005 kept the dump free of {@code CREATE DATABASE} and {@code USE}
+     * for, and ADR-014 relies on: a backup of {@code shop} loads into a schema
+     * with another name, and {@code shop} itself is not touched.
+     */
+    @Test
+    void restoresIntoASchemaWithAnotherNameLeavingTheSourceAlone() {
+        rootSql("""
+            DROP DATABASE IF EXISTS shop_drill; CREATE DATABASE shop_drill;
+            GRANT ALL ON shop_drill.* TO 'backup'@'%';
+            """);
+        Path artifact = artifacts.resolve("shop.sql.gz");
+        String before = query("SELECT GROUP_CONCAT(CONCAT(id,':',customer,':',total) ORDER BY id) FROM orders");
+        backup.dumpTo(connection("s3cr3t"), artifact);
+        sql("INSERT INTO orders (customer, total) VALUES ('Only in the source', 1.00);");
+
+        restore.restore(new MysqlConnection(
+                SERVER.getHost(), SERVER.getFirstMappedPort(), "shop_drill", "backup", "s3cr3t"), artifact);
+
+        assertThat(queryIn("shop_drill",
+                "SELECT GROUP_CONCAT(CONCAT(id,':',customer,':',total) ORDER BY id) FROM orders"))
+                .isEqualTo(before);
+        assertThat(queryIn("shop_drill", "SELECT COUNT(*) FROM items")).isEqualTo("3");
+        // The source keeps the row added after the backup: nothing went there.
+        assertThat(query("SELECT COUNT(*) FROM orders")).isEqualTo("4");
+    }
+
     @Test
     void aBackupCanBeRestoredMoreThanOnce() {
         Path artifact = artifacts.resolve("shop.sql.gz");
@@ -213,7 +240,11 @@ class BackupRestoreRoundTripIT {
     }
 
     private static String query(String sql) {
-        return exec("mysql", "-uroot", "-p" + SERVER.getPassword(), "shop",
+        return queryIn("shop", sql);
+    }
+
+    private static String queryIn(String schema, String sql) {
+        return exec("mysql", "-uroot", "-p" + SERVER.getPassword(), schema,
                 "-N", "--batch", "-e", sql).strip();
     }
 

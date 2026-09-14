@@ -38,8 +38,9 @@ below.
       fixed, and an empty password keeps the stored one. See ADR-012.
 - [x] **10. Checksum every artifact.** A SHA-256 recorded when the dump is
       written, shown on the backup, and checked before a restore. See ADR-013.
-- [ ] **11. Restore into another target.** Any registered target, confirmed by
+- [x] **11. Restore into another target.** Any registered target, confirmed by
       typing its name — for restore drills that do not overwrite production.
+      See ADR-014.
 - [ ] **12. Paginate the history.** Backup and restore lists a page at a time,
       and the target list without reading every backup ever made.
 

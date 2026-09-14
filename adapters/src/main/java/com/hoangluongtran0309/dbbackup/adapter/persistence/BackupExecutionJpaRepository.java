@@ -10,4 +10,6 @@ import com.hoangluongtran0309.dbbackup.core.model.ExecutionStatus;
 interface BackupExecutionJpaRepository extends JpaRepository<BackupExecutionEntity, UUID> {
 
     List<BackupExecutionEntity> findByStatus(ExecutionStatus status);
+
+    boolean existsByTargetId(UUID targetId);
 }

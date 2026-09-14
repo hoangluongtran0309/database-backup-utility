@@ -8,7 +8,8 @@ import lombok.Builder;
 import lombok.Getter;
 
 /**
- * One attempt to load a backup artifact back into its target.
+ * One attempt to load a backup artifact into a target — the one it was taken
+ * from, or any other registered target.
  *
  * <p>A separate aggregate from {@link BackupExecution} rather than a status on
  * it: a backup is a thing that exists, and restoring it is an event that can
@@ -25,8 +26,15 @@ public final class RestoreExecution {
 
     private final UUID id;
 
-    /** The backup being restored. Its target is where the data goes. */
+    /** The backup being restored. */
     private final UUID backupExecutionId;
+
+    /**
+     * Where the data went. Usually the target the backup was taken from, but
+     * not necessarily: see ADR-014. Recorded rather than derived from the
+     * backup, because the two can differ.
+     */
+    private final UUID targetId;
 
     private final ExecutionStatus status;
     private final Instant startedAt;
@@ -37,6 +45,7 @@ public final class RestoreExecution {
     private RestoreExecution(
             UUID id,
             UUID backupExecutionId,
+            UUID targetId,
             ExecutionStatus status,
             Instant startedAt,
             Instant finishedAt,
@@ -44,6 +53,7 @@ public final class RestoreExecution {
 
         this.id = require(id, "Restore id is required");
         this.backupExecutionId = require(backupExecutionId, "Backup execution id is required");
+        this.targetId = require(targetId, "Target id is required");
         this.status = require(status, "Status is required");
         this.startedAt = require(startedAt, "Start timestamp is required");
         this.finishedAt = finishedAt;
@@ -56,10 +66,12 @@ public final class RestoreExecution {
         }
     }
 
-    public static RestoreExecution started(UUID id, UUID backupExecutionId, Instant startedAt) {
+    /** @param targetId where the backup is going, which need not be where it came from */
+    public static RestoreExecution started(UUID id, UUID backupExecutionId, UUID targetId, Instant startedAt) {
         return RestoreExecution.builder()
                 .id(id)
                 .backupExecutionId(backupExecutionId)
+                .targetId(targetId)
                 .status(ExecutionStatus.RUNNING)
                 .startedAt(startedAt)
                 .build();
@@ -70,6 +82,7 @@ public final class RestoreExecution {
         return RestoreExecution.builder()
                 .id(id)
                 .backupExecutionId(backupExecutionId)
+                .targetId(targetId)
                 .status(ExecutionStatus.SUCCEEDED)
                 .startedAt(startedAt)
                 .finishedAt(finishedAt)
@@ -81,6 +94,7 @@ public final class RestoreExecution {
         return RestoreExecution.builder()
                 .id(id)
                 .backupExecutionId(backupExecutionId)
+                .targetId(targetId)
                 .status(ExecutionStatus.FAILED)
                 .startedAt(startedAt)
                 .finishedAt(finishedAt)

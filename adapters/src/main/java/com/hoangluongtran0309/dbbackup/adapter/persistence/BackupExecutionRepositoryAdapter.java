@@ -44,6 +44,11 @@ class BackupExecutionRepositoryAdapter implements BackupExecutionRepository {
     }
 
     @Override
+    public boolean existsForTarget(UUID targetId) {
+        return jpaRepository.existsByTargetId(targetId);
+    }
+
+    @Override
     public void deleteById(UUID id) {
         jpaRepository.deleteById(id);
         // Flushed so a foreign key still holding this row surfaces here rather
