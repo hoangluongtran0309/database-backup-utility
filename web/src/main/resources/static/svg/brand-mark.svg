@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-labelledby="dbBrandMarkTitle">
+    <title id="dbBrandMarkTitle">DB Backup Utility</title>
+    <!--
+      The letters are Inter — the same typeface app.css loads for the UI —
+      converted to outlines. Outlines, not <text>, because this file is also the
+      source favicon.ico is rasterised from and <text> would render with whatever
+      font the build machine happens to have.
+
+      Generated from static/fonts/inter-latin-wght-normal.woff2 at wght=750
+      (the weight .brand uses), cap height 21 in the 48-unit tile, letter
+      spacing -80 font units, pair centred on the tile. Re-derive with
+      fontTools if the font or the weight ever changes.
+    -->
+    <defs>
+        <linearGradient id="dbBrandMarkGradient" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#3d8ef0"/>
+            <stop offset="1" stop-color="#7d63f5"/>
+        </linearGradient>
+    </defs>
+    <rect width="48" height="48" rx="14" fill="url(#dbBrandMarkGradient)"/>
+    <path fill="#fff" d="M13.51 34.5H8V30.52H13.31Q15.22 30.52 16.53 29.86Q17.84 29.19 18.5 27.75Q19.17 26.31 19.17 23.99Q19.17 21.68 18.5 20.25Q17.82 18.81 16.52 18.15Q15.21 17.48 13.29 17.48H7.9V13.5H13.55Q16.73 13.5 19.03 14.76Q21.32 16.02 22.56 18.37Q23.8 20.72 23.8 23.99Q23.8 27.27 22.56 29.63Q21.32 31.98 19.02 33.24Q16.71 34.5 13.51 34.5ZM10.6 13.5V34.5H5.96V13.5Z"/>
+    <path fill="#fff" d="M25.68 34.5V13.5H34.2Q36.53 13.5 38.09 14.19Q39.65 14.87 40.44 16.08Q41.22 17.28 41.22 18.86Q41.22 20.08 40.73 21.01Q40.23 21.94 39.36 22.54Q38.5 23.14 37.38 23.39V23.6Q38.61 23.65 39.67 24.27Q40.73 24.9 41.38 26.02Q42.04 27.14 42.04 28.68Q42.04 30.35 41.21 31.66Q40.38 32.98 38.76 33.74Q37.15 34.5 34.8 34.5ZM30.32 30.72H33.78Q35.57 30.72 36.4 30.03Q37.23 29.35 37.23 28.19Q37.23 27.33 36.83 26.69Q36.42 26.04 35.67 25.68Q34.92 25.32 33.89 25.32H30.32ZM30.32 22.24H33.45Q34.33 22.24 35.03 21.93Q35.72 21.63 36.12 21.06Q36.51 20.48 36.51 19.68Q36.51 18.58 35.73 17.91Q34.94 17.24 33.54 17.24H30.32Z"/>
+</svg>

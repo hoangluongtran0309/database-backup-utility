@@ -11,15 +11,22 @@ that needs it.
 - [x] **2. Test connection to a target.** `mysql --execute="SELECT 1"` through
       a shared `ProcessRunner`; the result and MySQL's own error text are
       stored and shown.
-- [ ] **3. Run a full logical backup.** `mysqldump` to local disk, execution
+- [x] **3. Run a full logical backup.** `mysqldump` to local disk, execution
       history, started in the background so a long dump does not hold an HTTP
       request open.
-- [ ] **4. Compress the dump.** Stream `mysqldump` output through gzip.
-- [ ] **5. Restore a backup into a target.** With an explicit overwrite
+- [x] **4. Compress the dump.** Stream `mysqldump` output through gzip.
+- [x] **5. Restore a backup into a target.** With an explicit overwrite
       confirmation, and a round-trip integration test.
-- [ ] **6. Download and delete artifacts.** Deleting an execution deletes its
-      file.
-- [ ] **7. Package.** One Dockerfile, one compose file, quickstart.
+- [x] **6. Download and delete artifacts.** Deleting an execution deletes its
+      file, which is also what makes a used target removable.
+- [x] **7. Package.** One Dockerfile, one compose file, quickstart.
+
+That is the whole of the first round. What comes next is a decision, not a
+plan: cut `release/0.1.0`, or keep going on `develop`.
+
+- [x] **8. Sign in.** One operator account from the environment (bcrypt hash),
+      session sign-in, CSRF tokens on every form, security headers; the
+      healthcheck moves to `/actuator/health`. See ADR-011.
 
 ## Deliberately out of scope
 

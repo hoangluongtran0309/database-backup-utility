@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout/base :: page('Confirm restore', 'restores', ~{:: #content})}">
+<body>
+<div id="content">
+
+  <div class="page-header">
+    <div>
+      <div class="eyebrow">Restore</div>
+      <h1>Restore this backup</h1>
+      <p>Read what is about to happen, then confirm by typing the target's name.</p>
+    </div>
+  </div>
+
+  <div class="alert alert-danger" role="alert">
+    <p><strong>This overwrites live data.</strong></p>
+    <p>
+      Every table in the backup will be dropped and recreated in
+      <code th:text="${target.address}">127.0.0.1:3306/shop</code>.
+    </p>
+    <!-- Said plainly because it is the thing people assume wrongly: this
+         applies a dump, it does not reset the schema. -->
+    <p>
+      Tables that are <em>not</em> in the backup are left untouched. This applies
+      the backup over the schema; it does not reset it.
+    </p>
+  </div>
+
+  <div class="panel">
+    <dl class="detail-grid">
+      <dt>Backup taken</dt>
+      <dd class="mono"
+          th:text="${#temporals.format(
+                      backup.startedAt.atOffset(T(java.time.ZoneOffset).UTC),
+                      'yyyy-MM-dd HH:mm:ss')} + ' UTC'">…</dd>
+      <dt>Artifact</dt>
+      <dd th:replace="~{fragments/artifact-path :: artifactPath(${backup.artifactPath})}">…</dd>
+      <dt>Target</dt>
+      <dd th:text="${target.name}">production</dd>
+    </dl>
+  </div>
+
+  <form class="form-panel" method="post" th:action="@{/restores}">
+    <input type="hidden" name="backup" th:value="${backup.id}">
+
+    <div class="form-group">
+      <label for="confirmation">Type <strong th:text="${target.name}">production</strong> to confirm</label>
+      <input id="confirmation" name="confirmation" type="text" autocomplete="off"
+             spellcheck="false" aria-describedby="confirmation-help">
+      <p class="field-hint" id="confirmation-help">
+        Typing the name is deliberate: it is the last chance to notice the wrong target.
+      </p>
+    </div>
+
+    <div class="form-actions">
+      <button class="button button-danger-solid" type="submit" data-busy-label="Starting restore…">Restore, overwriting the schema</button>
+      <a class="button button-ghost" th:href="@{/executions/{id}(id=${backup.id})}">Cancel</a>
+    </div>
+  </form>
+
+</div>
+</body>
+</html>

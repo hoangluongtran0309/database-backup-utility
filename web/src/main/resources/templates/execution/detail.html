@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout/base :: page('Backup', 'backups', ~{:: #content})}">
+<body>
+<!-- data-live: while the backup runs, app.js re-fetches this page and swaps
+     this block for the new one — see ADR-010. The server renders every state;
+     the script only moves markup. -->
+<div id="content" data-live
+     th:attr="data-live-active=${execution.status.name() == 'RUNNING'},
+              data-live-announce=|Backup ${#strings.toLowerCase(execution.status)}|">
+
+  <div class="page-header">
+    <div>
+      <div class="eyebrow">Backup</div>
+      <h1 th:text="${targetName != null ? targetName : '(removed)'}">production</h1>
+      <p class="mono"
+         th:text="${#temporals.format(
+                     execution.startedAt.atOffset(T(java.time.ZoneOffset).UTC),
+                     'yyyy-MM-dd HH:mm:ss')} + ' UTC'">…</p>
+    </div>
+    <div class="actions">
+      <a class="button" th:href="@{/executions}">All backups</a>
+      <a class="button" th:if="${execution.status.name() == 'SUCCEEDED'}"
+         th:href="@{/executions/{id}/download(id=${execution.id})}">Download</a>
+      <a class="button button-primary" th:if="${execution.status.name() == 'SUCCEEDED'}"
+         th:href="@{/restores/new(backup=${execution.id})}">Restore this backup</a>
+      <a class="button button-danger" th:unless="${execution.status.name() == 'RUNNING'}"
+         th:href="@{/executions/{id}/delete(id=${execution.id})}">Delete</a>
+    </div>
+  </div>
+
+  <p class="alert alert-info" th:if="${execution.status.name() == 'RUNNING'}">
+    This backup is still running. This page follows it and updates when it finishes.
+    <noscript>With JavaScript off, reload the page to see where it got to.</noscript>
+  </p>
+
+  <div class="panel">
+    <dl class="detail-grid">
+      <dt>Status</dt>
+      <dd th:insert="~{fragments/execution-status :: statusBadge(${execution.status})}"></dd>
+
+      <dt>Target</dt>
+      <dd th:text="${targetName != null ? targetName : '(removed)'}">production</dd>
+
+      <dt>Started</dt>
+      <dd class="mono"
+          th:text="${#temporals.format(
+                      execution.startedAt.atOffset(T(java.time.ZoneOffset).UTC),
+                      'yyyy-MM-dd HH:mm:ss')} + ' UTC'">…</dd>
+
+      <dt>Finished</dt>
+      <dd class="mono" th:if="${execution.finishedAt == null}">—</dd>
+      <dd class="mono" th:unless="${execution.finishedAt == null}"
+          th:text="${#temporals.format(
+                      execution.finishedAt.atOffset(T(java.time.ZoneOffset).UTC),
+                      'yyyy-MM-dd HH:mm:ss')} + ' UTC'">…</dd>
+
+      <dt>Artifact</dt>
+      <dd th:replace="~{fragments/artifact-path :: artifactPath(${execution.artifactPath})}">—</dd>
+
+      <dt>Size</dt>
+      <dd class="mono" th:text="${execution.sizeBytes != null ? execution.sizeBytes + ' bytes' : '—'}">—</dd>
+    </dl>
+  </div>
+
+  <div th:if="${execution.errorMessage != null}">
+    <div class="section-heading"><h2>Why it failed</h2></div>
+    <!-- mysqldump's own output, in full. Summarising it here would remove the
+         one thing that says which knob to turn. -->
+    <pre class="error-output" th:text="${execution.errorMessage}"></pre>
+  </div>
+
+</div>
+</body>
+</html>

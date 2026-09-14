@@ -1,21 +1,112 @@
 <!DOCTYPE html>
-<html lang="en" xmlns:th="http://www.thymeleaf.org" th:fragment="page(title, content)">
-<head>
+<!--
+  The page shell. Every view calls it as
+    th:replace="~{layout/base :: page('Title', 'section', ~{:: #content})}"
+  where `section` is the nav entry the page belongs to — 'targets', 'backups'
+  or 'restores' — and drives the highlighted sidebar item and the breadcrumb.
+
+  The error page passes 'error': it belongs to no section, and it shows no
+  flash. Spring's error model carries an `error` attribute of its own (the
+  reason phrase), which the flash below would otherwise print as a red banner
+  repeating the page's own heading.
+
+  The <head> is a fragment of its own, `head(title)`, so that the sign-in page
+  — which has no sidebar and so does not use this shell — loads exactly the
+  same theme, styles and script.
+-->
+<html lang="en" xmlns:th="http://www.thymeleaf.org" th:fragment="page(title, section, content)"
+      th:with="sectionLabel=${section == 'targets' ? 'Targets' : (section == 'backups' ? 'Backups' : (section == 'restores' ? 'Restores' : null))},
+               sectionUrl=${section == 'backups' ? '/executions' : (section == 'restores' ? '/restores' : '/databases')},
+               showFlash=${section != 'error'}">
+<head th:fragment="head(title)">
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title th:text="|${title} · dbbackup|">dbbackup</title>
+  <!-- Before the stylesheet and without defer, so the first paint is already
+       in the right theme. -->
+  <script th:src="@{/js/theme.js}"></script>
+  <link rel="icon" type="image/svg+xml" th:href="@{/svg/brand-mark.svg}">
+  <link rel="icon" type="image/x-icon" sizes="48x48 32x32 16x16" th:href="@{/favicon.ico}">
   <link rel="stylesheet" th:href="@{/css/app.css}">
+  <script defer th:src="@{/js/app.js}"></script>
 </head>
 <body>
-  <header class="topbar">
-    <a class="brand" th:href="@{/databases}">dbbackup</a>
-    <span class="tagline">MySQL logical backup</span>
+<a class="skip-link" href="#main-content">Skip to main content</a>
+<div class="app-shell">
+  <header class="mobile-header">
+    <button class="icon-button" type="button" data-drawer-open
+            aria-label="Open navigation" aria-controls="app-navigation">☰</button>
+    <a class="brand" th:href="@{/databases}"><img class="brand-mark" th:src="@{/svg/brand-mark.svg}" alt="" width="34" height="34"><span>Backup Utility</span></a>
+    <button class="icon-button" type="button" data-theme-toggle aria-label="Toggle color theme"><span data-theme-icon>☀</span></button>
   </header>
 
-  <main>
-    <p class="flash" role="status" th:if="${message}" th:text="${message}"></p>
-    <p class="flash error" role="alert" th:if="${error}" th:text="${error}"></p>
-    <th:block th:replace="${content}"></th:block>
-  </main>
+  <div class="drawer-overlay" data-drawer-overlay hidden aria-hidden="true"></div>
+  <aside id="app-navigation" class="sidebar">
+    <div class="sidebar-header">
+      <a class="brand" th:href="@{/databases}"><img class="brand-mark" th:src="@{/svg/brand-mark.svg}" alt="" width="34" height="34"><span>Backup Utility</span></a>
+      <button class="icon-button sidebar-close" type="button" data-drawer-close aria-label="Close navigation">×</button>
+    </div>
+    <nav aria-label="Primary navigation">
+      <div class="nav-group">
+        <div class="nav-label">Setup</div>
+        <a class="nav-item" th:href="@{/databases}"
+           th:classappend="${section == 'targets'} ? 'active'"
+           th:attr="aria-current=${section == 'targets' ? 'page' : null}"><span aria-hidden="true">◎</span>Targets</a>
+      </div>
+      <div class="nav-group">
+        <div class="nav-label">Operations</div>
+        <a class="nav-item" th:href="@{/executions}"
+           th:classappend="${section == 'backups'} ? 'active'"
+           th:attr="aria-current=${section == 'backups' ? 'page' : null}"><span aria-hidden="true">↻</span>Backups</a>
+        <a class="nav-item" th:href="@{/restores}"
+           th:classappend="${section == 'restores'} ? 'active'"
+           th:attr="aria-current=${section == 'restores' ? 'page' : null}"><span aria-hidden="true">↶</span>Restores</a>
+      </div>
+    </nav>
+    <div class="sidebar-footer">
+      <!-- A form, not a link: signing out is a POST, so that another site
+           cannot sign the operator out with an <img> tag. th:action is what
+           puts the CSRF token in it. -->
+      <form class="signed-in" method="post" th:action="@{/logout}" th:if="${operatorName != null}">
+        <span class="signed-in-label">Signed in as <strong th:text="${operatorName}">admin</strong></span>
+        <button class="button button-small button-ghost" type="submit" data-busy-label="Signing out…">Sign out</button>
+      </form>
+      <span class="sidebar-tagline">MySQL logical backup</span>
+      <button class="theme-toggle" type="button" data-theme-toggle>
+        <span data-theme-icon aria-hidden="true">☀</span><span data-theme-label>Light theme</span>
+      </button>
+    </div>
+  </aside>
+
+  <div class="content-shell">
+    <main id="main-content" class="page" tabindex="-1">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a th:href="@{/databases}">Home</a>
+        <span aria-hidden="true">/</span>
+        <th:block th:if="${sectionLabel != null and title != sectionLabel}">
+          <a th:href="@{${sectionUrl}}" th:text="${sectionLabel}">Section</a>
+          <span aria-hidden="true">/</span>
+        </th:block>
+        <span aria-current="page" th:text="${title}">Page</span>
+      </nav>
+
+      <div class="flash flash-success" role="status" th:if="${showFlash and message != null}" data-flash>
+        <span th:text="${message}"></span>
+        <button type="button" class="flash-dismiss" data-flash-dismiss aria-label="Dismiss message">&times;</button>
+      </div>
+      <div class="flash flash-error" role="alert" th:if="${showFlash and error != null}" data-flash>
+        <span th:text="${error}"></span>
+        <button type="button" class="flash-dismiss" data-flash-dismiss aria-label="Dismiss message">&times;</button>
+      </div>
+
+      <th:block th:replace="${content}"></th:block>
+      <!-- Where app.js says "Backup succeeded" when a followed job finishes.
+           Outside the swapped block, so it exists before the text changes —
+           a live region inserted with its text already in it is not announced. -->
+      <div class="visually-hidden" role="status" data-live-announcer></div>
+    </main>
+  </div>
+</div>
+<div th:replace="~{fragments/confirm-dialog :: confirmDialog}"></div>
 </body>
 </html>

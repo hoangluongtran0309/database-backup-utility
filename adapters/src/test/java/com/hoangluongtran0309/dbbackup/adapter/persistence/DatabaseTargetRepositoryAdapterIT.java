@@ -8,8 +8,11 @@ import java.util.List;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.junit.jupiter.Container;
@@ -18,8 +21,11 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 
 import com.hoangluongtran0309.dbbackup.adapter.TestAdaptersApplication;
 import com.hoangluongtran0309.dbbackup.core.exception.DuplicateTargetNameException;
+import com.hoangluongtran0309.dbbackup.core.exception.TargetInUseException;
+import com.hoangluongtran0309.dbbackup.core.model.BackupExecution;
 import com.hoangluongtran0309.dbbackup.core.model.ConnectionCheck;
 import com.hoangluongtran0309.dbbackup.core.model.DatabaseTarget;
+import com.hoangluongtran0309.dbbackup.core.port.BackupExecutionRepository;
 import com.hoangluongtran0309.dbbackup.core.port.DatabaseTargetRepository;
 
 /**
@@ -29,6 +35,7 @@ import com.hoangluongtran0309.dbbackup.core.port.DatabaseTargetRepository;
  */
 @SpringBootTest(classes = TestAdaptersApplication.class)
 @Testcontainers
+@ExtendWith(OutputCaptureExtension.class)
 class DatabaseTargetRepositoryAdapterIT {
 
     @Container
@@ -43,6 +50,9 @@ class DatabaseTargetRepositoryAdapterIT {
 
     @Autowired
     private DatabaseTargetRepository repository;
+
+    @Autowired
+    private BackupExecutionRepository backups;
 
     @Test
     void savesAndReadsBackEveryField() {
@@ -81,6 +91,38 @@ class DatabaseTargetRepositoryAdapterIT {
         assertThatThrownBy(() -> repository.save(target("PRODUCTION", "other")))
                 .isInstanceOf(DuplicateTargetNameException.class)
                 .hasMessageContaining("PRODUCTION");
+        assertThatThrownBy(() -> repository.save(target("  production ", "other")))
+                .isInstanceOf(DuplicateTargetNameException.class);
+    }
+
+    /**
+     * A taken name is an operator's typo, not a fault: it is caught before the
+     * insert, so Hibernate never logs the index violation at WARN.
+     */
+    @Test
+    void aTakenNameIsRefusedWithoutTouchingTheIndex(CapturedOutput output) {
+        repository.save(target("production", "shop"));
+        int before = output.getAll().length();
+
+        assertThatThrownBy(() -> repository.save(target("Production", "other")))
+                .isInstanceOf(DuplicateTargetNameException.class);
+
+        assertThat(output.getAll().substring(before)).doesNotContain("23505");
+    }
+
+    @Test
+    void refusesToDeleteATargetThatStillHasBackups(CapturedOutput output) {
+        DatabaseTarget saved = repository.save(target("production", "shop"));
+        backups.save(BackupExecution.started(UUID.randomUUID(), saved.getId(), Instant.parse("2026-09-09T11:00:00Z")));
+        int before = output.getAll().length();
+
+        assertThatThrownBy(() -> repository.deleteById(saved.getId()))
+                .isInstanceOf(TargetInUseException.class)
+                .hasMessageContaining("production");
+
+        assertThat(repository.findById(saved.getId())).isPresent();
+        // Refused before the delete, so the foreign key is never hit.
+        assertThat(output.getAll().substring(before)).doesNotContain("23503");
     }
 
     @Test
@@ -172,6 +214,8 @@ class DatabaseTargetRepositoryAdapterIT {
      */
     @org.junit.jupiter.api.BeforeEach
     void clearTable() {
+        // Backups first: a target that still has one cannot be deleted.
+        backups.findAllNewestFirst().forEach(backup -> backups.deleteById(backup.getId()));
         List<DatabaseTarget> existing = repository.findAll();
         existing.forEach(target -> repository.deleteById(target.getId()));
     }

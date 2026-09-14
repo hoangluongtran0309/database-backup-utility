@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<!--/*
+  The sign-in page. Not built on layout/base: that shell is navigation to
+  pages nobody here can open yet. It shares the shell's <head>, so theme,
+  styles and script are the same.
+
+  Spring Security handles the POST — see SecurityConfig. The query string says
+  why the operator is here: ?error after a failed attempt, ?logout after
+  signing out, ?expired when a session ended under them.
+
+  data-sign-in is how app.js recognises this page when a detail page's poll is
+  answered with it instead of the job.
+*/-->
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{layout/base :: head('Sign in')}">
+  <title>Sign in · dbbackup</title>
+</head>
+<body>
+<main id="main-content" class="sign-in-page" data-sign-in>
+  <div class="sign-in">
+    <div class="sign-in-header">
+      <span class="brand"><img class="brand-mark" th:src="@{/svg/brand-mark.svg}" alt="" width="34" height="34"><span>Backup Utility</span></span>
+      <button class="icon-button" type="button" data-theme-toggle aria-label="Toggle color theme"><span data-theme-icon>☀</span></button>
+    </div>
+
+    <form class="form-panel" method="post" th:action="@{/login}">
+      <h1>Sign in</h1>
+      <p>This console can overwrite live databases, so it asks who you are first.</p>
+
+      <!-- The same words whichever half was wrong: saying which would tell a
+           guesser that the username is right. -->
+      <div class="alert alert-danger" role="alert" th:if="${param.error != null}">
+        <p>Username or password is incorrect.</p>
+      </div>
+      <div class="alert alert-success" role="status" th:if="${param.logout != null}">
+        <p>You have signed out.</p>
+      </div>
+      <!-- Said plainly, because the operator may have just pressed Restore: the
+           form they sent was not acted on. -->
+      <div class="alert alert-warning" role="alert" th:if="${param.expired != null}">
+        <p>Your session ended, so nothing was submitted. Sign in and try again.</p>
+      </div>
+
+      <div class="form-group">
+        <label for="username">Username</label>
+        <input id="username" name="username" type="text" autocomplete="username"
+               autocapitalize="none" spellcheck="false" required autofocus>
+      </div>
+      <div class="form-group">
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" required>
+      </div>
+
+      <button class="button button-primary" type="submit" data-busy-label="Signing in…">Sign in</button>
+    </form>
+  </div>
+</main>
+</body>
+</html>

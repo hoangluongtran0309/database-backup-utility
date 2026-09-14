@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<!--/*
+  A parser-level comment: Thymeleaf drops it, so none of this reaches a browser.
+
+  Every error page, rendered by Spring Boot's BasicErrorController for any
+  status. Before this, a failure outside what ExecutionErrorHandler catches — an
+  unknown path, a malformed id, the metadata database going away — fell through
+  to the framework's Whitelabel page, which looks like the application has
+  crashed and offers no way back.
+
+  Only what Spring puts in the error model by default is used: status, error
+  (the reason phrase), path and timestamp. The exception's own message stays
+  out, in the log — it names internal types, and sometimes SQL.
+
+  No th:with here: th:replace runs before it, so a local variable declared on
+  this element would not exist yet when the fragment is called, nor inside the
+  #content block when the layout renders it. The status tests are repeated
+  instead.
+*/-->
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout/base :: page(${status == 404 ? 'Page not found'
+                                         : (status == 400 ? 'That request could not be read'
+                                         : (status == 403 ? 'That form had gone stale'
+                                         : (status != null and status >= 500 ? 'Something went wrong' : 'That did not work')))},
+                                        'error', ~{:: #content})}">
+<body>
+<div id="content">
+
+  <div class="page-header">
+    <div>
+      <div class="eyebrow" th:text="${status != null ? 'Error ' + status : 'Error'}">Error 500</div>
+      <h1 th:text="${status == 404 ? 'Page not found'
+                    : (status == 400 ? 'That request could not be read'
+                    : (status == 403 ? 'That form had gone stale'
+                    : (status != null and status >= 500 ? 'Something went wrong' : 'That did not work')))}">Something went wrong</h1>
+      <p th:if="${status == 404}">Nothing lives at this address. It may have been mistyped, or point at something since deleted.</p>
+      <p th:if="${status == 400}">Part of the address is not in a form this console understands — often an id that has been cut short.</p>
+      <!-- Every page needs a sign-in, so the one thing left that answers 403
+           is a form whose CSRF token no longer matches the session — typically
+           a page left open across a sign-out and a sign-in. -->
+      <p th:if="${status == 403}">Nothing was changed. The page you sent it from is older than your current sign-in — go back, reload it, and try again.</p>
+      <p th:if="${status != null and status >= 500}">The console could not finish this request. The details are in the application log.</p>
+      <p th:if="${status != null and status != 404 and status != 400 and status != 403 and status < 500}" th:text="${error}">Forbidden</p>
+    </div>
+  </div>
+
+  <div class="panel">
+    <dl class="detail-grid">
+      <dt>Requested</dt>
+      <dd class="mono break" th:text="${path != null ? path : '—'}">/no-such-page</dd>
+      <dt>Status</dt>
+      <dd class="mono" th:text="${status != null ? status + ' ' + error : '—'}">500 Internal Server Error</dd>
+      <!-- For matching this page to the log line. In UTC like every other
+           time in the console; the log line carries its own offset. -->
+      <dt>When</dt>
+      <dd class="mono" th:if="${timestamp == null}">—</dd>
+      <dd class="mono" th:unless="${timestamp == null}"
+          th:text="${#temporals.format(
+                      timestamp.toInstant().atOffset(T(java.time.ZoneOffset).UTC),
+                      'yyyy-MM-dd HH:mm:ss')} + ' UTC'">2026-09-10 06:24:29 UTC</dd>
+    </dl>
+    <div class="form-actions">
+      <a class="button button-primary" th:href="@{/databases}">Go to targets</a>
+      <a class="button" th:href="@{/executions}">Backups</a>
+      <!-- A server-side failure is often the metadata store being briefly
+           away; trying again is a reasonable first move. -->
+      <a class="button button-ghost" th:if="${status != null and status >= 500 and path != null}"
+         th:href="@{${path}}">Try again</a>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

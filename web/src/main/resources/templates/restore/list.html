@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout/base :: page('Restores', 'restores', ~{:: #content})}">
+<body>
+<div id="content">
+
+  <div class="page-header">
+    <div>
+      <div class="eyebrow">Operations</div>
+      <h1>Restores</h1>
+      <p>Every restore applied to a target, newest first.</p>
+    </div>
+  </div>
+
+  <p class="empty-state panel" th:if="${restores.isEmpty()}">
+    No restores yet. Start one from a <a th:href="@{/executions}">backup</a>.
+  </p>
+
+  <div class="table-wrap responsive-cards" th:unless="${restores.isEmpty()}">
+    <table>
+      <thead>
+        <tr>
+          <th scope="col">Started</th>
+          <th scope="col">Into</th>
+          <th scope="col">From backup</th>
+          <th scope="col">Status</th>
+          <th scope="col"><span class="visually-hidden">Actions</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr th:each="restore : ${restores}" th:with="backup=${backups.get(restore.backupExecutionId)}">
+          <td data-label="Started" class="mono"
+              th:text="${#temporals.format(
+                          restore.startedAt.atOffset(T(java.time.ZoneOffset).UTC),
+                          'yyyy-MM-dd HH:mm:ss')} + ' UTC'">…</td>
+          <td data-label="Into"
+              th:text="${backup == null ? '(unknown)'
+                        : targetNames.getOrDefault(backup.targetId, '(removed)')}">production</td>
+          <td data-label="From backup" class="mono"
+              th:text="${backup == null ? '—'
+                        : #temporals.format(backup.startedAt.atOffset(T(java.time.ZoneOffset).UTC),
+                                            'yyyy-MM-dd HH:mm')}">…</td>
+          <td data-label="Status" th:insert="~{fragments/execution-status :: statusBadge(${restore.status})}"></td>
+          <td class="actions">
+            <div class="row-actions">
+              <a class="button button-small" th:href="@{/restores/{id}(id=${restore.id})}">Details</a>
+            </div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+</body>
+</html>
