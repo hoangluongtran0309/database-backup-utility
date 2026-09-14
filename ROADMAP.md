@@ -27,8 +27,21 @@ That was the first round. One more slice went in before it was released:
       session sign-in, CSRF tokens on every form, security headers; the
       healthcheck moves to `/actuator/health`. See ADR-011.
 
-All eight shipped as **0.1.0** (tag `v0.1.0`). Nothing is planned beyond it:
-the next slice is a decision, not a continuation of this list.
+All eight shipped as **0.1.0** (tag `v0.1.0`).
+
+## Second round
+
+Gaps the first round's own ADRs recorded, closed without widening the scope
+below.
+
+- [x] **9. Edit a target.** Name, host, port, user and password; the schema is
+      fixed, and an empty password keeps the stored one. See ADR-012.
+- [ ] **10. Checksum every artifact.** A SHA-256 recorded when the dump is
+      written, shown on the backup, and checked before a restore.
+- [ ] **11. Restore into another target.** Any registered target, confirmed by
+      typing its name — for restore drills that do not overwrite production.
+- [ ] **12. Paginate the history.** Backup and restore lists a page at a time,
+      and the target list without reading every backup ever made.
 
 ## Deliberately out of scope
 

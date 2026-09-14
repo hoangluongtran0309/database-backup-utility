@@ -1,6 +1,7 @@
 package com.hoangluongtran0309.dbbackup.web.controller;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -28,6 +29,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.hoangluongtran0309.dbbackup.application.backup.RunBackupService;
+import com.hoangluongtran0309.dbbackup.application.target.EditTargetCommand;
 import com.hoangluongtran0309.dbbackup.application.target.ManageDatabaseTargetService;
 import com.hoangluongtran0309.dbbackup.application.target.TestTargetConnectionService;
 import com.hoangluongtran0309.dbbackup.core.exception.DuplicateTargetNameException;
@@ -214,6 +216,113 @@ class DatabaseTargetControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(content().string(org.hamcrest.Matchers.not(
                         org.hamcrest.Matchers.containsString("s3cr3t"))));
+    }
+
+    @Test
+    void theEditFormIsFilledInExceptForThePassword() throws Exception {
+        DatabaseTarget target = target("production");
+        when(service.get(target.getId())).thenReturn(target);
+
+        mockMvc.perform(get("/databases/{id}/edit", target.getId()))
+                .andExpect(status().isOk())
+                .andExpect(view().name("database/form"))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("value=\"production\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("value=\"127.0.0.1\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "action=\"/databases/" + target.getId() + "\"")))
+                // The schema is shown read-only and has no name, so it is never sent.
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("readonly value=\"shop\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.not(
+                        org.hamcrest.Matchers.containsString("name=\"database\""))))
+                .andExpect(content().string(org.hamcrest.Matchers.not(
+                        org.hamcrest.Matchers.containsString("Y2lwaGVydGV4dA=="))))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Save changes")));
+    }
+
+    @Test
+    void editingATargetThatIsGoneGoesBackToTheList() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(service.get(id)).thenThrow(new NoSuchElementException("gone"));
+
+        mockMvc.perform(get("/databases/{id}/edit", id))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/databases"))
+                .andExpect(flash().attribute("error", "That target no longer exists"));
+    }
+
+    @Test
+    void savesAnEditAndRedirectsWithAnEmptyPasswordMeaningUnchanged() throws Exception {
+        DatabaseTarget target = target("production");
+        when(service.get(target.getId())).thenReturn(target);
+        when(service.edit(eq(target.getId()), any())).thenReturn(target("staging"));
+
+        mockMvc.perform(post("/databases/{id}", target.getId()).with(csrf())
+                        .param("name", "staging")
+                        .param("host", "10.0.0.5")
+                        .param("port", "3307")
+                        .param("username", "reader")
+                        .param("password", ""))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/databases"))
+                .andExpect(flash().attribute("message", "Saved target 'staging'"));
+
+        verify(service).edit(target.getId(), new EditTargetCommand("staging", "10.0.0.5", 3307, "reader", ""));
+    }
+
+    @Test
+    void anInvalidEditRedisplaysTheFormStillInEditMode() throws Exception {
+        DatabaseTarget target = target("production");
+        when(service.get(target.getId())).thenReturn(target);
+
+        mockMvc.perform(post("/databases/{id}", target.getId()).with(csrf())
+                        .param("name", "production")
+                        .param("host", "")
+                        .param("port", "3306")
+                        .param("username", "backup"))
+                .andExpect(status().isOk())
+                .andExpect(view().name("database/form"))
+                .andExpect(model().attributeHasFieldErrors("form", "host"))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("readonly value=\"shop\"")));
+
+        verify(service, never()).edit(any(), any());
+    }
+
+    @Test
+    void renamingOntoATakenNameIsReportedOnTheNameField() throws Exception {
+        DatabaseTarget target = target("staging");
+        when(service.get(target.getId())).thenReturn(target);
+        when(service.edit(eq(target.getId()), any())).thenThrow(new DuplicateTargetNameException("production"));
+
+        mockMvc.perform(post("/databases/{id}", target.getId()).with(csrf())
+                        .param("name", "production")
+                        .param("host", "127.0.0.1")
+                        .param("port", "3306")
+                        .param("username", "backup"))
+                .andExpect(status().isOk())
+                .andExpect(model().attributeHasFieldErrors("form", "name"))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("already exists")));
+    }
+
+    @Test
+    void anEditWithTheWrongCsrfTokenIsRefused() throws Exception {
+        mockMvc.perform(post("/databases/{id}", UUID.randomUUID()).with(csrf().useInvalidToken())
+                        .param("name", "production")
+                        .param("host", "127.0.0.1")
+                        .param("port", "3306")
+                        .param("username", "backup"))
+                .andExpect(status().isForbidden());
+
+        verify(service, never()).edit(any(), any());
+    }
+
+    @Test
+    void everyTargetOffersAnEditLink() throws Exception {
+        DatabaseTarget target = target("production");
+        when(service.listAll()).thenReturn(List.of(target));
+
+        mockMvc.perform(get("/databases"))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "href=\"/databases/" + target.getId() + "/edit\"")));
     }
 
     @Test

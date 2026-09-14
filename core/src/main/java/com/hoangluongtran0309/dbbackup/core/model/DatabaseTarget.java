@@ -59,7 +59,7 @@ public final class DatabaseTarget {
      */
     private final ConnectionCheck lastConnectionCheck;
 
-    @Builder
+    @Builder(toBuilder = true)
     private DatabaseTarget(
             UUID id,
             String name,
@@ -80,6 +80,42 @@ public final class DatabaseTarget {
         this.passwordCiphertext = require(passwordCiphertext, "passwordCiphertext", "Password is required");
         this.createdAt = require(createdAt, "createdAt", "Creation timestamp is required");
         this.lastConnectionCheck = lastConnectionCheck; // absent until the target is first tested
+    }
+
+    /**
+     * This target with new connection details — the same target, not a new one.
+     *
+     * <p>The id, the schema and the creation time stay. The schema above all:
+     * every backup of this target is a dump of that schema, and a target that
+     * could be pointed at another one would make its history describe a
+     * database it no longer names. A different schema is a different target.
+     *
+     * <p>The last connection check is dropped when anything it depended on
+     * changes, since it describes a connection that is no longer the one held.
+     * A rename alone keeps it.
+     *
+     * @param newPasswordCiphertext the new password, already encrypted, or
+     *        {@code null} to keep the current one
+     * @throws InvalidTargetException if a value is missing or out of range
+     */
+    public DatabaseTarget edited(
+            String name, String host, int port, String username, String newPasswordCiphertext) {
+
+        // Built before comparing, so the comparison sees the values as the
+        // constructor normalises them — " db " and "db" are the same host.
+        DatabaseTarget edited = toBuilder()
+                .name(name)
+                .host(host)
+                .port(port)
+                .username(username)
+                .passwordCiphertext(newPasswordCiphertext != null ? newPasswordCiphertext : passwordCiphertext)
+                .build();
+
+        boolean connectionChanged = newPasswordCiphertext != null
+                || !edited.host.equals(this.host)
+                || edited.port != this.port
+                || !edited.username.equals(this.username);
+        return connectionChanged ? edited.toBuilder().lastConnectionCheck(null).build() : edited;
     }
 
     /** True once this target has been probed at least once, whatever the outcome. */

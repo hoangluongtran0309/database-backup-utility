@@ -1,18 +1,25 @@
 <!DOCTYPE html>
 <html lang="en" xmlns:th="http://www.thymeleaf.org"
-      th:replace="~{layout/base :: page('Add target', 'targets', ~{:: #content})}">
+      th:replace="~{layout/base :: page(${editing == null ? 'Add target' : 'Edit target'}, 'targets', ~{:: #content})}">
 <body>
 <div id="content">
 
   <div class="page-header">
     <div>
       <div class="eyebrow">Setup</div>
-      <h1>Add a backup target</h1>
-      <p>A MySQL schema to back up. The connection is not tried until you press Test.</p>
+      <th:block th:if="${editing == null}">
+        <h1>Add a backup target</h1>
+        <p>A MySQL schema to back up. The connection is not tried until you press Test.</p>
+      </th:block>
+      <th:block th:unless="${editing == null}">
+        <h1>Edit <span th:text="${editing.name}">production</span></h1>
+        <p>Its backups stay with it. Changing how it connects clears the last connection check.</p>
+      </th:block>
     </div>
   </div>
 
-  <form class="form-panel" method="post" th:action="@{/databases}" th:object="${form}">
+  <form class="form-panel" method="post" th:object="${form}"
+        th:action="@{${editing == null ? '/databases' : '/databases/' + editing.id}}">
 
     <div th:replace="~{fragments/form-errors :: formErrors}"></div>
 
@@ -40,11 +47,20 @@
         <div th:replace="~{fragments/field-error :: fieldError('port')}"></div>
       </div>
 
-      <div class="form-group">
+      <div class="form-group" th:if="${editing == null}">
         <label for="database">Database</label>
         <input id="database" type="text" th:field="*{database}" placeholder="shop"
                th:attr="aria-invalid=${#fields.hasErrors('database')} ? 'true' : null">
         <div th:replace="~{fragments/field-error :: fieldError('database')}"></div>
+      </div>
+
+      <!-- Shown, not sent: every backup of this target is a dump of this
+           schema, so it cannot change. See ADR-012. -->
+      <div class="form-group" th:unless="${editing == null}">
+        <label for="database">Database</label>
+        <input id="database" type="text" readonly th:value="${editing.databaseName}"
+               aria-describedby="database-help">
+        <p class="field-hint" id="database-help">Fixed once registered. A different schema is a different target.</p>
       </div>
 
       <div class="form-group">
@@ -59,13 +75,15 @@
         <input id="password" type="password" th:field="*{password}"
                autocomplete="new-password" aria-describedby="password-help"
                th:attr="aria-invalid=${#fields.hasErrors('password')} ? 'true' : null">
-        <p class="field-hint" id="password-help">Encrypted before it is stored, and never shown again.</p>
+        <p class="field-hint" id="password-help" th:if="${editing == null}">Encrypted before it is stored, and never shown again.</p>
+        <p class="field-hint" id="password-help" th:unless="${editing == null}">Leave empty to keep the current password. A new one is encrypted before it is stored.</p>
         <div th:replace="~{fragments/field-error :: fieldError('password')}"></div>
       </div>
     </div>
 
     <div class="form-actions">
-      <button class="button button-primary" type="submit" data-busy-label="Registering…">Register target</button>
+      <button class="button button-primary" type="submit" th:if="${editing == null}" data-busy-label="Registering…">Register target</button>
+      <button class="button button-primary" type="submit" th:unless="${editing == null}" data-busy-label="Saving…">Save changes</button>
       <a class="button button-ghost" th:href="@{/databases}">Cancel</a>
     </div>
   </form>
