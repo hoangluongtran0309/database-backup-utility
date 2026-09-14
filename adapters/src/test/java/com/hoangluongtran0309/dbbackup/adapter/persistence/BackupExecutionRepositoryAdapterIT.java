@@ -24,6 +24,7 @@ import com.hoangluongtran0309.dbbackup.core.model.ExecutionStatus;
 import com.hoangluongtran0309.dbbackup.core.model.DatabaseTarget;
 import com.hoangluongtran0309.dbbackup.core.port.BackupExecutionRepository;
 import com.hoangluongtran0309.dbbackup.core.port.DatabaseTargetRepository;
+import com.hoangluongtran0309.dbbackup.core.port.HistoryPage;
 
 @SpringBootTest(classes = TestAdaptersApplication.class)
 @Testcontainers
@@ -55,7 +56,7 @@ class BackupExecutionRepositoryAdapterIT {
 
     @BeforeEach
     void reset() {
-        executions.findAllNewestFirst().forEach(e -> deleteExecution(e.getId()));
+        executions.findNewestFirst(1, 1000).items().forEach(e -> deleteExecution(e.getId()));
         targets.findAll().forEach(t -> targets.deleteById(t.getId()));
         targetId = targets.save(target("production")).getId();
     }
@@ -116,9 +117,82 @@ class BackupExecutionRepositoryAdapterIT {
         executions.save(BackupExecution.started(UUID.randomUUID(), targetId, STARTED.plusSeconds(60)));
         executions.save(BackupExecution.started(UUID.randomUUID(), targetId, STARTED.minusSeconds(60)));
 
-        assertThat(executions.findAllNewestFirst())
+        assertThat(executions.findNewestFirst(1, 50).items())
                 .extracting(BackupExecution::getStartedAt)
                 .containsExactly(STARTED.plusSeconds(60), STARTED, STARTED.minusSeconds(60));
+    }
+
+    @Test
+    void pagesTheHistoryNewestFirstAndSaysWhetherThereIsMore() {
+        for (int i = 0; i < 5; i++) {
+            executions.save(BackupExecution.started(UUID.randomUUID(), targetId, STARTED.plusSeconds(i)));
+        }
+
+        HistoryPage<BackupExecution> first = executions.findNewestFirst(1, 2);
+        HistoryPage<BackupExecution> last = executions.findNewestFirst(3, 2);
+        HistoryPage<BackupExecution> beyond = executions.findNewestFirst(4, 2);
+
+        assertThat(first.items()).extracting(BackupExecution::getStartedAt)
+                .containsExactly(STARTED.plusSeconds(4), STARTED.plusSeconds(3));
+        assertThat(first.hasOlder()).isTrue();
+        assertThat(last.items()).extracting(BackupExecution::getStartedAt).containsExactly(STARTED);
+        assertThat(last.hasOlder()).isFalse();
+        assertThat(beyond.isEmpty()).isTrue();
+        assertThat(beyond.hasNewer()).isTrue();
+    }
+
+    /** Backups started in the same instant must neither repeat nor go missing across pages. */
+    @Test
+    void pagesThroughBackupsThatStartedAtTheSameInstantWithoutRepeatingAny() {
+        java.util.Set<UUID> saved = new java.util.HashSet<>();
+        for (int i = 0; i < 7; i++) {
+            saved.add(executions.save(BackupExecution.started(UUID.randomUUID(), targetId, STARTED)).getId());
+        }
+
+        java.util.List<UUID> seen = new java.util.ArrayList<>();
+        for (int page = 1; page <= 4; page++) {
+            executions.findNewestFirst(page, 2).items().forEach(e -> seen.add(e.getId()));
+        }
+
+        assertThat(seen).doesNotHaveDuplicates().containsExactlyInAnyOrderElementsOf(saved);
+    }
+
+    @Test
+    void findsEachTargetsNewestAttemptAndNewestSuccess() {
+        UUID other = targets.save(target("staging")).getId();
+        BackupExecution good = executions.save(
+                BackupExecution.started(UUID.randomUUID(), targetId, STARTED));
+        executions.save(good.succeeded("/backups/a.sql.gz", 1L, SHA256, STARTED.plusSeconds(1)));
+        BackupExecution failed = executions.save(
+                BackupExecution.started(UUID.randomUUID(), targetId, STARTED.plusSeconds(60)));
+        executions.save(failed.failed("denied", STARTED.plusSeconds(61)));
+        BackupExecution running = executions.save(
+                BackupExecution.started(UUID.randomUUID(), other, STARTED.plusSeconds(30)));
+
+        assertThat(executions.findLatestPerTarget())
+                .extracting(BackupExecution::getId)
+                .containsExactlyInAnyOrder(failed.getId(), running.getId());
+        assertThat(executions.findLatestSucceededPerTarget())
+                .extracting(BackupExecution::getId)
+                .containsExactly(good.getId());
+    }
+
+    /** DISTINCT ON keeps exactly one per target even when two share the newest instant. */
+    @Test
+    void theNewestPerTargetIsOneRowEvenWhenTwoStartedTogether() {
+        executions.save(BackupExecution.started(UUID.randomUUID(), targetId, STARTED));
+        executions.save(BackupExecution.started(UUID.randomUUID(), targetId, STARTED));
+
+        assertThat(executions.findLatestPerTarget()).hasSize(1);
+    }
+
+    @Test
+    void findsBackupsByIdSkippingUnknownOnes() {
+        BackupExecution one = executions.save(BackupExecution.started(UUID.randomUUID(), targetId, STARTED));
+
+        assertThat(executions.findAllById(java.util.List.of(one.getId(), UUID.randomUUID())))
+                .extracting(BackupExecution::getId)
+                .containsExactly(one.getId());
     }
 
     @Test

@@ -58,6 +58,10 @@ history — in PostgreSQL. That is the only reason `org.postgresql` appears in t
 build and the only reason the Flyway migrations are written in PostgreSQL's
 dialect.
 
+Queries lean on that where it helps: the target list finds each target's newest
+backup with `DISTINCT ON`, one row per target however long the history, rather
+than reading every backup to find the first of each.
+
 **PostgreSQL is not a database this tool can back up.** There is no PostgreSQL
 engine adapter, no `POSTGRESQL` enum value, and no plan for one in the current
 roadmap. MySQL is the only engine, which is also why `database_targets` has no

@@ -26,7 +26,9 @@ the environment with a bcrypt hash, and every form carries a CSRF token. See
 [ADR-011](docs/adr/011-one-operator-account-from-the-environment.md).
 
 Backups run in the background: starting one redirects to its detail page, which
-follows it and updates when it finishes — restores likewise. See
+follows it and updates when it finishes — restores likewise. The backup and
+restore lists show fifty at a time, newest first, with links to newer and older
+pages. See
 [ADR-010](docs/adr/010-the-detail-page-follows-a-running-job.md). The target
 list shows each target's newest good backup, and flags a newer attempt that
 failed. Artifacts are gzipped and named `<schema>_<timestamp>.sql.gz`, readable

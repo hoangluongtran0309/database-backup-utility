@@ -41,7 +41,7 @@ below.
 - [x] **11. Restore into another target.** Any registered target, confirmed by
       typing its name — for restore drills that do not overwrite production.
       See ADR-014.
-- [ ] **12. Paginate the history.** Backup and restore lists a page at a time,
+- [x] **12. Paginate the history.** Backup and restore lists a page at a time,
       and the target list without reading every backup ever made.
 
 ## Deliberately out of scope

@@ -93,7 +93,6 @@ class DatabaseTargetControllerTest {
     @Test
     void saysNeverForATargetThatHasNoBackups() throws Exception {
         when(service.listAll()).thenReturn(List.of(target("production")));
-        when(executions.findAllNewestFirst()).thenReturn(List.of());
 
         mockMvc.perform(get("/databases"))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString(">Never</span>")));
@@ -111,7 +110,8 @@ class DatabaseTargetControllerTest {
         BackupExecution failed = BackupExecution.started(UUID.randomUUID(), target.getId(), BACKED_UP_AT.plusSeconds(3600))
                 .failed("Access denied", BACKED_UP_AT.plusSeconds(3601));
         when(service.listAll()).thenReturn(List.of(target));
-        when(executions.findAllNewestFirst()).thenReturn(List.of(failed, good));
+        when(executions.findLatestPerTarget()).thenReturn(List.of(failed));
+        when(executions.findLatestSucceededPerTarget()).thenReturn(List.of(good));
 
         mockMvc.perform(get("/databases"))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("2026-09-09 08:00 UTC")))
@@ -126,7 +126,7 @@ class DatabaseTargetControllerTest {
     void flagsABackupThatIsStillRunning() throws Exception {
         DatabaseTarget target = target("production");
         when(service.listAll()).thenReturn(List.of(target));
-        when(executions.findAllNewestFirst()).thenReturn(List.of(
+        when(executions.findLatestPerTarget()).thenReturn(List.of(
                 BackupExecution.started(UUID.randomUUID(), target.getId(), BACKED_UP_AT)));
 
         mockMvc.perform(get("/databases"))

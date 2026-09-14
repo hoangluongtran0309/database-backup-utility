@@ -207,6 +207,7 @@ td.actions { display: table-cell; width: 1%; }
 .row-actions { display: flex; align-items: center; justify-content: flex-end; gap: .4rem; }
 .row-actions form { margin: 0; }
 .empty-state { margin: 0; padding: 2.8rem 1.2rem; text-align: center; color: var(--muted); }
+.pager { display: flex; align-items: center; justify-content: center; gap: .9rem; margin-top: 1.1rem; }
 /* Links inside a sentence get an underline: colour alone is not a cue. */
 .empty-state a, .alert a, .field-hint a { text-decoration: underline; }
 

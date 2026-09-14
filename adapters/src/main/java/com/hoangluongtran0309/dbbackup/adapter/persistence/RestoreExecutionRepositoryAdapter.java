@@ -4,12 +4,15 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Slice;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.hoangluongtran0309.dbbackup.core.model.ExecutionStatus;
 import com.hoangluongtran0309.dbbackup.core.model.RestoreExecution;
+import com.hoangluongtran0309.dbbackup.core.port.HistoryPage;
 import com.hoangluongtran0309.dbbackup.core.port.RestoreExecutionRepository;
 
 import lombok.RequiredArgsConstructor;
@@ -35,10 +38,12 @@ class RestoreExecutionRepositoryAdapter implements RestoreExecutionRepository {
     }
 
     @Override
-    public List<RestoreExecution> findAllNewestFirst() {
-        return jpaRepository.findAll(NEWEST_FIRST).stream()
-                .map(RestoreExecutionRepositoryAdapter::toDomain)
-                .toList();
+    public HistoryPage<RestoreExecution> findNewestFirst(int page, int pageSize) {
+        Slice<RestoreExecutionEntity> slice = jpaRepository.findAllBy(PageRequest.of(page - 1, pageSize, NEWEST_FIRST));
+        return new HistoryPage<>(
+                slice.getContent().stream().map(RestoreExecutionRepositoryAdapter::toDomain).toList(),
+                page,
+                slice.hasNext());
     }
 
     @Override

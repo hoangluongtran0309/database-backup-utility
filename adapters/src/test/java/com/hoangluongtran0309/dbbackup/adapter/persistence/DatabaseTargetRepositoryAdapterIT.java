@@ -260,7 +260,7 @@ class DatabaseTargetRepositoryAdapterIT {
     @org.junit.jupiter.api.BeforeEach
     void clearTable() {
         // Backups first: a target that still has one cannot be deleted.
-        backups.findAllNewestFirst().forEach(backup -> backups.deleteById(backup.getId()));
+        backups.findNewestFirst(1, 1000).items().forEach(backup -> backups.deleteById(backup.getId()));
         List<DatabaseTarget> existing = repository.findAll();
         existing.forEach(target -> repository.deleteById(target.getId()));
     }
