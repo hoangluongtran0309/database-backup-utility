@@ -21,12 +21,14 @@ that needs it.
       file, which is also what makes a used target removable.
 - [x] **7. Package.** One Dockerfile, one compose file, quickstart.
 
-That is the whole of the first round. What comes next is a decision, not a
-plan: cut `release/0.1.0`, or keep going on `develop`.
+That was the first round. One more slice went in before it was released:
 
 - [x] **8. Sign in.** One operator account from the environment (bcrypt hash),
       session sign-in, CSRF tokens on every form, security headers; the
       healthcheck moves to `/actuator/health`. See ADR-011.
+
+All eight shipped as **0.1.0** (tag `v0.1.0`). Nothing is planned beyond it:
+the next slice is a decision, not a continuation of this list.
 
 ## Deliberately out of scope
 
