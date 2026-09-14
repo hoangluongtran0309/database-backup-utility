@@ -60,10 +60,18 @@ class RestoreExecutionRepositoryAdapter implements RestoreExecutionRepository {
         jpaRepository.flush();
     }
 
+    @Override
+    @Transactional
+    public void deleteForTarget(UUID targetId) {
+        jpaRepository.deleteByTargetId(targetId);
+        jpaRepository.flush();
+    }
+
     private static RestoreExecutionEntity toEntity(RestoreExecution execution) {
         RestoreExecutionEntity entity = new RestoreExecutionEntity();
         entity.setId(execution.getId());
         entity.setBackupExecutionId(execution.getBackupExecutionId());
+        entity.setTargetId(execution.getTargetId());
         entity.setStatus(execution.getStatus());
         entity.setStartedAt(execution.getStartedAt());
         entity.setFinishedAt(execution.getFinishedAt());
@@ -75,6 +83,7 @@ class RestoreExecutionRepositoryAdapter implements RestoreExecutionRepository {
         return RestoreExecution.builder()
                 .id(entity.getId())
                 .backupExecutionId(entity.getBackupExecutionId())
+                .targetId(entity.getTargetId())
                 .status(entity.getStatus())
                 .startedAt(entity.getStartedAt())
                 .finishedAt(entity.getFinishedAt())

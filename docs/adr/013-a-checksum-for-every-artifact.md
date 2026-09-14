@@ -70,4 +70,6 @@ belongs on the job thread, not in the request.
 - `V5` adds the column and a check that only a successful backup carries a
   checksum, in `sha256sum`'s form.
 - The checksum proves the file is unchanged, not that it restores. A dump that
-  was complete but wrong is still found out only by restoring it.
+  was complete but wrong is still found out only by restoring it —
+  [ADR-014](014-restore-into-any-registered-target.md) makes that possible
+  without overwriting the source.

@@ -28,7 +28,8 @@ import com.hoangluongtran0309.dbbackup.core.port.StoragePort;
 import lombok.RequiredArgsConstructor;
 
 /**
- * Loads a backup artifact back into the target it came from.
+ * Loads a backup artifact into a target: the one it came from, or any other
+ * registered target (ADR-014).
  *
  * <p>Split into accept-then-run for the same reasons as a backup, described in
  * ADR-004: the row is committed before the work is submitted, so an accepted
@@ -50,15 +51,17 @@ public class RestoreBackupService {
     private final Clock clock;
 
     /**
-     * Accepts a restore of {@code backupExecutionId} into its own target.
+     * Accepts a restore of {@code backupExecutionId} into {@code targetId}.
      *
      * <p>Not {@code @Transactional}, deliberately — see ADR-004.
      *
-     * @throws NoSuchElementException if the backup, or the target it belongs
-     *         to, no longer exists
+     * @param targetId where the data goes — the backup's own target, or any
+     *        other. The dump carries no {@code USE}, so a schema of another
+     *        name takes it as readily (ADR-005).
+     * @throws NoSuchElementException if the backup or the target no longer exists
      * @throws RestoreFailedException if the backup never produced an artifact
      */
-    public UUID start(UUID backupExecutionId) {
+    public UUID start(UUID backupExecutionId, UUID targetId) {
         BackupExecution backup = backups.findById(backupExecutionId)
                 .orElseThrow(() -> new NoSuchElementException(
                         "No backup execution with id " + backupExecutionId));
@@ -70,12 +73,11 @@ public class RestoreBackupService {
                     "That backup is %s, so there is nothing to restore".formatted(backup.getStatus()));
         }
 
-        DatabaseTarget target = targets.findById(backup.getTargetId())
-                .orElseThrow(() -> new NoSuchElementException(
-                        "The target this backup came from no longer exists"));
+        DatabaseTarget target = targets.findById(targetId)
+                .orElseThrow(() -> new NoSuchElementException("The target to restore into no longer exists"));
 
         RestoreExecution execution = restores.save(
-                RestoreExecution.started(UUID.randomUUID(), backupExecutionId, clock.instant()));
+                RestoreExecution.started(UUID.randomUUID(), backupExecutionId, targetId, clock.instant()));
 
         try {
             jobExecutor.execute(() -> run(execution.getId(), target, backup));

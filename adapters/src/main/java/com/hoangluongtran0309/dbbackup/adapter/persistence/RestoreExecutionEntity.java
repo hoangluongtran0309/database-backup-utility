@@ -28,6 +28,9 @@ class RestoreExecutionEntity {
     @Column(name = "backup_execution_id", nullable = false)
     private UUID backupExecutionId;
 
+    @Column(name = "target_id", nullable = false)
+    private UUID targetId;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 16)
     private ExecutionStatus status;

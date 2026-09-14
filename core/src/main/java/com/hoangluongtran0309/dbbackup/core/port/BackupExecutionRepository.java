@@ -23,6 +23,9 @@ public interface BackupExecutionRepository {
      */
     List<BackupExecution> findRunning();
 
+    /** Whether any backup, in any state, was taken of this target. */
+    boolean existsForTarget(UUID targetId);
+
     /** Silent when the id is unknown. */
     void deleteById(UUID id);
 }

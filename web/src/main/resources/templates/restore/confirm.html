@@ -2,15 +2,37 @@
 <html lang="en" xmlns:th="http://www.thymeleaf.org"
       th:replace="~{layout/base :: page('Confirm restore', 'restores', ~{:: #content})}">
 <body>
-<div id="content">
+<div id="content"
+     th:with="elsewhere=${source == null or source.id != target.id}">
 
   <div class="page-header">
     <div>
       <div class="eyebrow">Restore</div>
       <h1>Restore this backup</h1>
-      <p>Read what is about to happen, then confirm by typing the target's name.</p>
+      <p>Choose where it goes, read what is about to happen, then confirm by typing that target's name.</p>
     </div>
   </div>
+
+  <!-- A GET form: choosing a target reloads this page, so everything below —
+       the warning, the name to type — describes the target chosen. app.js
+       submits it on change; the button does the same with the script off. -->
+  <form class="form-panel" method="get" th:action="@{/restores/new}">
+    <input type="hidden" name="backup" th:value="${backup.id}">
+    <div class="form-group">
+      <label for="target">Restore into</label>
+      <select id="target" name="target" data-autosubmit aria-describedby="target-help">
+        <option th:each="t : ${targets}" th:value="${t.id}" th:selected="${t.id == target.id}"
+                th:text="|${t.name} — ${t.address}${source != null and t.id == source.id ? ' (where it was taken)' : ''}|">production</option>
+      </select>
+      <p class="field-hint" id="target-help">
+        The target it was taken from, unless you choose another — for a restore drill
+        into a scratch schema, say, that leaves the original alone.
+      </p>
+    </div>
+    <div class="form-actions">
+      <button class="button" type="submit" data-autosubmit-fallback>Use this target</button>
+    </div>
+  </form>
 
   <div class="alert alert-danger" role="alert">
     <p><strong>This overwrites live data.</strong></p>
@@ -24,6 +46,10 @@
       Tables that are <em>not</em> in the backup are left untouched. This applies
       the backup over the schema; it does not reset it.
     </p>
+    <p th:if="${elsewhere and source != null}">
+      The backup was taken from <strong th:text="${source.name}">production</strong>
+      (<code th:text="${source.address}">127.0.0.1:3306/shop</code>), which is not touched.
+    </p>
   </div>
 
   <div class="panel">
@@ -33,15 +59,18 @@
           th:text="${#temporals.format(
                       backup.startedAt.atOffset(T(java.time.ZoneOffset).UTC),
                       'yyyy-MM-dd HH:mm:ss')} + ' UTC'">…</dd>
+      <dt>Taken from</dt>
+      <dd th:text="${source != null ? source.name : '(removed)'}">production</dd>
       <dt>Artifact</dt>
       <dd th:replace="~{fragments/artifact-path :: artifactPath(${backup.artifactPath})}">…</dd>
-      <dt>Target</dt>
+      <dt>Restore into</dt>
       <dd th:text="${target.name}">production</dd>
     </dl>
   </div>
 
   <form class="form-panel" method="post" th:action="@{/restores}">
     <input type="hidden" name="backup" th:value="${backup.id}">
+    <input type="hidden" name="target" th:value="${target.id}">
 
     <div class="form-group">
       <label for="confirmation">Type <strong th:text="${target.name}">production</strong> to confirm</label>
