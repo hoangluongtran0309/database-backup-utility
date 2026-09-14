@@ -61,6 +61,11 @@ git branch -d feature/03-run-logical-backup
 The version in the parent `pom.xml` is hardcoded — there is no `${revision}`
 and no flatten plugin — so the release branch is where it changes, twice.
 
+`main` accepts changes only through a pull request (see
+[what the remote enforces](#what-the-remote-enforces)), so the release reaches
+it as a PR merged with a merge commit — GitHub's equivalent of `--no-ff`. A
+local `git merge` into `main` cannot be pushed.
+
 ```bash
 git switch develop
 git switch -c release/0.1.0
@@ -69,19 +74,30 @@ git switch -c release/0.1.0
 mvn versions:set -DnewVersion=0.1.0 -DprocessAllModules -DgenerateBackupPoms=false
 mvn verify
 git commit -am "chore: release 0.1.0"
+git push -u origin release/0.1.0
 
+gh pr create --base main --head release/0.1.0 --title "Release 0.1.0"
+gh pr merge --merge          # or "Create a merge commit" in the web UI
+
+# Tag the merge commit GitHub made, and only once it exists: a tag made on a
+# local merge points at a commit main will never contain.
+git fetch origin
 git switch main
-git merge --no-ff release/0.1.0
+git merge --ff-only origin/main
 git tag -a v0.1.0 -m "0.1.0"
+git push origin v0.1.0
 
-# Back into develop, or develop would keep the old version and lose the tag's
-# ancestry. This second merge is the step people forget.
+# Back into develop, or develop would keep the old version and miss any fix
+# made on the release branch. This second merge is the step people forget.
+# develop accepts a direct push, so it stays a local merge.
 git switch develop
 git merge --no-ff release/0.1.0
 mvn versions:set -DnewVersion=0.2.0-SNAPSHOT -DprocessAllModules -DgenerateBackupPoms=false
 git commit -am "chore: open 0.2.0-SNAPSHOT"
+git push origin develop
 
 git branch -d release/0.1.0
+git push origin --delete release/0.1.0
 ```
 
 Only bug fixes go onto a `release/*` branch. Anything else waits for `develop`.
@@ -99,14 +115,22 @@ git switch -c hotfix/0.1.1
 mvn versions:set -DnewVersion=0.1.1 -DprocessAllModules -DgenerateBackupPoms=false
 mvn verify
 git commit -am "fix: <what was broken>"
+git push -u origin hotfix/0.1.1
 
+gh pr create --base main --head hotfix/0.1.1 --title "Hotfix 0.1.1"
+gh pr merge --merge
+
+git fetch origin
 git switch main
-git merge --no-ff hotfix/0.1.1
+git merge --ff-only origin/main
 git tag -a v0.1.1 -m "0.1.1"
+git push origin v0.1.1
 
 git switch develop
 git merge --no-ff hotfix/0.1.1      # or into the live release/* branch, if one exists
+git push origin develop
 git branch -d hotfix/0.1.1
+git push origin --delete hotfix/0.1.1
 ```
 
 If a `release/*` branch is open when the hotfix lands, merge the hotfix into
@@ -115,9 +139,12 @@ that branch rather than into `develop`; the release branch carries it to
 
 ## Tooling
 
-The `git flow` CLI is not required — every command above is plain git. The
-repository is nonetheless configured for it, so `git flow init` on a machine
-that has it will adopt these names rather than prompt:
+The `git flow` CLI is not required — every command above is plain git, apart
+from the `gh` pull request into `main`, which the web UI does equally well. Its
+`finish` commands merge into `main` locally, which the remote refuses; use it,
+if at all, for starting branches. The repository is nonetheless configured for
+it, so `git flow init` on a machine that has it will adopt these names rather
+than prompt:
 
 ```
 gitflow.branch.master   main
@@ -134,7 +161,16 @@ gitflow.prefix.versiontag v
 and on every pull request targeting `main` or `develop`. A release branch is
 therefore already proven before it reaches `main`.
 
-Branch protection on the remote is **not yet configured**, because nothing has
-been pushed. Once `main` and `develop` exist on the remote, the rules worth
-having are: require a pull request, require the `mvn verify` check to pass,
-forbid force-pushes, and forbid deletion.
+## What the remote enforces
+
+Two repository rulesets on GitHub, not classic branch protection — so the
+branch protection API reports `main` as unprotected even though it is not:
+
+- **main and develop are append-only** — neither can be deleted or
+  force-pushed.
+- **main changes only through a pull request** — merged with a merge commit,
+  the only method allowed; no approving review is required.
+
+A passing `mvn verify` is not a required check. Adding it is worth doing once
+the workflow has run at least once, since GitHub only offers checks it has
+seen.
