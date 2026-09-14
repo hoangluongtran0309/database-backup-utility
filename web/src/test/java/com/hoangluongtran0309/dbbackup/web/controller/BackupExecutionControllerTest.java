@@ -38,6 +38,7 @@ import com.hoangluongtran0309.dbbackup.application.target.ManageDatabaseTargetSe
 import com.hoangluongtran0309.dbbackup.core.model.BackupExecution;
 import com.hoangluongtran0309.dbbackup.core.model.DatabaseTarget;
 import com.hoangluongtran0309.dbbackup.core.port.BackupExecutionRepository;
+import com.hoangluongtran0309.dbbackup.core.port.HistoryPage;
 import com.hoangluongtran0309.dbbackup.web.security.SecurityConfig;
 
 @WebMvcTest(BackupExecutionController.class)
@@ -68,7 +69,7 @@ class BackupExecutionControllerTest {
 
     @Test
     void showsAnEmptyStateWhenNothingHasBeenBackedUp() throws Exception {
-        when(executions.findAllNewestFirst()).thenReturn(List.of());
+        when(executions.findNewestFirst(1, 50)).thenReturn(new HistoryPage<>(List.of(), 1, false));
         when(targets.listAll()).thenReturn(List.of());
 
         mockMvc.perform(get("/executions"))
@@ -79,7 +80,7 @@ class BackupExecutionControllerTest {
 
     @Test
     void listsExecutionsWithTheirTargetName() throws Exception {
-        when(executions.findAllNewestFirst()).thenReturn(List.of(succeeded()));
+        when(executions.findNewestFirst(1, 50)).thenReturn(new HistoryPage<>(List.of(succeeded()), 1, false));
         when(targets.listAll()).thenReturn(List.of(target("production")));
 
         mockMvc.perform(get("/executions"))
@@ -98,7 +99,7 @@ class BackupExecutionControllerTest {
      */
     @Test
     void theStatusBadgeStaysInsideItsOwnTableCell() throws Exception {
-        when(executions.findAllNewestFirst()).thenReturn(List.of(succeeded()));
+        when(executions.findNewestFirst(1, 50)).thenReturn(new HistoryPage<>(List.of(succeeded()), 1, false));
         when(targets.listAll()).thenReturn(List.of(target("production")));
 
         mockMvc.perform(get("/executions"))
@@ -111,7 +112,7 @@ class BackupExecutionControllerTest {
     /** History outlives the target it refers to; it must still render. */
     @Test
     void showsRemovedWhenTheTargetIsGone() throws Exception {
-        when(executions.findAllNewestFirst()).thenReturn(List.of(succeeded()));
+        when(executions.findNewestFirst(1, 50)).thenReturn(new HistoryPage<>(List.of(succeeded()), 1, false));
         when(targets.listAll()).thenReturn(List.of());
 
         mockMvc.perform(get("/executions"))
@@ -326,6 +327,62 @@ class BackupExecutionControllerTest {
                 .andExpect(content().string(org.hamcrest.Matchers.not(
                         org.hamcrest.Matchers.containsString("/delete"))));
         verify(artifacts, never()).download(any());
+    }
+
+    // --- paging ---------------------------------------------------------------
+
+    @Test
+    void theListIsReadAPageAtATimeAndOffersOlderWhenThereIsMore() throws Exception {
+        when(executions.findNewestFirst(1, 50)).thenReturn(new HistoryPage<>(List.of(succeeded()), 1, true));
+        when(targets.listAll()).thenReturn(List.of(target("production")));
+
+        mockMvc.perform(get("/executions"))
+                .andExpect(content().string(containsString("href=\"/executions?page=2\"")))
+                .andExpect(content().string(containsString("Older")))
+                .andExpect(content().string(not(containsString("Newer"))));
+    }
+
+    @Test
+    void aLaterPageOffersNewerAndOlder() throws Exception {
+        when(executions.findNewestFirst(2, 50)).thenReturn(new HistoryPage<>(List.of(succeeded()), 2, true));
+        when(targets.listAll()).thenReturn(List.of(target("production")));
+
+        mockMvc.perform(get("/executions").param("page", "2"))
+                .andExpect(content().string(containsString("href=\"/executions?page=1\"")))
+                .andExpect(content().string(containsString("href=\"/executions?page=3\"")))
+                .andExpect(content().string(containsString("Page 2")));
+    }
+
+    /** Nothing to page through: no pager at all. */
+    @Test
+    void aSinglePageHasNoPager() throws Exception {
+        when(executions.findNewestFirst(1, 50)).thenReturn(new HistoryPage<>(List.of(succeeded()), 1, false));
+        when(targets.listAll()).thenReturn(List.of(target("production")));
+
+        mockMvc.perform(get("/executions"))
+                .andExpect(content().string(not(containsString("class=\"pager\""))));
+    }
+
+    @Test
+    void aPageBelowOneIsTheFirstPage() throws Exception {
+        when(executions.findNewestFirst(1, 50)).thenReturn(new HistoryPage<>(List.of(), 1, false));
+        when(targets.listAll()).thenReturn(List.of());
+
+        mockMvc.perform(get("/executions").param("page", "-3"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("No backups yet")));
+    }
+
+    /** Past the end is not "no backups yet": it says so, and offers the way back. */
+    @Test
+    void aPagePastTheEndSaysSoAndLinksBack() throws Exception {
+        when(executions.findNewestFirst(9, 50)).thenReturn(new HistoryPage<>(List.of(), 9, false));
+        when(targets.listAll()).thenReturn(List.of());
+
+        mockMvc.perform(get("/executions").param("page", "9"))
+                .andExpect(content().string(containsString("Nothing this far back")))
+                .andExpect(content().string(not(containsString("No backups yet"))))
+                .andExpect(content().string(containsString("href=\"/executions?page=8\"")));
     }
 
     // --- checksums ------------------------------------------------------------

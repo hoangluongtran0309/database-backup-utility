@@ -135,9 +135,23 @@ class RestoreExecutionRepositoryAdapterIT {
         restores.save(RestoreExecution.started(UUID.randomUUID(), backupId, targetId, STARTED));
         restores.save(RestoreExecution.started(UUID.randomUUID(), backupId, targetId, STARTED.plusSeconds(60)));
 
-        assertThat(restores.findAllNewestFirst())
+        assertThat(restores.findNewestFirst(1, 50).items())
                 .extracting(RestoreExecution::getStartedAt)
                 .containsExactly(STARTED.plusSeconds(60), STARTED);
+    }
+
+    @Test
+    void pagesTheHistoryNewestFirst() {
+        for (int i = 0; i < 3; i++) {
+            restores.save(RestoreExecution.started(UUID.randomUUID(), backupId, targetId, STARTED.plusSeconds(i)));
+        }
+
+        assertThat(restores.findNewestFirst(1, 2).items()).extracting(RestoreExecution::getStartedAt)
+                .containsExactly(STARTED.plusSeconds(2), STARTED.plusSeconds(1));
+        assertThat(restores.findNewestFirst(1, 2).hasOlder()).isTrue();
+        assertThat(restores.findNewestFirst(2, 2).items()).extracting(RestoreExecution::getStartedAt)
+                .containsExactly(STARTED);
+        assertThat(restores.findNewestFirst(2, 2).hasOlder()).isFalse();
     }
 
     @Test
@@ -176,7 +190,7 @@ class RestoreExecutionRepositoryAdapterIT {
         restores.deleteForBackup(backupId);
 
         assertThat(restores.countForBackup(backupId)).isZero();
-        assertThat(restores.findAllNewestFirst()).isEmpty();
+        assertThat(restores.findNewestFirst(1, 50).isEmpty()).isTrue();
     }
 
     /** Which is what makes the backup itself deletable afterwards. */

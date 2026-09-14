@@ -12,8 +12,13 @@ public interface RestoreExecutionRepository {
 
     Optional<RestoreExecution> findById(UUID id);
 
-    /** Most recent first. The order is part of the contract. */
-    List<RestoreExecution> findAllNewestFirst();
+    /**
+     * One page of the history, most recent first.
+     *
+     * @param page 1-based
+     * @see BackupExecutionRepository#findNewestFirst(int, int)
+     */
+    HistoryPage<RestoreExecution> findNewestFirst(int page, int pageSize);
 
     /** @see BackupExecutionRepository#findRunning() */
     List<RestoreExecution> findRunning();

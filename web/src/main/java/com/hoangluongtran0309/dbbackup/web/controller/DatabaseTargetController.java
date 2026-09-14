@@ -5,7 +5,6 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.UUID;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -26,7 +25,6 @@ import com.hoangluongtran0309.dbbackup.core.exception.TargetInUseException;
 import com.hoangluongtran0309.dbbackup.core.model.BackupExecution;
 import com.hoangluongtran0309.dbbackup.core.model.ConnectionCheck;
 import com.hoangluongtran0309.dbbackup.core.model.DatabaseTarget;
-import com.hoangluongtran0309.dbbackup.core.model.ExecutionStatus;
 import com.hoangluongtran0309.dbbackup.core.port.BackupExecutionRepository;
 import com.hoangluongtran0309.dbbackup.web.dto.DatabaseTargetForm;
 import com.hoangluongtran0309.dbbackup.web.dto.EditTargetForm;
@@ -66,14 +64,14 @@ public class DatabaseTargetController {
      * Beside each target, its newest backup attempt and its newest successful
      * one — "when was this last backed up?" is the question the page exists to
      * answer, and a failed attempt must not hide the good copy before it.
+     * Asked of the database per target, rather than by reading the whole
+     * history to find the first of each.
      */
     @GetMapping
     String list(Model model) {
-        List<BackupExecution> newestFirst = executions.findAllNewestFirst();
         model.addAttribute("targets", service.listAll());
-        model.addAttribute("latestBackups", firstPerTarget(newestFirst.stream()));
-        model.addAttribute("lastSuccessfulBackups", firstPerTarget(newestFirst.stream()
-                .filter(e -> e.getStatus() == ExecutionStatus.SUCCEEDED)));
+        model.addAttribute("latestBackups", byTarget(executions.findLatestPerTarget()));
+        model.addAttribute("lastSuccessfulBackups", byTarget(executions.findLatestSucceededPerTarget()));
         return "database/list";
     }
 
@@ -199,10 +197,9 @@ public class DatabaseTargetController {
         return "redirect:/databases";
     }
 
-    /** Relies on the repository's newest-first order: the first seen is kept. */
-    private static Map<UUID, BackupExecution> firstPerTarget(Stream<BackupExecution> newestFirst) {
-        return newestFirst.collect(Collectors.toMap(
-                BackupExecution::getTargetId, e -> e, (newer, older) -> newer));
+    /** The repository returns at most one per target; a duplicate would be a bug there, so it fails here. */
+    private static Map<UUID, BackupExecution> byTarget(List<BackupExecution> onePerTarget) {
+        return onePerTarget.stream().collect(Collectors.toMap(BackupExecution::getTargetId, e -> e));
     }
 
     /** The shared form page, in edit mode: {@code editing} is what switches it. */

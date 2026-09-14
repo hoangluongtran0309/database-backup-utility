@@ -1,0 +1,14 @@
+<div xmlns:th="http://www.thymeleaf.org">
+  <!-- Newer and older, and nothing else: the history is read without counting
+       it, so there is no "page 3 of 40" to show. A page past the end is
+       empty, and still offers the way back. -->
+  <nav class="pager" aria-label="Pages"
+       th:fragment="pager(history, path)"
+       th:if="${history.hasNewer() or history.hasOlder()}">
+    <a class="button button-small" rel="prev" th:if="${history.hasNewer()}"
+       th:href="@{${path}(page=${history.page - 1})}">← Newer</a>
+    <span class="field-hint" th:text="|Page ${history.page}|">Page 2</span>
+    <a class="button button-small" rel="next" th:if="${history.hasOlder()}"
+       th:href="@{${path}(page=${history.page + 1})}">Older →</a>
+  </nav>
+</div>

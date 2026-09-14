@@ -12,8 +12,12 @@
     </div>
   </div>
 
-  <p class="empty-state panel" th:if="${restores.isEmpty()}">
+  <p class="empty-state panel" th:if="${restores.isEmpty() and !history.hasNewer()}">
     No restores yet. Start one from a <a th:href="@{/executions}">backup</a>.
+  </p>
+
+  <p class="empty-state panel" th:if="${restores.isEmpty() and history.hasNewer()}">
+    Nothing this far back. <a th:href="@{/restores}">Back to the newest</a>.
   </p>
 
   <div class="table-wrap responsive-cards" th:unless="${restores.isEmpty()}">
@@ -57,6 +61,8 @@
       </tbody>
     </table>
   </div>
+
+  <nav th:replace="~{fragments/pager :: pager(${history}, '/restores')}"></nav>
 
 </div>
 </body>
