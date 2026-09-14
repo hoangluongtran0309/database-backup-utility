@@ -55,7 +55,31 @@ public class BackupExecutionController {
                 .orElseThrow(() -> new NoSuchElementException("No backup execution with id " + id));
         model.addAttribute("execution", execution);
         model.addAttribute("targetName", targetNames().get(execution.getTargetId()));
+        model.addAttribute("artifactOnDisk", artifacts.isOnDisk(execution));
         return "execution/detail";
+    }
+
+    /**
+     * Re-reads the artifact and compares it with the checksum recorded when it
+     * was written. Synchronous: it reads the file once, which is bounded by the
+     * disk in a way a dump is not.
+     */
+    @PostMapping("/{id}/verify")
+    String verify(@PathVariable UUID id, RedirectAttributes flash) {
+        BackupArtifactService.Verification result = artifacts.verify(id);
+        switch (result.integrity()) {
+            case INTACT -> flash.addFlashAttribute("message",
+                    "Verified: the artifact matches the checksum recorded when it was made");
+            case MISMATCH -> flash.addFlashAttribute("error",
+                    "The artifact does not match its checksum — recorded %s, now %s. It has changed since it "
+                            .formatted(result.recorded(), result.actual())
+                            + "was written, and a restore from it will be refused.");
+            case MISSING -> flash.addFlashAttribute("error", "The artifact is no longer on disk");
+            case NOT_RECORDED -> flash.addFlashAttribute("message",
+                    "This backup predates checksums, so there is nothing to compare with. Its SHA-256 now is "
+                            + result.actual());
+        }
+        return "redirect:/executions/" + id;
     }
 
     /**

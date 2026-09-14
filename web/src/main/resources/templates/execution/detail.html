@@ -20,10 +20,13 @@
     </div>
     <div class="actions">
       <a class="button" th:href="@{/executions}">All backups</a>
-      <a class="button" th:if="${execution.status.name() == 'SUCCEEDED'}"
-         th:href="@{/executions/{id}/download(id=${execution.id})}">Download</a>
-      <a class="button button-primary" th:if="${execution.status.name() == 'SUCCEEDED'}"
-         th:href="@{/restores/new(backup=${execution.id})}">Restore this backup</a>
+      <th:block th:if="${execution.status.name() == 'SUCCEEDED' and artifactOnDisk}">
+        <form method="post" th:action="@{/executions/{id}/verify(id=${execution.id})}">
+          <button class="button" type="submit" data-busy-label="Verifying…">Verify</button>
+        </form>
+        <a class="button" th:href="@{/executions/{id}/download(id=${execution.id})}">Download</a>
+        <a class="button button-primary" th:href="@{/restores/new(backup=${execution.id})}">Restore this backup</a>
+      </th:block>
       <a class="button button-danger" th:unless="${execution.status.name() == 'RUNNING'}"
          th:href="@{/executions/{id}/delete(id=${execution.id})}">Delete</a>
     </div>
@@ -32,6 +35,14 @@
   <p class="alert alert-info" th:if="${execution.status.name() == 'RUNNING'}">
     This backup is still running. This page follows it and updates when it finishes.
     <noscript>With JavaScript off, reload the page to see where it got to.</noscript>
+  </p>
+
+  <!-- The row outlives the file if someone removes it by hand. Said here, and
+       the buttons that would need the file are not offered. -->
+  <p class="alert alert-danger" role="alert"
+     th:if="${execution.status.name() == 'SUCCEEDED' and !artifactOnDisk}">
+    The artifact is no longer on disk, so it cannot be verified, downloaded or restored.
+    The record can still be deleted.
   </p>
 
   <div class="panel">
@@ -60,6 +71,16 @@
 
       <dt>Size</dt>
       <dd class="mono" th:text="${execution.sizeBytes != null ? execution.sizeBytes + ' bytes' : '—'}">—</dd>
+
+      <!-- Of the file as stored, still gzipped: the same value sha256sum
+           prints for the download. See ADR-013. -->
+      <dt>SHA-256</dt>
+      <dd class="mono break" th:if="${execution.sha256 != null}" th:text="${execution.sha256}">…</dd>
+      <dd th:if="${execution.sha256 == null and execution.status.name() == 'SUCCEEDED'}">
+        <span class="badge badge-neutral">Not recorded</span>
+        <span class="field-hint">made before checksums were kept</span>
+      </dd>
+      <dd class="mono" th:if="${execution.status.name() != 'SUCCEEDED'}">—</dd>
     </dl>
   </div>
 

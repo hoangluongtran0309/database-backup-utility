@@ -47,6 +47,7 @@ import com.hoangluongtran0309.dbbackup.web.security.SecurityConfig;
 class BackupExecutionControllerTest {
 
     private static final Instant STARTED = Instant.parse("2026-09-09T10:00:00Z");
+    private static final String SHA256 = "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08";
     private static final UUID TARGET_ID = UUID.randomUUID();
 
     /** How the artifact at /backups/shop_20260909_100000.sql.gz is rendered. */
@@ -327,9 +328,102 @@ class BackupExecutionControllerTest {
         verify(artifacts, never()).download(any());
     }
 
+    // --- checksums ------------------------------------------------------------
+
+    @Test
+    void detailShowsTheChecksumAndOffersToVerify() throws Exception {
+        BackupExecution backup = succeeded();
+        when(executions.findById(backup.getId())).thenReturn(Optional.of(backup));
+        when(targets.listAll()).thenReturn(List.of(target("production")));
+        when(artifacts.isOnDisk(backup)).thenReturn(true);
+
+        mockMvc.perform(get("/executions/{id}", backup.getId()))
+                .andExpect(content().string(containsString(SHA256)))
+                .andExpect(content().string(containsString(
+                        "action=\"/executions/" + backup.getId() + "/verify\"")))
+                .andExpect(content().string(not(containsString("no longer on disk"))));
+    }
+
+    @Test
+    void aBackupFromBeforeChecksumsSaysNoneWasRecorded() throws Exception {
+        BackupExecution legacy = BackupExecution.builder()
+                .id(UUID.randomUUID()).targetId(TARGET_ID)
+                .status(com.hoangluongtran0309.dbbackup.core.model.ExecutionStatus.SUCCEEDED)
+                .startedAt(STARTED).finishedAt(STARTED.plusSeconds(90))
+                .artifactPath("/backups/shop_20260909_100000.sql.gz").sizeBytes(8192L).build();
+        when(executions.findById(legacy.getId())).thenReturn(Optional.of(legacy));
+        when(targets.listAll()).thenReturn(List.of(target("production")));
+        when(artifacts.isOnDisk(legacy)).thenReturn(true);
+
+        mockMvc.perform(get("/executions/{id}", legacy.getId()))
+                .andExpect(content().string(containsString("Not recorded")));
+    }
+
+    /** Nothing that needs the file is offered once it is gone; deleting the record still is. */
+    @Test
+    void aBackupWhoseFileIsGoneSaysSoAndOffersOnlyDeletion() throws Exception {
+        BackupExecution backup = succeeded();
+        when(executions.findById(backup.getId())).thenReturn(Optional.of(backup));
+        when(targets.listAll()).thenReturn(List.of(target("production")));
+        when(artifacts.isOnDisk(backup)).thenReturn(false);
+
+        mockMvc.perform(get("/executions/{id}", backup.getId()))
+                .andExpect(content().string(containsString("no longer on disk")))
+                .andExpect(content().string(not(containsString("/verify"))))
+                .andExpect(content().string(not(containsString("/download"))))
+                .andExpect(content().string(not(containsString("/restores/new"))))
+                .andExpect(content().string(containsString("/executions/" + backup.getId() + "/delete")));
+    }
+
+    @Test
+    void verifyingAnIntactArtifactSaysSo() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(artifacts.verify(id)).thenReturn(new BackupArtifactService.Verification(
+                BackupArtifactService.Integrity.INTACT, SHA256, SHA256));
+
+        mockMvc.perform(post("/executions/{id}/verify", id).with(csrf()))
+                .andExpect(redirectedUrl("/executions/" + id))
+                .andExpect(flash().attribute("message", containsString("matches the checksum")));
+    }
+
+    @Test
+    void verifyingAChangedArtifactShowsBothChecksumsAsAnError() throws Exception {
+        UUID id = UUID.randomUUID();
+        String now = "60303ae22b998861bce3b28f33eec1be758a213c86c93c076dbe9f558c11c752";
+        when(artifacts.verify(id)).thenReturn(new BackupArtifactService.Verification(
+                BackupArtifactService.Integrity.MISMATCH, SHA256, now));
+
+        mockMvc.perform(post("/executions/{id}/verify", id).with(csrf()))
+                .andExpect(redirectedUrl("/executions/" + id))
+                .andExpect(flash().attribute("error", containsString(SHA256)))
+                .andExpect(flash().attribute("error", containsString(now)))
+                .andExpect(flash().attribute("error", containsString("will be refused")));
+    }
+
+    @Test
+    void verifyingAMissingArtifactSaysItIsGone() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(artifacts.verify(id)).thenReturn(new BackupArtifactService.Verification(
+                BackupArtifactService.Integrity.MISSING, SHA256, null));
+
+        mockMvc.perform(post("/executions/{id}/verify", id).with(csrf()))
+                .andExpect(flash().attribute("error", "The artifact is no longer on disk"));
+    }
+
+    @Test
+    void verifyingABackupFromBeforeChecksumsShowsTodaysValue() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(artifacts.verify(id)).thenReturn(new BackupArtifactService.Verification(
+                BackupArtifactService.Integrity.NOT_RECORDED, null, SHA256));
+
+        mockMvc.perform(post("/executions/{id}/verify", id).with(csrf()))
+                .andExpect(flash().attribute("message", containsString("predates checksums")))
+                .andExpect(flash().attribute("message", containsString(SHA256)));
+    }
+
     private static BackupExecution succeeded() {
         return BackupExecution.started(UUID.randomUUID(), TARGET_ID, STARTED)
-                .succeeded("/backups/shop_20260909_100000.sql.gz", 8192L, STARTED.plusSeconds(90));
+                .succeeded("/backups/shop_20260909_100000.sql.gz", 8192L, SHA256, STARTED.plusSeconds(90));
     }
 
     private static BackupExecution failed() {

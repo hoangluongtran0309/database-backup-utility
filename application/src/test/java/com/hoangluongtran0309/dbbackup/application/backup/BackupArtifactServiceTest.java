@@ -36,6 +36,8 @@ class BackupArtifactServiceTest {
     private static final UUID TARGET_ID = UUID.randomUUID();
     private static final String PATH = "/backups/shop_20260909_100000.sql.gz";
     private static final Path ARTIFACT = Path.of(PATH);
+    private static final String SHA256 = "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08";
+    private static final String OTHER_SHA256 = "60303ae22b998861bce3b28f33eec1be758a213c86c93c076dbe9f558c11c752";
 
     @Mock private BackupExecutionRepository backups;
     @Mock private RestoreExecutionRepository restores;
@@ -177,9 +179,76 @@ class BackupArtifactServiceTest {
         verify(backups, never()).deleteById(any());
     }
 
+    // --- verify -------------------------------------------------------------
+
+    @Test
+    void anArtifactThatStillHasItsChecksumIsIntact() {
+        givenSucceeded();
+        when(storage.exists(ARTIFACT)).thenReturn(true);
+        when(storage.sha256Of(ARTIFACT)).thenReturn(SHA256);
+
+        BackupArtifactService.Verification result = service.verify(BACKUP_ID);
+
+        assertThat(result.integrity()).isEqualTo(BackupArtifactService.Integrity.INTACT);
+        assertThat(result.actual()).isEqualTo(SHA256);
+    }
+
+    @Test
+    void anArtifactThatChangedIsAMismatchAndSaysBothChecksums() {
+        givenSucceeded();
+        when(storage.exists(ARTIFACT)).thenReturn(true);
+        when(storage.sha256Of(ARTIFACT)).thenReturn(OTHER_SHA256);
+
+        BackupArtifactService.Verification result = service.verify(BACKUP_ID);
+
+        assertThat(result.integrity()).isEqualTo(BackupArtifactService.Integrity.MISMATCH);
+        assertThat(result.recorded()).isEqualTo(SHA256);
+        assertThat(result.actual()).isEqualTo(OTHER_SHA256);
+    }
+
+    @Test
+    void anArtifactThatIsGoneIsMissingAndIsNotRead() {
+        givenSucceeded();
+        when(storage.exists(ARTIFACT)).thenReturn(false);
+
+        assertThat(service.verify(BACKUP_ID).integrity()).isEqualTo(BackupArtifactService.Integrity.MISSING);
+        verify(storage, never()).sha256Of(any());
+    }
+
+    /** Made before checksums: nothing to compare with, but today's value is still worth showing. */
+    @Test
+    void aBackupWithoutARecordedChecksumSaysSoAndShowsTheCurrentOne() {
+        when(backups.findById(BACKUP_ID)).thenReturn(Optional.of(BackupExecution.builder()
+                .id(BACKUP_ID)
+                .targetId(TARGET_ID)
+                .status(com.hoangluongtran0309.dbbackup.core.model.ExecutionStatus.SUCCEEDED)
+                .startedAt(STARTED)
+                .finishedAt(STARTED.plusSeconds(60))
+                .artifactPath(PATH)
+                .sizeBytes(8192L)
+                .build()));
+        when(storage.exists(ARTIFACT)).thenReturn(true);
+        when(storage.sha256Of(ARTIFACT)).thenReturn(OTHER_SHA256);
+
+        BackupArtifactService.Verification result = service.verify(BACKUP_ID);
+
+        assertThat(result.integrity()).isEqualTo(BackupArtifactService.Integrity.NOT_RECORDED);
+        assertThat(result.actual()).isEqualTo(OTHER_SHA256);
+    }
+
+    @Test
+    void verifyingABackupThatProducedNothingSaysSo() {
+        when(backups.findById(BACKUP_ID)).thenReturn(Optional.of(
+                BackupExecution.started(BACKUP_ID, TARGET_ID, STARTED).failed("denied", STARTED.plusSeconds(1))));
+
+        assertThatThrownBy(() -> service.verify(BACKUP_ID))
+                .isInstanceOf(NoSuchElementException.class)
+                .hasMessageContaining("no artifact");
+    }
+
     private void givenSucceeded() {
         when(backups.findById(BACKUP_ID)).thenReturn(Optional.of(
                 BackupExecution.started(BACKUP_ID, TARGET_ID, STARTED)
-                        .succeeded(PATH, 8192L, STARTED.plusSeconds(60))));
+                        .succeeded(PATH, 8192L, SHA256, STARTED.plusSeconds(60))));
     }
 }

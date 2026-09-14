@@ -44,6 +44,7 @@ import com.hoangluongtran0309.dbbackup.web.security.SecurityConfig;
 class RestoreControllerTest {
 
     private static final Instant STARTED = Instant.parse("2026-09-09T10:00:00Z");
+    private static final String SHA256 = "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08";
     private static final UUID TARGET_ID = UUID.randomUUID();
     private static final UUID BACKUP_ID = UUID.randomUUID();
 
@@ -215,7 +216,7 @@ class RestoreControllerTest {
 
     private static BackupExecution backup() {
         return BackupExecution.started(BACKUP_ID, TARGET_ID, STARTED)
-                .succeeded("/backups/shop_20260909_100000.sql.gz", 8192L, STARTED.plusSeconds(60));
+                .succeeded("/backups/shop_20260909_100000.sql.gz", 8192L, SHA256, STARTED.plusSeconds(60));
     }
 
     private static DatabaseTarget target() {

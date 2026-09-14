@@ -31,6 +31,7 @@ import com.hoangluongtran0309.dbbackup.core.port.RestoreExecutionRepository;
 class RestoreExecutionRepositoryAdapterIT {
 
     private static final Instant STARTED = Instant.parse("2026-09-09T12:00:00Z");
+    private static final String SHA256 = "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08";
 
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:17-alpine");
@@ -60,7 +61,7 @@ class RestoreExecutionRepositoryAdapterIT {
 
         UUID targetId = targets.save(target()).getId();
         BackupExecution backup = backups.save(BackupExecution.started(UUID.randomUUID(), targetId, STARTED));
-        backupId = backups.save(backup.succeeded("/backups/shop.sql.gz", 1024L, STARTED.plusSeconds(60))).getId();
+        backupId = backups.save(backup.succeeded("/backups/shop.sql.gz", 1024L, SHA256, STARTED.plusSeconds(60))).getId();
     }
 
     @Test

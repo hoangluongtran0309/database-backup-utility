@@ -152,6 +152,8 @@ code { color: var(--text); font-family: var(--mono); font-size: .88em; overflow-
 .page-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 1.35rem; }
 .page-header p { color: var(--muted); margin: .4rem 0 0; }
 .actions, .form-actions { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+/* A POST button among the header's links lines up and stretches like them. */
+.page-header > .actions > form { display: contents; }
 .section-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin: 1.8rem 0 .8rem; }
 .eyebrow { margin-bottom: .35rem; color: var(--primary); font-size: .72rem; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; }
 

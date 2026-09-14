@@ -27,6 +27,16 @@ public interface StoragePort {
      */
     InputStream openForReading(Path artifact);
 
+    /**
+     * SHA-256 of the artifact's bytes as stored, in lower-case hex — what
+     * {@code sha256sum} prints for the same file.
+     *
+     * @throws IllegalArgumentException if the path is outside the store
+     * @throws java.io.UncheckedIOException if it cannot be read, which
+     *         includes it no longer being there
+     */
+    String sha256Of(Path artifact);
+
     /** Removes an artifact if it is still there. Absent is not an error. */
     void delete(Path artifact);
 }

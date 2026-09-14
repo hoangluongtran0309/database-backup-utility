@@ -48,6 +48,7 @@ class RunBackupServiceTest {
     private static final Instant NOW = Instant.parse("2026-09-09T10:15:30Z");
     private static final UUID TARGET_ID = UUID.randomUUID();
     private static final Path ARTIFACT = Path.of("/backups/shop_20260909_101530.sql.gz");
+    private static final String SHA256 = "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08";
 
     @Mock private DatabaseTargetRepository targets;
     @Mock private BackupExecutionRepository executions;
@@ -160,6 +161,7 @@ class RunBackupServiceTest {
         when(encryption.decrypt("sealed")).thenReturn("s3cr3t");
         when(storage.locationFor("shop_20260909_101530.sql.gz")).thenReturn(ARTIFACT);
         when(backupEngine.dumpTo(any(), eq(ARTIFACT))).thenReturn(8192L);
+        when(storage.sha256Of(ARTIFACT)).thenReturn(SHA256);
 
         runQueuedWork(service.start(TARGET_ID));
 
@@ -167,7 +169,43 @@ class RunBackupServiceTest {
         assertThat(recorded.getStatus()).isEqualTo(ExecutionStatus.SUCCEEDED);
         assertThat(recorded.getArtifactPath()).isEqualTo(ARTIFACT.toString());
         assertThat(recorded.getSizeBytes()).isEqualTo(8192L);
+        assertThat(recorded.getSha256()).isEqualTo(SHA256);
         assertThat(recorded.getFinishedAt()).isEqualTo(NOW);
+    }
+
+    /** Checksummed after the dump, never before: the file is only complete once the engine returns. */
+    @Test
+    void checksumsTheArtifactOnlyOnceTheDumpHasFinished() {
+        givenTarget();
+        givenSaveEchoes();
+        when(encryption.decrypt(any())).thenReturn("s3cr3t");
+        when(storage.locationFor(any())).thenReturn(ARTIFACT);
+        when(backupEngine.dumpTo(any(), any())).thenReturn(1L);
+        when(storage.sha256Of(ARTIFACT)).thenReturn(SHA256);
+
+        runQueuedWork(service.start(TARGET_ID));
+
+        InOrder order = inOrder(backupEngine, storage);
+        order.verify(backupEngine).dumpTo(any(), eq(ARTIFACT));
+        order.verify(storage).sha256Of(ARTIFACT);
+    }
+
+    /** A file that cannot be read back is not a backup anyone should rely on. */
+    @Test
+    void anArtifactThatCannotBeReadBackFailsTheBackupAndGoes() {
+        givenTarget();
+        givenSaveEchoes();
+        when(encryption.decrypt(any())).thenReturn("s3cr3t");
+        when(storage.locationFor(any())).thenReturn(ARTIFACT);
+        when(backupEngine.dumpTo(any(), any())).thenReturn(1L);
+        when(storage.sha256Of(ARTIFACT)).thenThrow(new java.io.UncheckedIOException(
+                new java.io.IOException("Input/output error")));
+
+        runQueuedWork(service.start(TARGET_ID));
+
+        assertThat(lastSaved().getStatus()).isEqualTo(ExecutionStatus.FAILED);
+        assertThat(lastSaved().getErrorMessage()).contains("Input/output error");
+        verify(storage).delete(ARTIFACT);
     }
 
     @Test
@@ -177,6 +215,7 @@ class RunBackupServiceTest {
         when(encryption.decrypt("sealed")).thenReturn("s3cr3t");
         when(storage.locationFor(any())).thenReturn(ARTIFACT);
         when(backupEngine.dumpTo(any(), any())).thenReturn(1L);
+        when(storage.sha256Of(ARTIFACT)).thenReturn(SHA256);
 
         runQueuedWork(service.start(TARGET_ID));
 

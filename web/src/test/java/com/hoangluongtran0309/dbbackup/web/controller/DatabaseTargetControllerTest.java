@@ -47,6 +47,7 @@ import com.hoangluongtran0309.dbbackup.web.security.SecurityConfig;
 class DatabaseTargetControllerTest {
 
     private static final Instant CHECKED_AT = Instant.parse("2026-09-09T11:00:00Z");
+    private static final String SHA256 = "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08";
     private static final Instant BACKED_UP_AT = Instant.parse("2026-09-09T08:00:00Z");
 
     @Autowired
@@ -106,7 +107,7 @@ class DatabaseTargetControllerTest {
     void showsTheLastSuccessfulBackupEvenWhenANewerAttemptFailed() throws Exception {
         DatabaseTarget target = target("production");
         BackupExecution good = BackupExecution.started(UUID.randomUUID(), target.getId(), BACKED_UP_AT)
-                .succeeded("/backups/shop.sql.gz", 8192, BACKED_UP_AT.plusSeconds(5));
+                .succeeded("/backups/shop.sql.gz", 8192, SHA256, BACKED_UP_AT.plusSeconds(5));
         BackupExecution failed = BackupExecution.started(UUID.randomUUID(), target.getId(), BACKED_UP_AT.plusSeconds(3600))
                 .failed("Access denied", BACKED_UP_AT.plusSeconds(3601));
         when(service.listAll()).thenReturn(List.of(target));
