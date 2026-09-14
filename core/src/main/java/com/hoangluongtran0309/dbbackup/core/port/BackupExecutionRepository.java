@@ -38,8 +38,11 @@ public interface BackupExecutionRepository {
      */
     List<BackupExecution> findRunning();
 
-    /** Whether any backup, in any state, was taken of this target. */
-    boolean existsForTarget(UUID targetId);
+    /**
+     * Every backup, in any state, taken of this target, in no particular order.
+     * Rows only — reading them touches no artifact.
+     */
+    List<BackupExecution> findAllForTarget(UUID targetId);
 
     /** Silent when the id is unknown. */
     void deleteById(UUID id);

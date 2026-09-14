@@ -71,8 +71,12 @@ restored — questions with no obvious answers yet.
 
 - A target can now be removed, once its backups are deleted one at a time. That
   is tedious with many backups; bulk deletion is not part of this round.
+  *Superseded by [ADR-015](015-deleting-many-backups-and-a-target-with-them.md):
+  backups can be deleted several at once, and a target removed together with
+  its backups once its name is typed.*
 - A backup that is still running cannot be deleted — the dump is being written
-  to that file.
+  to that file. Nor, since [ADR-015](015-deleting-many-backups-and-a-target-with-them.md),
+  one that is being restored.
 - Downloading serves the artifact exactly as stored, still gzipped, so what
   lands on the operator's machine is byte for byte what this tool would restore.
 - `StoragePort` refuses to read or delete anything outside its root. Every path

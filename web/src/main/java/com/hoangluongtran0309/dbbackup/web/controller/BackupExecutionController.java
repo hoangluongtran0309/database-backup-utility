@@ -1,6 +1,7 @@
 package com.hoangluongtran0309.dbbackup.web.controller;
 
 import java.io.InputStream;
+import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.UUID;
@@ -105,6 +106,49 @@ public class BackupExecutionController {
                 .body(new InputStreamResource(content));
     }
 
+    /**
+     * The backups ticked on the list, and what deleting them takes with them.
+     * A GET, so the list's checkboxes need no script: the list page is a form
+     * that lands here.
+     */
+    @GetMapping("/delete")
+    String confirmDeleteMany(
+            @RequestParam(name = "id", required = false) List<UUID> ids,
+            Model model,
+            RedirectAttributes flash) {
+
+        if (ids == null || ids.isEmpty()) {
+            flash.addFlashAttribute("error", "Tick the backups to delete first");
+            return "redirect:/executions";
+        }
+        BackupArtifactService.BulkDeletionPreview preview = artifacts.previewDeletions(ids);
+        if (preview.executions().isEmpty()) {
+            flash.addFlashAttribute("error", "Those backups no longer exist");
+            return "redirect:/executions";
+        }
+        model.addAttribute("preview", preview);
+        model.addAttribute("targetNames", targetNames());
+        return "execution/delete-many";
+    }
+
+    @PostMapping("/delete")
+    String deleteMany(
+            @RequestParam(name = "id", required = false) List<UUID> ids,
+            RedirectAttributes flash) {
+
+        if (ids == null || ids.isEmpty()) {
+            flash.addFlashAttribute("error", "Tick the backups to delete first");
+            return "redirect:/executions";
+        }
+        try {
+            BackupArtifactService.BulkDeletion done = artifacts.deleteAll(ids);
+            flash.addFlashAttribute("message", summary(done));
+        } catch (IllegalStateException e) {
+            flash.addFlashAttribute("error", e.getMessage());
+        }
+        return "redirect:/executions";
+    }
+
     @GetMapping("/{id}/delete")
     String confirmDelete(@PathVariable UUID id, Model model) {
         model.addAttribute("preview", artifacts.previewDeletion(id));
@@ -127,6 +171,24 @@ public class BackupExecutionController {
             flash.addFlashAttribute("error", e.getMessage());
         }
         return "redirect:/executions";
+    }
+
+    /** Counted in the singular when there is one, like every other count in the console. */
+    private static String summary(BackupArtifactService.BulkDeletion done) {
+        String text = done.deleted() == 1
+                ? "1 backup deleted"
+                : "%d backups deleted".formatted(done.deleted());
+        if (done.artifactsRemoved() > 0) {
+            text += done.artifactsRemoved() == 1
+                    ? ", along with 1 artifact"
+                    : ", along with %d artifacts".formatted(done.artifactsRemoved());
+        }
+        if (done.alreadyGone() > 0) {
+            text += done.alreadyGone() == 1
+                    ? " — 1 was already gone"
+                    : " — %d were already gone".formatted(done.alreadyGone());
+        }
+        return text;
     }
 
     /**

@@ -28,9 +28,11 @@ import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import com.hoangluongtran0309.dbbackup.application.backup.BackupArtifactService.BulkDeletionPreview;
 import com.hoangluongtran0309.dbbackup.application.backup.RunBackupService;
 import com.hoangluongtran0309.dbbackup.application.target.EditTargetCommand;
 import com.hoangluongtran0309.dbbackup.application.target.ManageDatabaseTargetService;
+import com.hoangluongtran0309.dbbackup.application.target.ManageDatabaseTargetService.TargetRemovalPreview;
 import com.hoangluongtran0309.dbbackup.application.target.TestTargetConnectionService;
 import com.hoangluongtran0309.dbbackup.core.exception.DuplicateTargetNameException;
 import com.hoangluongtran0309.dbbackup.core.exception.TargetInUseException;
@@ -413,28 +415,155 @@ class DatabaseTargetControllerTest {
                 .andExpect(flash().attribute("error", "That target no longer exists"));
     }
 
-    @Test
-    void refusingToRemoveATargetWithBackupsIsReportedNotThrown() throws Exception {
-        UUID targetId = UUID.randomUUID();
-        org.mockito.Mockito.doThrow(new TargetInUseException("production"))
-                .when(service).delete(targetId);
+    // --- remove -------------------------------------------------------------
 
-        mockMvc.perform(post("/databases/{id}/delete", targetId).with(csrf()))
-                .andExpect(status().is3xxRedirection())
+    /** A target with backups goes to a page, not a one-click dialog; one without keeps the dialog. */
+    @Test
+    void offersThePageForATargetWithBackupsAndTheDialogForOneWithout() throws Exception {
+        DatabaseTarget withBackups = target("production");
+        DatabaseTarget empty = target("drill");
+        when(service.listAll()).thenReturn(List.of(withBackups, empty));
+        when(executions.findLatestPerTarget()).thenReturn(List.of(
+                BackupExecution.started(UUID.randomUUID(), withBackups.getId(), BACKED_UP_AT)
+                        .failed("boom", BACKED_UP_AT.plusSeconds(1))));
+
+        mockMvc.perform(get("/databases"))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "href=\"/databases/" + withBackups.getId() + "/delete\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString(
+                        "href=\"/databases/" + empty.getId() + "/delete\""))))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Remove target “drill”?")));
+    }
+
+    @Test
+    void theRemovePageCountsWhatGoesAndAsksForTheName() throws Exception {
+        DatabaseTarget target = target("production");
+        BackupExecution backup = BackupExecution.started(UUID.randomUUID(), target.getId(), BACKED_UP_AT)
+                .succeeded("/backups/shop.sql.gz", 8192, SHA256, BACKED_UP_AT.plusSeconds(5));
+        when(service.previewRemoval(target.getId())).thenReturn(new TargetRemovalPreview(
+                target,
+                new BulkDeletionPreview(List.of(backup, backup), 2, 16384L, 1L, null),
+                3L,
+                null));
+
+        mockMvc.perform(get("/databases/{id}/delete", target.getId()))
+                .andExpect(status().isOk())
+                .andExpect(view().name("database/delete"))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("All 2 of its backups go with it")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("16384</span> bytes in all")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("3</span> restore records")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("name=\"confirmation\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Remove it and its backups")));
+    }
+
+    @Test
+    void theRemovePageOfATargetWithoutBackupsAsksOnlyForAClick() throws Exception {
+        DatabaseTarget target = target("drill");
+        when(service.previewRemoval(target.getId())).thenReturn(new TargetRemovalPreview(
+                target, new BulkDeletionPreview(List.of(), 0, 0L, 0L, null), 0L, null));
+
+        mockMvc.perform(get("/databases/{id}/delete", target.getId()))
+                .andExpect(content().string(org.hamcrest.Matchers.not(
+                        org.hamcrest.Matchers.containsString("name=\"confirmation\""))))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Remove this target")));
+    }
+
+    /** Said instead of the button, so nobody types a name only to be told no. */
+    @Test
+    void theRemovePageSaysWhyItCannotGoAndOffersNoButton() throws Exception {
+        DatabaseTarget target = target("production");
+        when(service.previewRemoval(target.getId())).thenReturn(new TargetRemovalPreview(
+                target, new BulkDeletionPreview(List.of(), 0, 0L, 0L, null), 0L,
+                "A restore into this target is running. Wait for it to finish before removing the target."));
+
+        mockMvc.perform(get("/databases/{id}/delete", target.getId()))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("A restore into this target is running")))
+                .andExpect(content().string(org.hamcrest.Matchers.not(
+                        org.hamcrest.Matchers.containsString("Remove this target"))));
+    }
+
+    @Test
+    void theRemovePageOfATargetDeletedInAnotherTabSaysSo() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(service.previewRemoval(id)).thenThrow(new NoSuchElementException("gone"));
+
+        mockMvc.perform(get("/databases/{id}/delete", id))
                 .andExpect(redirectedUrl("/databases"))
+                .andExpect(flash().attribute("error", "That target no longer exists"));
+    }
+
+    @Test
+    void removingATargetWithBackupsUnnamedSendsItBackToThePage() throws Exception {
+        DatabaseTarget target = target("production");
+        when(service.get(target.getId())).thenReturn(target);
+        org.mockito.Mockito.doThrow(new TargetInUseException("production"))
+                .when(service).delete(target.getId(), false);
+
+        mockMvc.perform(post("/databases/{id}/delete", target.getId()).with(csrf()))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/databases/" + target.getId() + "/delete"))
                 .andExpect(flash().attribute("error",
                         org.hamcrest.Matchers.containsString("still has backups")));
     }
 
     @Test
-    void deletesATarget() throws Exception {
+    void aWrongNameIsNotAConfirmation() throws Exception {
+        DatabaseTarget target = target("production");
+        when(service.get(target.getId())).thenReturn(target);
+        org.mockito.Mockito.doThrow(new TargetInUseException("production"))
+                .when(service).delete(target.getId(), false);
+
+        mockMvc.perform(post("/databases/{id}/delete", target.getId()).with(csrf()).param("confirmation", "Production"))
+                .andExpect(redirectedUrl("/databases/" + target.getId() + "/delete"))
+                .andExpect(flash().attribute("error",
+                        "Type the target's name exactly — 'production' — to remove it with its backups"));
+    }
+
+    @Test
+    void removesATargetWithItsBackupsWhenTheNameIsTyped() throws Exception {
+        DatabaseTarget target = target("production");
+        when(service.get(target.getId())).thenReturn(target);
+
+        mockMvc.perform(post("/databases/{id}/delete", target.getId()).with(csrf()).param("confirmation", " production "))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/databases"))
+                .andExpect(flash().attribute("message", "Target 'production' removed"));
+
+        verify(service).delete(target.getId(), true);
+    }
+
+    @Test
+    void aRefusalWhileSomethingIsRunningIsReportedNotThrown() throws Exception {
+        DatabaseTarget target = target("production");
+        when(service.get(target.getId())).thenReturn(target);
+        org.mockito.Mockito.doThrow(new IllegalStateException("One of these backups is still running."))
+                .when(service).delete(target.getId(), true);
+
+        mockMvc.perform(post("/databases/{id}/delete", target.getId()).with(csrf()).param("confirmation", "production"))
+                .andExpect(redirectedUrl("/databases/" + target.getId() + "/delete"))
+                .andExpect(flash().attribute("error", "One of these backups is still running."));
+    }
+
+    @Test
+    void removingATargetThatIsAlreadyGoneIsNotAnError() throws Exception {
         UUID id = UUID.randomUUID();
+        when(service.get(id)).thenThrow(new NoSuchElementException("gone"));
 
         mockMvc.perform(post("/databases/{id}/delete", id).with(csrf()))
-                .andExpect(status().is3xxRedirection())
-                .andExpect(redirectedUrl("/databases"));
+                .andExpect(redirectedUrl("/databases"))
+                .andExpect(flash().attribute("message", "Target removed"));
 
-        verify(service).delete(id);
+        verify(service, never()).delete(any(), org.mockito.ArgumentMatchers.anyBoolean());
+    }
+
+    @Test
+    void removingATargetNeedsACsrfToken() throws Exception {
+        UUID id = UUID.randomUUID();
+
+        mockMvc.perform(post("/databases/{id}/delete", id).with(csrf().useInvalidToken()))
+                .andExpect(status().isForbidden());
+
+        verify(service, never()).delete(any(), org.mockito.ArgumentMatchers.anyBoolean());
     }
 
     private static DatabaseTarget target(String name) {

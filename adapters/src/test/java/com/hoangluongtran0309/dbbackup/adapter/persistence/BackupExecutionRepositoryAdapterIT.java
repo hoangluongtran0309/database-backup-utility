@@ -195,6 +195,21 @@ class BackupExecutionRepositoryAdapterIT {
                 .containsExactly(one.getId());
     }
 
+    /** What removing a target takes with it: its backups, in every state, and no other target's. */
+    @Test
+    void findsEveryBackupOfOneTargetAndNoOthers() {
+        UUID otherId = targets.save(target("staging")).getId();
+        BackupExecution running = executions.save(BackupExecution.started(UUID.randomUUID(), targetId, STARTED));
+        BackupExecution failed = executions.save(BackupExecution.started(UUID.randomUUID(), targetId, STARTED)
+                .failed("boom", STARTED.plusSeconds(1)));
+        executions.save(BackupExecution.started(UUID.randomUUID(), otherId, STARTED));
+
+        assertThat(executions.findAllForTarget(targetId))
+                .extracting(BackupExecution::getId)
+                .containsExactlyInAnyOrder(running.getId(), failed.getId());
+        assertThat(executions.findAllForTarget(UUID.randomUUID())).isEmpty();
+    }
+
     @Test
     void findsOnlyTheExecutionsStillRunning() {
         BackupExecution running = executions.save(BackupExecution.started(UUID.randomUUID(), targetId, STARTED));

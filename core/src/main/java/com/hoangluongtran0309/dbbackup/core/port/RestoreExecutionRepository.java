@@ -1,5 +1,6 @@
 package com.hoangluongtran0309.dbbackup.core.port;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -25,6 +26,16 @@ public interface RestoreExecutionRepository {
 
     /** How many restores refer to this backup. Shown before it is deleted. */
     long countForBackup(UUID backupExecutionId);
+
+    /** How many restores refer to any of these backups. Shown before they are deleted together. */
+    long countForBackups(Collection<UUID> backupExecutionIds);
+
+    /**
+     * How many restores went into this target or were made from a backup of
+     * it — every record that removing the target takes with it, each counted
+     * once.
+     */
+    long countInvolvingTarget(UUID targetId);
 
     /**
      * Removes every restore record referring to this backup.

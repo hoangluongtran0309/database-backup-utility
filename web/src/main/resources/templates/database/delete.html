@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout/base :: page('Remove target', 'targets', ~{:: #content})}">
+<body>
+<div id="content"
+     th:with="target=${preview.target()}, backups=${preview.backups()},
+              count=${preview.backups().executions().size()}">
+
+  <div class="page-header">
+    <div>
+      <div class="eyebrow">Setup</div>
+      <h1>Remove <span th:text="${target.name}">production</span>?</h1>
+      <p>Check what goes with it before you confirm.</p>
+    </div>
+  </div>
+
+  <!-- Said instead of the button, not after the click. -->
+  <div class="alert alert-warning" role="alert" th:if="${preview.refused()}">
+    <p><strong th:text="${preview.refusal()}">A restore into this target is running.</strong></p>
+    <p>Nothing has been removed.</p>
+  </div>
+
+  <div class="alert alert-danger" role="alert" th:unless="${preview.refused()}">
+    <p th:if="${preview.takesBackups()}">
+      <strong th:text="${count == 1
+                         ? 'Its backup goes with it. There is no undo.'
+                         : 'All ' + count + ' of its backups go with it. There is no undo.'}">All 12 of its backups go with it. There is no undo.</strong>
+    </p>
+    <p th:unless="${preview.takesBackups()}"><strong>There is no undo.</strong></p>
+    <p th:if="${backups.artifactsOnDisk() == 1}">
+      1 artifact, <span th:text="${backups.bytesOnDisk()}">8192</span> bytes, is deleted from disk.
+    </p>
+    <p th:if="${backups.artifactsOnDisk() > 1}">
+      <span th:text="${backups.artifactsOnDisk()}">10</span> artifacts,
+      <span th:text="${backups.bytesOnDisk()}">81920</span> bytes in all, are deleted from disk.
+    </p>
+    <p>Its stored credentials are deleted.</p>
+    <!-- Restores into it and restores of its backups, each counted once. -->
+    <p th:if="${preview.restoreCount() == 1}">
+      1 restore record — into this target, or from one of its backups — is deleted with it.
+    </p>
+    <p th:if="${preview.restoreCount() > 1}">
+      <span th:text="${preview.restoreCount()}">3</span> restore records — into this target, or from
+      its backups — are deleted with it.
+    </p>
+  </div>
+
+  <div class="panel">
+    <dl class="detail-grid">
+      <dt>Name</dt>
+      <dd th:text="${target.name}">production</dd>
+      <dt>Address</dt>
+      <dd class="mono" th:text="${target.address}">127.0.0.1:3306/shop</dd>
+      <dt>Backups</dt>
+      <dd class="mono" th:text="${count}">12</dd>
+    </dl>
+  </div>
+
+  <form class="form-panel" method="post" th:action="@{/databases/{id}/delete(id=${target.id})}">
+    <!-- Typing the name only when backups go too: those are the valuable
+         thing, and the name is the last chance to notice the wrong target. -->
+    <div class="form-group" th:if="${preview.takesBackups() and !preview.refused()}">
+      <label for="confirmation">Type <strong th:text="${target.name}">production</strong> to confirm</label>
+      <input id="confirmation" name="confirmation" type="text" autocomplete="off"
+             spellcheck="false" aria-describedby="confirmation-help">
+      <p class="field-hint" id="confirmation-help">
+        Its backups are deleted with it, so this asks for more than a click.
+      </p>
+    </div>
+
+    <div class="form-actions">
+      <button class="button button-danger-solid" type="submit" data-busy-label="Removing…"
+              th:unless="${preview.refused()}"
+              th:text="${preview.takesBackups() ? 'Remove it and its backups' : 'Remove this target'}">Remove it and its backups</button>
+      <a class="button button-ghost" th:href="@{/databases}">Cancel</a>
+    </div>
+  </form>
+
+</div>
+</body>
+</html>

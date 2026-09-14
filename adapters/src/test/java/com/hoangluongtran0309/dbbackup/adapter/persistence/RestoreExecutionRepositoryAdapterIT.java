@@ -205,6 +205,40 @@ class RestoreExecutionRepositoryAdapterIT {
     }
 
     @Test
+    void countsTheRestoresOfSeveralBackupsTogether() {
+        UUID otherBackupId = backups.save(BackupExecution.started(UUID.randomUUID(), targetId, STARTED)
+                .succeeded("/backups/other.sql.gz", 1L, SHA256, STARTED.plusSeconds(1))).getId();
+        UUID untouchedBackupId = backups.save(BackupExecution.started(UUID.randomUUID(), targetId, STARTED)
+                .succeeded("/backups/third.sql.gz", 1L, SHA256, STARTED.plusSeconds(1))).getId();
+        restores.save(RestoreExecution.started(UUID.randomUUID(), backupId, targetId, STARTED));
+        restores.save(RestoreExecution.started(UUID.randomUUID(), backupId, targetId, STARTED));
+        restores.save(RestoreExecution.started(UUID.randomUUID(), otherBackupId, targetId, STARTED));
+        restores.save(RestoreExecution.started(UUID.randomUUID(), untouchedBackupId, targetId, STARTED));
+
+        assertThat(restores.countForBackups(java.util.List.of(backupId, otherBackupId))).isEqualTo(3);
+        assertThat(restores.countForBackups(java.util.List.of())).isZero();
+    }
+
+    /**
+     * Every record removing a target takes: restores into it, restores of its
+     * backups into somewhere else — and a restore of its backup back into it
+     * counted once, not twice.
+     */
+    @Test
+    void countsEveryRestoreInvolvingATargetOnce() {
+        UUID drillId = targets.save(target("drill")).getId();
+        UUID drillBackupId = backups.save(BackupExecution.started(UUID.randomUUID(), drillId, STARTED)
+                .succeeded("/backups/drill.sql.gz", 1L, SHA256, STARTED.plusSeconds(1))).getId();
+        restores.save(RestoreExecution.started(UUID.randomUUID(), backupId, targetId, STARTED));       // own, back into it
+        restores.save(RestoreExecution.started(UUID.randomUUID(), backupId, drillId, STARTED));        // own, elsewhere
+        restores.save(RestoreExecution.started(UUID.randomUUID(), drillBackupId, targetId, STARTED));  // another's, into it
+        restores.save(RestoreExecution.started(UUID.randomUUID(), drillBackupId, drillId, STARTED));   // not involved
+
+        assertThat(restores.countInvolvingTarget(targetId)).isEqualTo(3);
+        assertThat(restores.countInvolvingTarget(drillId)).isEqualTo(3);
+    }
+
+    @Test
     void deletingRestoresForABackupThatHasNoneIsHarmless() {
         restores.deleteForBackup(UUID.randomUUID());
 

@@ -315,6 +315,120 @@ class BackupExecutionControllerTest {
                 .andExpect(flash().attribute("error", "That backup no longer exists"));
     }
 
+    // --- delete several ------------------------------------------------------
+
+    /** A running backup is still writing its file, so it has no box to tick. */
+    @Test
+    void theListOffersABoxForEveryBackupButARunningOne() throws Exception {
+        BackupExecution done = succeeded();
+        BackupExecution running = BackupExecution.started(UUID.randomUUID(), TARGET_ID, STARTED.plusSeconds(60));
+        when(executions.findNewestFirst(1, 50)).thenReturn(new HistoryPage<>(List.of(running, done), 1, false));
+        when(targets.listAll()).thenReturn(List.of(target("production")));
+
+        mockMvc.perform(get("/executions"))
+                .andExpect(content().string(containsString("action=\"/executions/delete\"")))
+                .andExpect(content().string(containsString("form=\"delete-selected\"")))
+                .andExpect(content().string(containsString("name=\"id\" value=\"" + done.getId() + "\"")))
+                .andExpect(content().string(not(containsString("value=\"" + running.getId() + "\""))));
+    }
+
+    @Test
+    void theDeleteManyPageTotalsWhatGoes() throws Exception {
+        BackupExecution first = succeeded();
+        BackupExecution second = failed();
+        when(artifacts.previewDeletions(List.of(first.getId(), second.getId()))).thenReturn(
+                new BackupArtifactService.BulkDeletionPreview(List.of(first, second), 1, 8192L, 2L, null));
+        when(targets.listAll()).thenReturn(List.of(target("production")));
+
+        mockMvc.perform(get("/executions/delete").param("id", first.getId().toString(), second.getId().toString()))
+                .andExpect(status().isOk())
+                .andExpect(view().name("execution/delete-many"))
+                .andExpect(content().string(containsString("Delete these 2 backups?")))
+                .andExpect(content().string(containsString("1 artifact, <span>8192</span> bytes, is deleted from disk")))
+                .andExpect(content().string(containsString("restore records refer to them and are deleted with them")))
+                .andExpect(content().string(containsString("shop_20260909_100000.sql.gz")))
+                // Carried to the POST, which is what deletes.
+                .andExpect(content().string(containsString("name=\"id\" value=\"" + second.getId() + "\"")))
+                .andExpect(content().string(containsString("Delete these 2 backups</button>")));
+    }
+
+    /** Said instead of the button: nothing is deleted while one of them is in use. */
+    @Test
+    void theDeleteManyPageSaysWhyItIsRefusedAndOffersNoButton() throws Exception {
+        BackupExecution first = succeeded();
+        when(artifacts.previewDeletions(List.of(first.getId()))).thenReturn(
+                new BackupArtifactService.BulkDeletionPreview(List.of(first), 1, 8192L, 0L,
+                        "This backup is being restored right now. Wait for the restore to finish before deleting it."));
+        when(targets.listAll()).thenReturn(List.of(target("production")));
+
+        mockMvc.perform(get("/executions/delete").param("id", first.getId().toString()))
+                .andExpect(content().string(containsString("is being restored right now")))
+                .andExpect(content().string(not(containsString("Delete this backup</button>"))));
+    }
+
+    @Test
+    void tickingNothingIsSaidNotShownAsAnEmptyPage() throws Exception {
+        mockMvc.perform(get("/executions/delete"))
+                .andExpect(redirectedUrl("/executions"))
+                .andExpect(flash().attribute("error", "Tick the backups to delete first"));
+        verify(artifacts, never()).previewDeletions(any());
+    }
+
+    @Test
+    void tickedBackupsThatAreAllGoneAreSaidToBeGone() throws Exception {
+        UUID gone = UUID.randomUUID();
+        when(artifacts.previewDeletions(List.of(gone))).thenReturn(
+                new BackupArtifactService.BulkDeletionPreview(List.of(), 0, 0L, 0L, null));
+
+        mockMvc.perform(get("/executions/delete").param("id", gone.toString()))
+                .andExpect(redirectedUrl("/executions"))
+                .andExpect(flash().attribute("error", "Those backups no longer exist"));
+    }
+
+    @Test
+    void deletesSeveralAndSummarisesWhatWent() throws Exception {
+        UUID first = UUID.randomUUID();
+        UUID second = UUID.randomUUID();
+        UUID third = UUID.randomUUID();
+        when(artifacts.deleteAll(List.of(first, second, third)))
+                .thenReturn(new BackupArtifactService.BulkDeletion(2, 1, 1));
+
+        mockMvc.perform(post("/executions/delete").with(csrf())
+                        .param("id", first.toString(), second.toString(), third.toString()))
+                .andExpect(redirectedUrl("/executions"))
+                .andExpect(flash().attribute("message",
+                        "2 backups deleted, along with 1 artifact — 1 was already gone"));
+    }
+
+    @Test
+    void deletingOneThroughTheListSaysSoInTheSingular() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(artifacts.deleteAll(List.of(id))).thenReturn(new BackupArtifactService.BulkDeletion(1, 1, 0));
+
+        mockMvc.perform(post("/executions/delete").with(csrf()).param("id", id.toString()))
+                .andExpect(flash().attribute("message", "1 backup deleted, along with 1 artifact"));
+    }
+
+    @Test
+    void aRefusedBatchIsReportedNotThrown() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(artifacts.deleteAll(List.of(id))).thenThrow(new IllegalStateException(
+                "One of these backups is still running. Wait for it to finish before deleting it."));
+
+        mockMvc.perform(post("/executions/delete").with(csrf()).param("id", id.toString()))
+                .andExpect(redirectedUrl("/executions"))
+                .andExpect(flash().attribute("error",
+                        "One of these backups is still running. Wait for it to finish before deleting it."));
+    }
+
+    @Test
+    void deletingSeveralNeedsACsrfToken() throws Exception {
+        mockMvc.perform(post("/executions/delete").with(csrf().useInvalidToken())
+                        .param("id", UUID.randomUUID().toString()))
+                .andExpect(status().isForbidden());
+        verify(artifacts, never()).deleteAll(any());
+    }
+
     @Test
     void aRunningBackupOffersNoDownloadOrRestoreLink() throws Exception {
         BackupExecution execution = BackupExecution.started(UUID.randomUUID(), TARGET_ID, STARTED);
