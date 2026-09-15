@@ -60,7 +60,11 @@ filesystem. It is not there in anticipation of S3.
   `BACKUP_DIR` to something outside the working directory.
 - Nothing deletes artifacts yet, so the directory grows without limit. Removing
   a target that has backups is refused rather than allowed to strand files; the
-  ability to delete them arrives with the slice that adds it.
+  ability to delete them arrives with the slice that adds it. *Superseded by
+  [ADR-008](008-deleting-a-backup-takes-its-history-with-it.md) and
+  [ADR-015](015-deleting-many-backups-and-a-target-with-them.md): backups are
+  deleted with their files, several at once, and a target can go with its
+  backups once its name is typed.*
 - The dump is written with the schema name positional rather than via
   `--databases`, so it contains no `CREATE DATABASE` or `USE`. That is what will
   let a restore load it into a schema with a different name.

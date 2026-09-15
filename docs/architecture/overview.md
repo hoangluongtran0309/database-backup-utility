@@ -82,11 +82,15 @@ once:
   this with half a megabyte on each stream, and runs on a separate thread so a
   reintroduced deadlock fails the build instead of hanging it.
 - **Every command has a timeout**, after which the child is forcibly killed.
-- **Input too large for memory is redirected from a file.** `runWithInput`
-  points the child's stdin at a file and lets the kernel do the feeding.
-  Writing to a child's stdin from a thread of ours would add a fourth stream to
-  keep in lockstep, and a writer blocked on a child that is itself blocked
-  writing output is the same deadlock in a harder-to-see shape.
+- **Input too large for memory is fed from a stream.** `runFeeding` copies a
+  caller-supplied source into the child's stdin on a thread of its own, beside
+  the two that drain stdout and stderr, so none of the three ever waits on
+  another. If the source cannot be read, the child is killed before its stdin
+  is closed — a client given a clean end of input would take half a dump for a
+  whole one. See [ADR-016](../adr/016-restore-streams-the-dump-into-the-client.md).
+- **Every pipe has a dedicated thread**, never one borrowed from the common
+  pool, which is one worker smaller than the machine and would run out on a
+  small host with two jobs running.
 - **Output too large for memory is streamed.** `runStreaming` copies stdout into
   a caller-supplied sink through a fixed buffer, so a dump costs the same heap
   whatever its size. The sink is flushed but never closed — a
@@ -144,16 +148,21 @@ gone — jobs run here and nowhere else — so startup marks them failed.
 
 ## Removing things
 
-Nothing is removed automatically. The chain is strict and walked by hand:
-a target cannot go while it has backups, and a backup cannot go while restore
-records refer to it. Deleting a backup removes those records, then its file,
-then its row — in that order, so a failure never strands a file on disk with
-nothing pointing at it. See
+Nothing is removed automatically. The chain is strict and walked by the use
+cases, never by the schema: a target cannot go while it has backups, and a
+backup cannot go while restore records refer to it. Deleting a backup removes
+those records, then its file, then its row — in that order, so a failure never
+strands a file on disk with nothing pointing at it. See
 [ADR-008](../adr/008-deleting-a-backup-takes-its-history-with-it.md). Removing
-a target likewise removes the records of restores into it, in the use case and
-only after checking it has no backups
-([ADR-014](../adr/014-restore-into-any-registered-target.md)). Every foreign
-key is `RESTRICT`: the schema never removes history by itself.
+a target likewise removes the records of restores into it
+([ADR-014](../adr/014-restore-into-any-registered-target.md)).
+
+Several backups go together by the same steps, one after another, and a target
+can take its backups with it once its name is typed. Every check — a backup
+still running, a restore still reading one — is made for all of them before any
+is touched
+([ADR-015](../adr/015-deleting-many-backups-and-a-target-with-them.md)). Every
+foreign key is `RESTRICT`: the schema never removes history by itself.
 
 `StoragePort` refuses to read or delete anything outside its configured root.
 Every path it receives was read back from the database, and a value in a

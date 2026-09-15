@@ -3,8 +3,10 @@ package com.hoangluongtran0309.dbbackup.adapter.process;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -223,6 +225,119 @@ class ProcessRunnerTest {
             assertThat(new String(in.readAllBytes(), StandardCharsets.UTF_8))
                     .isEqualTo("compressed payload\n");
         }
+    }
+
+    // --- feeding stdin ------------------------------------------------------
+
+    /**
+     * The deadlock the old temporary file was there to avoid: a child that
+     * writes as much as it reads. {@code cat} echoes every byte, so both
+     * directions carry megabytes, far past a pipe buffer each way. A feeder
+     * sharing a thread with a drain could not pass this.
+     */
+    @Test
+    @Timeout(value = 60, threadMode = ThreadMode.SEPARATE_THREAD)
+    void feedsInputFarLargerThanAPipeIntoAChildThatEchoesItAll() {
+        String input = "abcdefghijklmnopqrstuvwxyz\n".repeat(200_000);
+
+        ProcessRunner.Result result = runner.runFeeding(
+                List.of("/bin/cat"), Map.of(), Duration.ofSeconds(50),
+                new ByteArrayInputStream(input.getBytes(StandardCharsets.UTF_8)));
+
+        assertThat(result.succeeded()).isTrue();
+        assertThat(result.stdout()).hasSize(input.length()).isEqualTo(input);
+    }
+
+    @Test
+    @Timeout(value = 30, threadMode = ThreadMode.SEPARATE_THREAD)
+    void feedsInputAndStillCapturesWhatTheChildSays() {
+        ProcessRunner.Result result = runner.runFeeding(
+                List.of("/bin/sh", "-c", "wc -c; echo done >&2"), Map.of(), Duration.ofSeconds(25),
+                new ByteArrayInputStream("twelve bytes".getBytes(StandardCharsets.UTF_8)));
+
+        assertThat(result.stdout().strip()).isEqualTo("12");
+        assertThat(result.stderr().strip()).isEqualTo("done");
+    }
+
+    /**
+     * mysql --batch stops at the first bad statement and exits, with most of
+     * the dump still unread. That is its error to report, not a broken pipe
+     * of ours.
+     */
+    @Test
+    @Timeout(value = 30, threadMode = ThreadMode.SEPARATE_THREAD)
+    void aChildThatStopsReadingEarlyReportsItsOwnExitAndStderr() {
+        ProcessRunner.Result result = runner.runFeeding(
+                List.of("/bin/sh", "-c", "head -c 10 > /dev/null; echo 'ERROR 1064 at line 1' >&2; exit 3"),
+                Map.of(), Duration.ofSeconds(25),
+                new ByteArrayInputStream(new byte[5_000_000]));
+
+        assertThat(result.exitCode()).isEqualTo(3);
+        assertThat(result.errorOutput()).isEqualTo("ERROR 1064 at line 1");
+    }
+
+    /**
+     * A source that fails halfway — a truncated archive. Had the child's stdin
+     * been closed first, it would see a clean end of input and finish as if it
+     * had had all of it: here, by leaving a file behind.
+     */
+    @Test
+    @Timeout(value = 30, threadMode = ThreadMode.SEPARATE_THREAD)
+    void aSourceThatFailsHalfwayKillsTheChildBeforeItSeesTheEnd(@TempDir Path dir) {
+        Path finished = dir.resolve("finished");
+        InputStream failing = new InputStream() {
+            private int served;
+
+            @Override
+            public int read() throws IOException {
+                byte[] one = new byte[1];
+                return read(one, 0, 1) < 0 ? -1 : one[0];
+            }
+
+            @Override
+            public int read(byte[] b, int off, int len) throws IOException {
+                if (served >= 200_000) {
+                    throw new IOException("Unexpected end of ZLIB input stream");
+                }
+                int n = Math.min(len, 200_000 - served);
+                served += n;
+                return n;
+            }
+        };
+
+        assertThatThrownBy(() -> runner.runFeeding(
+                List.of("/bin/sh", "-c", "cat > /dev/null; touch \"$1\"", "sh", finished.toString()),
+                Map.of(), Duration.ofSeconds(25), failing))
+                .isInstanceOf(ProcessRunner.ProcessFailedException.class)
+                .hasMessageContaining("Failed while reading the input")
+                .hasMessageContaining("Unexpected end of ZLIB input stream");
+        // The child was waited for before the exception, so this is final.
+        assertThat(finished).doesNotExist();
+    }
+
+    @Test
+    void doesNotCloseTheSourceItIsGiven() {
+        boolean[] closed = {false};
+        InputStream source = new ByteArrayInputStream("x".getBytes(StandardCharsets.UTF_8)) {
+            @Override
+            public void close() {
+                closed[0] = true;
+            }
+        };
+
+        runner.runFeeding(List.of("/bin/cat"), Map.of(), Duration.ofSeconds(5), source);
+
+        assertThat(closed[0]).isFalse();
+    }
+
+    @Test
+    @Timeout(value = 30, threadMode = ThreadMode.SEPARATE_THREAD)
+    void killsAFedChildThatOutlivesItsTimeout() {
+        assertThatThrownBy(() -> runner.runFeeding(
+                List.of("/bin/sh", "-c", "sleep 60"), Map.of(), Duration.ofMillis(500),
+                new ByteArrayInputStream(new byte[5_000_000])))
+                .isInstanceOf(ProcessRunner.ProcessFailedException.class)
+                .hasMessageContaining("did not finish");
     }
 
     // --- result shape -------------------------------------------------------

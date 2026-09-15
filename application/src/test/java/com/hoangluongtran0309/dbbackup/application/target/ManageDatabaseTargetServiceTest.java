@@ -25,9 +25,13 @@ import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import com.hoangluongtran0309.dbbackup.application.backup.BackupArtifactService;
+import com.hoangluongtran0309.dbbackup.application.backup.BackupArtifactService.BulkDeletionPreview;
 import com.hoangluongtran0309.dbbackup.core.exception.InvalidTargetException;
 import com.hoangluongtran0309.dbbackup.core.exception.TargetInUseException;
+import com.hoangluongtran0309.dbbackup.core.model.BackupExecution;
 import com.hoangluongtran0309.dbbackup.core.model.DatabaseTarget;
+import com.hoangluongtran0309.dbbackup.core.model.RestoreExecution;
 import com.hoangluongtran0309.dbbackup.core.port.BackupExecutionRepository;
 import com.hoangluongtran0309.dbbackup.core.port.DatabaseTargetRepository;
 import com.hoangluongtran0309.dbbackup.core.port.EncryptionPort;
@@ -53,6 +57,9 @@ class ManageDatabaseTargetServiceTest {
     private RestoreExecutionRepository restores;
 
     @Mock
+    private BackupArtifactService artifacts;
+
+    @Mock
     private EncryptionPort encryption;
 
     @Captor
@@ -63,7 +70,7 @@ class ManageDatabaseTargetServiceTest {
     @BeforeEach
     void setUp() {
         service = new ManageDatabaseTargetService(
-                repository, backups, restores, encryption, Clock.fixed(NOW, ZoneOffset.UTC));
+                repository, backups, restores, artifacts, encryption, Clock.fixed(NOW, ZoneOffset.UTC));
     }
 
     @Test
@@ -190,25 +197,76 @@ class ManageDatabaseTargetServiceTest {
     void removingATargetRemovesTheRestoresIntoItFirst() {
         DatabaseTarget target = stored();
         when(repository.findById(target.getId())).thenReturn(Optional.of(target));
-        when(backups.existsForTarget(target.getId())).thenReturn(false);
+        when(backups.findAllForTarget(target.getId())).thenReturn(List.of());
 
-        service.delete(target.getId());
+        service.delete(target.getId(), false);
 
         InOrder order = inOrder(restores, repository);
         order.verify(restores).deleteForTarget(target.getId());
         order.verify(repository).deleteById(target.getId());
+        verify(artifacts, never()).deleteAll(any());
     }
 
     /** Refused before anything is touched, so a refusal takes no history with it. */
     @Test
-    void aTargetWithBackupsIsRefusedAndKeepsItsRestoreRecords() {
+    void aTargetWithBackupsIsRefusedUnlessThatWasConfirmed() {
         DatabaseTarget target = stored();
         when(repository.findById(target.getId())).thenReturn(Optional.of(target));
-        when(backups.existsForTarget(target.getId())).thenReturn(true);
+        when(backups.findAllForTarget(target.getId())).thenReturn(List.of(backupOf(target)));
 
-        assertThatThrownBy(() -> service.delete(target.getId()))
+        assertThatThrownBy(() -> service.delete(target.getId(), false))
                 .isInstanceOf(TargetInUseException.class)
-                .hasMessageContaining("production");
+                .hasMessageContaining("production")
+                .hasMessageContaining("still has backups");
+
+        verify(artifacts, never()).deleteAll(any());
+        verify(restores, never()).deleteForTarget(any());
+        verify(repository, never()).deleteById(any());
+    }
+
+    /** ADR-015: its backups first, exactly as deleting them by hand would; then restores; then the row. */
+    @Test
+    void aConfirmedRemovalTakesTheBackupsThenTheRestoresThenTheTarget() {
+        DatabaseTarget target = stored();
+        BackupExecution first = backupOf(target);
+        BackupExecution second = backupOf(target);
+        when(repository.findById(target.getId())).thenReturn(Optional.of(target));
+        when(backups.findAllForTarget(target.getId())).thenReturn(List.of(first, second));
+
+        service.delete(target.getId(), true);
+
+        InOrder order = inOrder(artifacts, restores, repository);
+        order.verify(artifacts).deleteAll(List.of(first.getId(), second.getId()));
+        order.verify(restores).deleteForTarget(target.getId());
+        order.verify(repository).deleteById(target.getId());
+    }
+
+    @Test
+    void aTargetARestoreIsRunningIntoIsRefusedAndKeepsEverything() {
+        DatabaseTarget target = stored();
+        when(repository.findById(target.getId())).thenReturn(Optional.of(target));
+        when(backups.findAllForTarget(target.getId())).thenReturn(List.of(backupOf(target)));
+        when(restores.findRunning()).thenReturn(List.of(
+                RestoreExecution.started(UUID.randomUUID(), UUID.randomUUID(), target.getId(), NOW)));
+
+        assertThatThrownBy(() -> service.delete(target.getId(), true))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("restore into this target is running");
+
+        verify(artifacts, never()).deleteAll(any());
+        verify(repository, never()).deleteById(any());
+    }
+
+    /** A refusal from the backups themselves — one still running, say — stops the removal before the target row. */
+    @Test
+    void aRefusalFromItsBackupsLeavesTheTarget() {
+        DatabaseTarget target = stored();
+        when(repository.findById(target.getId())).thenReturn(Optional.of(target));
+        when(backups.findAllForTarget(target.getId())).thenReturn(List.of(backupOf(target)));
+        when(artifacts.deleteAll(any())).thenThrow(new IllegalStateException("This backup is still running."));
+
+        assertThatThrownBy(() -> service.delete(target.getId(), true))
+                .isInstanceOf(IllegalStateException.class);
 
         verify(restores, never()).deleteForTarget(any());
         verify(repository, never()).deleteById(any());
@@ -219,14 +277,49 @@ class ManageDatabaseTargetServiceTest {
         UUID id = UUID.randomUUID();
         when(repository.findById(id)).thenReturn(Optional.empty());
 
-        service.delete(id);
+        service.delete(id, true);
 
         verify(restores, never()).deleteForTarget(any());
         verify(repository, never()).deleteById(any());
     }
 
+    @Test
+    void previewCountsItsBackupsAndEveryRestoreThatGoes() {
+        DatabaseTarget target = stored();
+        BackupExecution backup = backupOf(target);
+        BulkDeletionPreview ownBackups = new BulkDeletionPreview(List.of(backup), 1, 8192L, 1L, null);
+        when(repository.findById(target.getId())).thenReturn(Optional.of(target));
+        when(backups.findAllForTarget(target.getId())).thenReturn(List.of(backup));
+        when(artifacts.previewDeletions(List.of(backup.getId()))).thenReturn(ownBackups);
+        when(restores.countInvolvingTarget(target.getId())).thenReturn(4L);
+
+        ManageDatabaseTargetService.TargetRemovalPreview preview = service.previewRemoval(target.getId());
+
+        assertThat(preview.target()).isEqualTo(target);
+        assertThat(preview.backups()).isEqualTo(ownBackups);
+        assertThat(preview.restoreCount()).isEqualTo(4L);
+        assertThat(preview.takesBackups()).isTrue();
+        assertThat(preview.refused()).isFalse();
+    }
+
+    @Test
+    void previewPassesOnWhyItsBackupsCannotGo() {
+        DatabaseTarget target = stored();
+        when(repository.findById(target.getId())).thenReturn(Optional.of(target));
+        when(backups.findAllForTarget(target.getId())).thenReturn(List.of());
+        when(artifacts.previewDeletions(List.of()))
+                .thenReturn(new BulkDeletionPreview(List.of(), 0, 0L, 0L, "One of these backups is still running."));
+
+        assertThat(service.previewRemoval(target.getId()).refusal()).contains("still running");
+    }
+
     private static RegisterTargetCommand command() {
         return new RegisterTargetCommand("production", "127.0.0.1", 3306, "shop", "backup", "s3cr3t");
+    }
+
+    private static BackupExecution backupOf(DatabaseTarget target) {
+        return BackupExecution.started(UUID.randomUUID(), target.getId(), NOW)
+                .failed("boom", NOW.plusSeconds(1));
     }
 
     private static DatabaseTarget stored() {

@@ -95,8 +95,15 @@
                 <button class="button button-small button-primary" type="submit" data-busy-label="Starting…">Back up now</button>
               </form>
               <a class="button button-small" th:href="@{/databases/{id}/edit(id=${target.id})}">Edit</a>
+              <!-- A target with backups takes them with it, so it gets a page
+                   that counts them and asks for its name (ADR-015). One without
+                   keeps the quick dialog; if a backup appears in between, the
+                   server sends it to that page anyway. -->
+              <a class="button button-small button-danger" th:if="${latestBackups.containsKey(target.id)}"
+                 th:href="@{/databases/{id}/delete(id=${target.id})}">Remove…</a>
               <form method="post" th:action="@{/databases/{id}/delete(id=${target.id})}"
-                    th:attr="data-confirm=|Remove target “${target.name}”? Its stored credentials, and the record of any restores into it, are deleted. A target that still has backups cannot be removed.|"
+                    th:unless="${latestBackups.containsKey(target.id)}"
+                    th:attr="data-confirm=|Remove target “${target.name}”? Its stored credentials, and the record of any restores into it, are deleted.|"
                     data-confirm-title="Remove target" data-confirm-accept="Remove">
                 <button class="button button-small button-danger" type="submit" data-busy-label="Removing…">Remove</button>
               </form>

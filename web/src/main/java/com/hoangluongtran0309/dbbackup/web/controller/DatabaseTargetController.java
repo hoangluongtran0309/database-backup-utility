@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import com.hoangluongtran0309.dbbackup.application.backup.RunBackupService;
@@ -186,15 +187,48 @@ public class DatabaseTargetController {
         }
     }
 
-    @PostMapping("/{id}/delete")
-    String delete(@PathVariable UUID id, RedirectAttributes flash) {
+    /** What removing the target takes with it, said before the click rather than discovered after it. */
+    @GetMapping("/{id}/delete")
+    String confirmDelete(@PathVariable UUID id, Model model, RedirectAttributes flash) {
         try {
-            service.delete(id);
+            model.addAttribute("preview", service.previewRemoval(id));
+        } catch (NoSuchElementException e) {
+            return targetGone(flash);
+        }
+        return "database/delete";
+    }
+
+    /**
+     * A target with backups goes only with its name typed: its backups go with
+     * it (ADR-015). Typing, not ticking, for the reason ADR-014 gives.
+     */
+    @PostMapping("/{id}/delete")
+    String delete(
+            @PathVariable UUID id,
+            @RequestParam(value = "confirmation", required = false) String confirmation,
+            RedirectAttributes flash) {
+
+        DatabaseTarget target;
+        try {
+            target = service.get(id);
+        } catch (NoSuchElementException e) {
             flash.addFlashAttribute("message", "Target removed");
+            return "redirect:/databases";
+        }
+        boolean named = confirmation != null && target.getName().equals(confirmation.strip());
+        try {
+            service.delete(id, named);
+            flash.addFlashAttribute("message", "Target '%s' removed".formatted(target.getName()));
+            return "redirect:/databases";
         } catch (TargetInUseException e) {
+            flash.addFlashAttribute("error", confirmation == null || confirmation.isBlank()
+                    ? e.getMessage()
+                    : "Type the target's name exactly — '%s' — to remove it with its backups"
+                            .formatted(target.getName()));
+        } catch (IllegalStateException e) {
             flash.addFlashAttribute("error", e.getMessage());
         }
-        return "redirect:/databases";
+        return "redirect:/databases/" + id + "/delete";
     }
 
     /** The repository returns at most one per target; a duplicate would be a bug there, so it fails here. */

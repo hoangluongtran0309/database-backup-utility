@@ -48,8 +48,8 @@ class BackupExecutionRepositoryAdapter implements BackupExecutionRepository {
     }
 
     @Override
-    public boolean existsForTarget(UUID targetId) {
-        return jpaRepository.existsByTargetId(targetId);
+    public List<BackupExecution> findAllForTarget(UUID targetId) {
+        return jpaRepository.findByTargetId(targetId).stream().map(BackupExecutionMapper::toDomain).toList();
     }
 
     @Override

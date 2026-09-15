@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout/base :: page('Delete backups', 'backups', ~{:: #content})}">
+<body>
+<div id="content" th:with="count=${preview.executions().size()}">
+
+  <div class="page-header">
+    <div>
+      <div class="eyebrow">Backup</div>
+      <h1 th:text="${count == 1 ? 'Delete this backup?' : 'Delete these ' + count + ' backups?'}">Delete these 3 backups?</h1>
+      <p>Check what goes with them before you confirm.</p>
+    </div>
+  </div>
+
+  <!-- Said instead of the button, not after the click: nothing is deleted
+       while one of them is still in use. -->
+  <div class="alert alert-warning" role="alert" th:if="${preview.refused()}">
+    <p><strong th:text="${preview.refusal()}">One of these backups is still running.</strong></p>
+    <p>Nothing has been deleted. Go back and leave it out, or wait and try again.</p>
+  </div>
+
+  <div class="alert alert-danger" role="alert" th:unless="${preview.refused()}">
+    <p th:if="${preview.artifactsOnDisk() == 1}">
+      <strong>1 artifact, <span th:text="${preview.bytesOnDisk()}">8192</span> bytes, is deleted from disk. There is no undo.</strong>
+    </p>
+    <p th:if="${preview.artifactsOnDisk() > 1}">
+      <strong><span th:text="${preview.artifactsOnDisk()}">3</span> artifacts,
+        <span th:text="${preview.bytesOnDisk()}">24576</span> bytes in all, are deleted from disk. There is no undo.</strong>
+    </p>
+    <p th:if="${preview.artifactsOnDisk() == 0}"><strong>There is no undo.</strong></p>
+    <p th:if="${preview.restoreCount() == 1}">
+      1 restore record refers to one of them and is deleted with it.
+    </p>
+    <p th:if="${preview.restoreCount() > 1}">
+      <span th:text="${preview.restoreCount()}">2</span>
+      restore records refer to them and are deleted with them.
+    </p>
+  </div>
+
+  <div class="table-wrap responsive-cards">
+    <table>
+      <thead>
+        <tr>
+          <th scope="col">Started</th>
+          <th scope="col">Target</th>
+          <th scope="col">Status</th>
+          <th scope="col">Artifact</th>
+          <th scope="col">Size</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr th:each="execution : ${preview.executions()}">
+          <td data-label="Started" class="mono"
+              th:text="${#temporals.format(
+                          execution.startedAt.atOffset(T(java.time.ZoneOffset).UTC),
+                          'yyyy-MM-dd HH:mm:ss')} + ' UTC'">…</td>
+          <td data-label="Target" th:text="${targetNames.getOrDefault(execution.targetId, '(removed)')}">production</td>
+          <td data-label="Status" th:insert="~{fragments/execution-status :: statusBadge(${execution.status})}"></td>
+          <!-- The file name alone: the fragment that adds the directory is a
+               <dd>, and every file here is in the same one. -->
+          <td data-label="Artifact" class="mono break"
+              th:text="${execution.artifactPath == null ? '—'
+                        : execution.artifactPath.substring(execution.artifactPath.lastIndexOf('/') + 1)}">shop_20260909_100000.sql.gz</td>
+          <td data-label="Size" class="mono" th:text="${execution.sizeBytes != null ? execution.sizeBytes + ' B' : '—'}">—</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <form method="post" th:action="@{/executions/delete}">
+    <input type="hidden" name="id" th:each="execution : ${preview.executions()}" th:value="${execution.id}">
+    <div class="form-actions">
+      <button class="button button-danger-solid" type="submit" data-busy-label="Deleting…"
+              th:unless="${preview.refused()}"
+              th:text="${count == 1 ? 'Delete this backup' : 'Delete these ' + count + ' backups'}">Delete these 3 backups</button>
+      <a class="button button-ghost" th:href="@{/executions}">Cancel</a>
+    </div>
+  </form>
+
+</div>
+</body>
+</html>

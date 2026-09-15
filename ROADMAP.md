@@ -44,6 +44,19 @@ below.
 - [x] **12. Paginate the history.** Backup and restore lists a page at a time,
       and the target list without reading every backup ever made.
 
+## Third round
+
+The disk the backups live on, which nothing but the operator keeps in check.
+
+- [x] **13. Delete backups in bulk.** Tick several on the backup list and
+      delete them together; remove a target with all its backups by typing its
+      name. Still by hand — nothing prunes automatically. See ADR-015.
+- [x] **14. Stream the restore.** Feed the gunzipped dump straight into the
+      client instead of through a decompressed copy on disk, so a restore no
+      longer needs free space many times the archive's size. The archive is
+      read through once first, so a truncated one still never reaches the
+      target. See ADR-016.
+
 ## Deliberately out of scope
 
 Not "later" — absent, and not to be reintroduced without a decision that

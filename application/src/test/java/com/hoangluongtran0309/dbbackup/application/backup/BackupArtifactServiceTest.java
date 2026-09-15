@@ -12,6 +12,7 @@ import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.UUID;
@@ -24,6 +25,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.hoangluongtran0309.dbbackup.core.model.BackupExecution;
+import com.hoangluongtran0309.dbbackup.core.model.RestoreExecution;
 import com.hoangluongtran0309.dbbackup.core.port.BackupExecutionRepository;
 import com.hoangluongtran0309.dbbackup.core.port.RestoreExecutionRepository;
 import com.hoangluongtran0309.dbbackup.core.port.StoragePort;
@@ -179,6 +181,130 @@ class BackupArtifactServiceTest {
         verify(backups, never()).deleteById(any());
     }
 
+    /** The restore is reading that file, and would record its outcome against a row that is gone. */
+    @Test
+    void refusesToDeleteABackupThatIsBeingRestored() {
+        givenSucceeded();
+        when(restores.findRunning()).thenReturn(List.of(
+                RestoreExecution.started(UUID.randomUUID(), BACKUP_ID, TARGET_ID, STARTED.plusSeconds(90))));
+
+        assertThatThrownBy(() -> service.delete(BACKUP_ID))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("being restored");
+
+        verify(restores, never()).deleteForBackup(any());
+        verify(storage, never()).delete(any());
+        verify(backups, never()).deleteById(any());
+    }
+
+    // --- several at once ----------------------------------------------------
+
+    @Test
+    void deletesEachBackupRestoresThenFileThenRow() {
+        BackupExecution first = succeeded(UUID.randomUUID(), "/backups/a.sql.gz", 100L, STARTED);
+        BackupExecution second = succeeded(UUID.randomUUID(), "/backups/b.sql.gz", 200L, STARTED.plusSeconds(60));
+        when(backups.findAllById(any())).thenReturn(List.of(first, second));
+
+        BackupArtifactService.BulkDeletion done = service.deleteAll(List.of(first.getId(), second.getId()));
+
+        assertThat(done).isEqualTo(new BackupArtifactService.BulkDeletion(2, 2, 0));
+        for (BackupExecution execution : List.of(first, second)) {
+            InOrder order = inOrder(restores, storage, backups);
+            order.verify(restores).deleteForBackup(execution.getId());
+            order.verify(storage).delete(Path.of(execution.getArtifactPath()));
+            order.verify(backups).deleteById(execution.getId());
+        }
+    }
+
+    /** Checked for all of them first: a refusal deletes nothing, not "some of them". */
+    @Test
+    void oneRunningBackupRefusesTheWholeBatch() {
+        BackupExecution done = succeeded(UUID.randomUUID(), "/backups/a.sql.gz", 100L, STARTED);
+        BackupExecution running = BackupExecution.started(UUID.randomUUID(), TARGET_ID, STARTED.plusSeconds(60));
+        when(backups.findAllById(any())).thenReturn(List.of(done, running));
+
+        assertThatThrownBy(() -> service.deleteAll(List.of(done.getId(), running.getId())))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("still running");
+
+        verify(restores, never()).deleteForBackup(any());
+        verify(storage, never()).delete(any());
+        verify(backups, never()).deleteById(any());
+    }
+
+    @Test
+    void oneBackupBeingRestoredRefusesTheWholeBatch() {
+        BackupExecution first = succeeded(UUID.randomUUID(), "/backups/a.sql.gz", 100L, STARTED);
+        BackupExecution second = succeeded(UUID.randomUUID(), "/backups/b.sql.gz", 200L, STARTED.plusSeconds(60));
+        when(backups.findAllById(any())).thenReturn(List.of(first, second));
+        when(restores.findRunning()).thenReturn(List.of(
+                RestoreExecution.started(UUID.randomUUID(), second.getId(), TARGET_ID, STARTED.plusSeconds(90))));
+
+        assertThatThrownBy(() -> service.deleteAll(List.of(first.getId(), second.getId())))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("being restored");
+
+        verify(backups, never()).deleteById(any());
+    }
+
+    /** Deleted in another tab, say. Not an error; counted, so the summary can say so. */
+    @Test
+    void skipsBackupsThatAreAlreadyGone() {
+        BackupExecution present = succeeded(UUID.randomUUID(), "/backups/a.sql.gz", 100L, STARTED);
+        UUID gone = UUID.randomUUID();
+        when(backups.findAllById(any())).thenReturn(List.of(present));
+
+        BackupArtifactService.BulkDeletion done = service.deleteAll(List.of(present.getId(), gone, gone));
+
+        assertThat(done).isEqualTo(new BackupArtifactService.BulkDeletion(1, 1, 1));
+        verify(backups).deleteById(present.getId());
+    }
+
+    @Test
+    void countsOnlyTheArtifactsThatExistedAsRemoved() {
+        BackupExecution failed = BackupExecution.started(UUID.randomUUID(), TARGET_ID, STARTED)
+                .failed("boom", STARTED.plusSeconds(1));
+        BackupExecution good = succeeded(UUID.randomUUID(), "/backups/a.sql.gz", 100L, STARTED.plusSeconds(60));
+        when(backups.findAllById(any())).thenReturn(List.of(failed, good));
+
+        assertThat(service.deleteAll(List.of(failed.getId(), good.getId())))
+                .isEqualTo(new BackupArtifactService.BulkDeletion(2, 1, 0));
+    }
+
+    @Test
+    void previewOfSeveralTotalsWhatIsOnDiskNewestFirst() {
+        BackupExecution older = succeeded(UUID.randomUUID(), "/backups/a.sql.gz", 100L, STARTED);
+        BackupExecution newer = succeeded(UUID.randomUUID(), "/backups/b.sql.gz", 200L, STARTED.plusSeconds(60));
+        BackupExecution vanished = succeeded(UUID.randomUUID(), "/backups/c.sql.gz", 400L, STARTED.plusSeconds(120));
+        when(backups.findAllById(any())).thenReturn(List.of(older, vanished, newer));
+        when(storage.exists(Path.of("/backups/a.sql.gz"))).thenReturn(true);
+        when(storage.exists(Path.of("/backups/b.sql.gz"))).thenReturn(true);
+        when(storage.exists(Path.of("/backups/c.sql.gz"))).thenReturn(false);
+        when(restores.countForBackups(any())).thenReturn(3L);
+
+        BackupArtifactService.BulkDeletionPreview preview =
+                service.previewDeletions(List.of(older.getId(), newer.getId(), vanished.getId()));
+
+        assertThat(preview.executions()).containsExactly(vanished, newer, older);
+        assertThat(preview.artifactsOnDisk()).isEqualTo(2);
+        assertThat(preview.bytesOnDisk()).isEqualTo(300L);
+        assertThat(preview.restoreCount()).isEqualTo(3L);
+        assertThat(preview.refused()).isFalse();
+    }
+
+    @Test
+    void previewOfSeveralSaysWhyItWouldBeRefused() {
+        BackupExecution running = BackupExecution.started(UUID.randomUUID(), TARGET_ID, STARTED);
+        BackupExecution done = succeeded(UUID.randomUUID(), "/backups/a.sql.gz", 100L, STARTED.plusSeconds(60));
+        when(backups.findAllById(any())).thenReturn(List.of(running, done));
+
+        BackupArtifactService.BulkDeletionPreview preview =
+                service.previewDeletions(List.of(running.getId(), done.getId()));
+
+        assertThat(preview.refused()).isTrue();
+        assertThat(preview.refusal()).startsWith("One of these backups is still running");
+    }
+
     // --- verify -------------------------------------------------------------
 
     @Test
@@ -244,6 +370,10 @@ class BackupArtifactServiceTest {
         assertThatThrownBy(() -> service.verify(BACKUP_ID))
                 .isInstanceOf(NoSuchElementException.class)
                 .hasMessageContaining("no artifact");
+    }
+
+    private static BackupExecution succeeded(UUID id, String path, long size, Instant started) {
+        return BackupExecution.started(id, TARGET_ID, started).succeeded(path, size, SHA256, started.plusSeconds(30));
     }
 
     private void givenSucceeded() {

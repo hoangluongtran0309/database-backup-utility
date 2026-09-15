@@ -10,6 +10,11 @@
       <h1>Backups</h1>
       <p>Every backup taken, newest first. Gzipped dumps on local disk.</p>
     </div>
+    <!-- Outside the form it submits, through form="…": the header is where a
+         page's action goes, and the table below is where the ticks are. -->
+    <div class="actions" th:unless="${executions.isEmpty()}">
+      <button class="button button-danger" type="submit" form="delete-selected">Delete selected…</button>
+    </div>
   </div>
 
   <p class="empty-state panel" th:if="${executions.isEmpty() and !history.hasNewer()}">
@@ -20,40 +25,53 @@
     Nothing this far back. <a th:href="@{/executions}">Back to the newest</a>.
   </p>
 
-  <div class="table-wrap responsive-cards" th:unless="${executions.isEmpty()}">
-    <table>
-      <thead>
-        <tr>
-          <th scope="col">Started</th>
-          <th scope="col">Target</th>
-          <th scope="col">Status</th>
-          <th scope="col">Size</th>
-          <th scope="col"><span class="visually-hidden">Actions</span></th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr th:each="execution : ${executions}">
-          <td data-label="Started" class="mono"
-              th:text="${#temporals.format(
-                          execution.startedAt.atOffset(T(java.time.ZoneOffset).UTC),
-                          'yyyy-MM-dd HH:mm:ss')} + ' UTC'">…</td>
-          <!-- A target removed after the fact leaves its history readable. -->
-          <td data-label="Target" th:text="${targetNames.getOrDefault(execution.targetId, '(removed)')}">production</td>
-          <!-- th:insert, not th:replace: replace would swap out the <td> itself
-               and leave the badge loose in the row. -->
-          <td data-label="Status" th:insert="~{fragments/execution-status :: statusBadge(${execution.status})}"></td>
-          <td data-label="Size" class="mono" th:text="${execution.sizeBytes != null ? execution.sizeBytes + ' B' : '—'}">—</td>
-          <td class="actions">
-            <div class="row-actions">
-              <a class="button button-small" th:if="${execution.status.name() == 'SUCCEEDED'}"
-                 th:href="@{/executions/{id}/download(id=${execution.id})}">Download</a>
-              <a class="button button-small" th:href="@{/executions/{id}(id=${execution.id})}">Details</a>
-            </div>
-          </td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
+  <!-- A GET form, so ticking needs no script: it lands on a confirmation page
+       that says what goes before anything does. -->
+  <form id="delete-selected" method="get" th:action="@{/executions/delete}" th:unless="${executions.isEmpty()}">
+    <div class="table-wrap responsive-cards">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col"><span class="visually-hidden">Select</span></th>
+            <th scope="col">Started</th>
+            <th scope="col">Target</th>
+            <th scope="col">Status</th>
+            <th scope="col">Size</th>
+            <th scope="col"><span class="visually-hidden">Actions</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- Formatted once in th:with: Thymeleaf refuses T(...) inside an
+               arbitrary attribute such as aria-label. -->
+          <tr th:each="execution : ${executions}"
+              th:with="started=${#temporals.format(
+                                   execution.startedAt.atOffset(T(java.time.ZoneOffset).UTC),
+                                   'yyyy-MM-dd HH:mm:ss')} + ' UTC'">
+            <!-- No box for a running backup: its file is still being written. -->
+            <td data-label="Select" class="select">
+              <input type="checkbox" name="id" th:value="${execution.id}"
+                     th:unless="${execution.status.name() == 'RUNNING'}"
+                     th:aria-label="|Select the backup started ${started}|">
+            </td>
+            <td data-label="Started" class="mono" th:text="${started}">…</td>
+            <!-- A target removed after the fact leaves its history readable. -->
+            <td data-label="Target" th:text="${targetNames.getOrDefault(execution.targetId, '(removed)')}">production</td>
+            <!-- th:insert, not th:replace: replace would swap out the <td> itself
+                 and leave the badge loose in the row. -->
+            <td data-label="Status" th:insert="~{fragments/execution-status :: statusBadge(${execution.status})}"></td>
+            <td data-label="Size" class="mono" th:text="${execution.sizeBytes != null ? execution.sizeBytes + ' B' : '—'}">—</td>
+            <td class="actions">
+              <div class="row-actions">
+                <a class="button button-small" th:if="${execution.status.name() == 'SUCCEEDED'}"
+                   th:href="@{/executions/{id}/download(id=${execution.id})}">Download</a>
+                <a class="button button-small" th:href="@{/executions/{id}(id=${execution.id})}">Details</a>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </form>
 
   <nav th:replace="~{fragments/pager :: pager(${history}, '/executions')}"></nav>
 
