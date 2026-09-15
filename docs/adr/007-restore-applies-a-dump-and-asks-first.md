@@ -25,7 +25,9 @@ the target's name to proceed.
 
 **How the bytes get there.** The artifact is decompressed to a temporary file
 beside itself, and `ProcessBuilder.redirectInput` points the client's stdin at
-that file. The temporary file is deleted in a `finally`.
+that file. The temporary file is deleted in a `finally`. *Superseded by
+[ADR-016](016-restore-streams-the-dump-into-the-client.md): the archive is
+decompressed as it is fed to the client, and nothing is written to disk.*
 
 A restore is a separate aggregate, `restore_executions`, not a status on the
 backup.
@@ -52,7 +54,9 @@ to recognise. Letting the kernel redirect a file removes the possibility rather
 than managing it. The cost is disk: the decompressed dump, briefly, next to the
 archive. It goes beside the artifact rather than in `/tmp` because that
 directory is the one already sized for backups, and `/tmp` is often a small
-tmpfs.
+tmpfs. *[ADR-016](016-restore-streams-the-dump-into-the-client.md) revisits
+this: with stdout and stderr each drained on a thread of their own, a third
+thread feeding stdin shares none of them, and the deadlock cannot form.*
 
 **Why a separate aggregate.** A backup is a thing that exists; restoring it is
 an event that can happen many times, or never. Recording it as a status on the
@@ -67,7 +71,9 @@ backup would lose the history of every restore but the last.
   is inherent to applying a dump statement by statement, and the reason the
   error message is stored and shown verbatim.
 - The decompressed copy can be many times the size of the archive. A restore
-  needs that much free space in the backup directory.
+  needs that much free space in the backup directory. *Superseded by
+  [ADR-016](016-restore-streams-the-dump-into-the-client.md): there is no
+  decompressed copy.*
 - Restores share the job pool with backups, so the bound is on total heavy work
   rather than on each kind separately.
 - Removing a backup that has been restored is refused by the foreign key. What
