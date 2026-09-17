@@ -51,29 +51,29 @@ split rather than side effects of it:
   moment of its life; a plaintext password belongs in a separate type named for
   what it carries.
 
-## PostgreSQL is the metadata store, not a backup engine
+## Metadata PostgreSQL and PostgreSQL targets are separate
 
-This tool stores its own metadata — registered targets, and later the execution
-history — in PostgreSQL. That is the only reason `org.postgresql` appears in the
-build and the only reason the Flyway migrations are written in PostgreSQL's
-dialect.
+This tool stores its own metadata — registered targets and execution history —
+in PostgreSQL. That is why the JDBC driver is on the runtime classpath and why
+Flyway migrations use PostgreSQL's dialect.
 
 Queries lean on that where it helps: the target list finds each target's newest
 backup with `DISTINCT ON`, one row per target however long the history, rather
 than reading every backup to find the first of each.
 
-**PostgreSQL is not a database this tool can back up.** There is no PostgreSQL
-engine adapter, no `POSTGRESQL` enum value, and no plan for one in the current
-roadmap. MySQL is the only engine, which is also why `database_targets` has no
-`engine` column: the migration that introduces a second engine is the one that
-should add it.
+That datasource is not a backup target. A PostgreSQL target is a separate
+`DatabaseTarget`, explicitly registered with its own host, database and
+credentials. Target access goes through `psql`, `pg_dump` and `pg_restore`, not
+through the metadata connection pool. The separation prevents a deployment
+credential from silently gaining a second purpose.
 
-## Talking to MySQL
+## Talking to target databases
 
-Everything that reaches a target does so by running the MySQL client binaries as
-child processes, never over JDBC — see
-[ADR-003](../adr/003-shelling-out-to-the-mysql-client.md). Every such call goes
-through `ProcessRunner`, which is where three subprocess hazards are handled
+Everything that reaches a target runs that engine's client binaries as child
+processes, never JDBC — see
+[ADR-003](../adr/003-shelling-out-to-the-mysql-client.md) and
+[ADR-017](../adr/017-route-logical-backups-by-database-engine.md). Every call
+goes through `ProcessRunner`, which is where the subprocess hazards are handled
 once:
 
 - **Both pipes are drained concurrently, before `waitFor`.** A pipe holds only a
@@ -97,10 +97,10 @@ once:
   `GZIPOutputStream`'s trailer is written on close, and that belongs to whoever
   opened it. If the sink cannot be written to, the child is killed at once
   rather than left blocked on a pipe until the timeout.
-- **Credentials travel in `ProcessBuilder.environment()`** as `MYSQL_PWD`. Never
-  on the command line, where `ps` shows them to every user on the host, and
-  never through `System.setProperty`, which is JVM-global and would leak between
-  jobs running at the same time.
+- **Credentials travel in `ProcessBuilder.environment()`** as `MYSQL_PWD` or
+  `PGPASSWORD`. Never on the command line, where `ps` shows them to every user
+  on the host, and never through `System.setProperty`, which is JVM-global and
+  would leak between jobs running at the same time.
 
 `MysqlClient` adds the MySQL-specific knowledge: it rewrites the literal host
 `localhost` to `127.0.0.1`, because the client otherwise connects over a Unix
@@ -108,6 +108,19 @@ socket and silently ignores `--port`. `MysqlDumpBackupAdapter` reuses that rule
 but not the connect timeout — `mysqldump` does not accept `--connect-timeout`
 and exits 7 with *unknown variable* if given it, so the `ProcessRunner` timeout
 is its only backstop.
+
+The PostgreSQL adapters pass the host, port, user and database explicitly and
+set `PGCONNECT_TIMEOUT`. `PostgresDumpBackupAdapter` writes a custom-format
+archive directly to its destination; `PostgresRestoreAdapter` lists that
+archive before starting a destructive restore. Each configured binary is
+checked for executability when its adapter is constructed.
+
+The use cases do not know those commands. `DatabaseConnection` carries the
+short-lived plaintext credential and `EngineAdapterRegistry` selects a
+`ConnectionTestPort`, `LogicalBackupPort` or `LogicalRestorePort` by
+`DatabaseEngine`. Duplicate adapters fail startup; a missing one is an explicit
+configuration error. The restore use case rejects different source and
+destination engines before it persists a job.
 
 ## Running a backup
 
@@ -120,11 +133,11 @@ are separate on purpose — see
    controller redirects to `/executions/{id}`. This method is deliberately not
    `@Transactional`: the row has to be visible to the background thread, which
    reads it through a different connection.
-2. **Running.** The pooled thread decrypts the password, asks `StoragePort`
-   where the artifact goes, runs `mysqldump` with its stdout gzipped straight
-   to that file, and writes the outcome onto the same row. Artifacts are
-   `<schema>_<timestamp>.sql.gz` — see
-   [ADR-006](../adr/006-gzip-the-dump-as-it-is-written.md).
+2. **Running.** The pooled thread decrypts the password, selects the engine's
+   backup adapter, asks it for the artifact suffix, asks `StoragePort` where the
+   artifact goes, and writes the outcome onto the same row. MySQL streams
+   gzipped SQL to `<database>_<timestamp>.sql.gz`; PostgreSQL writes a custom
+   archive to `<database>_<timestamp>.dump`.
 
 Meanwhile the detail page follows the row: it re-fetches itself every two
 seconds and swaps in the part that changed, until the row reaches a finished
@@ -138,9 +151,10 @@ A restore follows the same two-step shape and shares the same pool, so the bound
 is on total heavy work rather than on each kind separately. What a restore
 actually does — and what it deliberately does not — is in
 [ADR-007](../adr/007-restore-applies-a-dump-and-asks-first.md). It can go into
-any registered target ([ADR-014](../adr/014-restore-into-any-registered-target.md)),
-and before the client starts, the job thread checks the artifact against the
-checksum recorded when it was written
+any registered target of the same engine
+([ADR-017](../adr/017-route-logical-backups-by-database-engine.md)), and before
+the client starts, the job thread checks the artifact against the checksum
+recorded when it was written
 ([ADR-013](../adr/013-a-checksum-for-every-artifact.md)).
 
 Any row still RUNNING when the application starts belongs to a process that is
@@ -178,8 +192,8 @@ Flyway output, and H2 would misreport all three.
 
 No test may skip itself because something it needs is absent. A test that turns
 green by not running is worse than no test at all — so the integration tests
-assert that the `mysql` binary is present rather than assuming it, and CI
-installs it explicitly.
+assert that all MySQL and PostgreSQL client binaries are present rather than
+assuming it, and CI installs them explicitly.
 
 ## Database migrations
 
@@ -188,3 +202,9 @@ Flyway migrations live in `adapters/src/main/resources/db/migration/`, named
 never edited; a correction is a new migration. Hibernate runs with
 `ddl-auto: validate`, so a mapping that drifts from the schema fails at startup
 rather than in production.
+
+`V7` is the boundary between the single-engine history and the engine-routed
+model. It adds `database_targets.engine`, backfills every pre-existing row as
+`MYSQL`, then makes the column non-null. Its integration test migrates a real
+database only to V6, inserts a target with backup and restore history, applies
+V7 and proves the ciphertext and history survived.

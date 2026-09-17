@@ -41,12 +41,15 @@ jobs:
       # tests run them against a real server. Asserted here rather than assumed:
       # the predecessor of this project had a MongoDB test that skipped itself
       # for its entire life because CI never installed the tools it needed.
-      - name: Install the MySQL client tools
+      - name: Install the database client tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y mysql-client
+          sudo apt-get install -y mysql-client postgresql-client
           test -x /usr/bin/mysql
           test -x /usr/bin/mysqldump
+          test -x /usr/bin/psql
+          test -x /usr/bin/pg_dump
+          test -x /usr/bin/pg_restore
 
       - name: Verify
         run: mvn --batch-mode --no-transfer-progress verify

@@ -1,6 +1,7 @@
 package com.hoangluongtran0309.dbbackup.application.target;
 
 import com.hoangluongtran0309.dbbackup.core.exception.InvalidTargetException;
+import com.hoangluongtran0309.dbbackup.core.model.DatabaseEngine;
 
 /**
  * What the operator typed, with the password still in plain text.
@@ -10,6 +11,7 @@ import com.hoangluongtran0309.dbbackup.core.exception.InvalidTargetException;
  */
 public record RegisterTargetCommand(
         String name,
+        DatabaseEngine engine,
         String host,
         int port,
         String database,
@@ -17,6 +19,9 @@ public record RegisterTargetCommand(
         String password) {
 
     public RegisterTargetCommand {
+        if (engine == null) {
+            throw new InvalidTargetException("engine", "Database engine is required");
+        }
         // Every other field is checked by DatabaseTarget's constructor. The
         // password cannot be: by the time it reaches the model it is
         // ciphertext, and the ciphertext of an empty string is not empty.

@@ -31,15 +31,17 @@ import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import com.hoangluongtran0309.dbbackup.application.EngineAdapterRegistry;
 import com.hoangluongtran0309.dbbackup.core.exception.BackupFailedException;
 import com.hoangluongtran0309.dbbackup.core.model.BackupExecution;
+import com.hoangluongtran0309.dbbackup.core.model.DatabaseEngine;
 import com.hoangluongtran0309.dbbackup.core.model.ExecutionStatus;
 import com.hoangluongtran0309.dbbackup.core.model.DatabaseTarget;
-import com.hoangluongtran0309.dbbackup.core.model.MysqlConnection;
+import com.hoangluongtran0309.dbbackup.core.model.DatabaseConnection;
 import com.hoangluongtran0309.dbbackup.core.port.BackupExecutionRepository;
 import com.hoangluongtran0309.dbbackup.core.port.DatabaseTargetRepository;
 import com.hoangluongtran0309.dbbackup.core.port.EncryptionPort;
-import com.hoangluongtran0309.dbbackup.core.port.MysqlLogicalBackupPort;
+import com.hoangluongtran0309.dbbackup.core.port.LogicalBackupPort;
 import com.hoangluongtran0309.dbbackup.core.port.StoragePort;
 
 @ExtendWith(MockitoExtension.class)
@@ -52,7 +54,8 @@ class RunBackupServiceTest {
 
     @Mock private DatabaseTargetRepository targets;
     @Mock private BackupExecutionRepository executions;
-    @Mock private MysqlLogicalBackupPort backupEngine;
+    @Mock private EngineAdapterRegistry adapters;
+    @Mock private LogicalBackupPort backupEngine;
     @Mock private StoragePort storage;
     @Mock private EncryptionPort encryption;
 
@@ -66,11 +69,13 @@ class RunBackupServiceTest {
 
     @BeforeEach
     void setUp() {
+        org.mockito.Mockito.lenient().when(adapters.backupFor(DatabaseEngine.MYSQL)).thenReturn(backupEngine);
+        org.mockito.Mockito.lenient().when(backupEngine.artifactSuffix()).thenReturn(".sql.gz");
         service = newService(capturingExecutor);
     }
 
     private RunBackupService newService(Executor executor) {
-        return new RunBackupService(targets, executions, backupEngine, storage, encryption,
+        return new RunBackupService(targets, executions, adapters, storage, encryption,
                 executor, Clock.fixed(NOW, ZoneOffset.UTC));
     }
 
@@ -219,7 +224,7 @@ class RunBackupServiceTest {
 
         runQueuedWork(service.start(TARGET_ID));
 
-        ArgumentCaptor<MysqlConnection> connection = ArgumentCaptor.forClass(MysqlConnection.class);
+        ArgumentCaptor<DatabaseConnection> connection = ArgumentCaptor.forClass(DatabaseConnection.class);
         verify(backupEngine).dumpTo(connection.capture(), eq(ARTIFACT));
         assertThat(connection.getValue().password()).isEqualTo("s3cr3t");
         assertThat(connection.getValue().database()).isEqualTo("shop");
@@ -288,7 +293,7 @@ class RunBackupServiceTest {
 
     @Test
     void namesTheArtifactAfterTheSchemaAndTheUtcStartTime() {
-        assertThat(RunBackupService.artifactFileName(target("shop"), NOW))
+        assertThat(RunBackupService.artifactFileName(target("shop"), NOW, ".sql.gz"))
                 .isEqualTo("shop_20260909_101530.sql.gz");
     }
 
@@ -296,14 +301,14 @@ class RunBackupServiceTest {
     @Test
     void sanitisesASchemaNameThatWouldEscapeTheStorageDirectory() {
         // Dots survive, separators do not, so the result is still a bare name.
-        assertThat(RunBackupService.artifactFileName(target("../../etc"), NOW))
+        assertThat(RunBackupService.artifactFileName(target("../../etc"), NOW, ".sql.gz"))
                 .isEqualTo(".._.._etc_20260909_101530.sql.gz")
                 .doesNotContain("/");
     }
 
     @Test
     void sanitisesSpacesAndQuotesInASchemaName() {
-        assertThat(RunBackupService.artifactFileName(target("my db'; drop"), NOW))
+        assertThat(RunBackupService.artifactFileName(target("my db'; drop"), NOW, ".sql.gz"))
                 .isEqualTo("my_db___drop_20260909_101530.sql.gz");
     }
 
@@ -329,7 +334,7 @@ class RunBackupServiceTest {
     }
 
     private static DatabaseTarget target(String schema) {
-        return DatabaseTarget.builder()
+        return DatabaseTarget.builder().engine(com.hoangluongtran0309.dbbackup.core.model.DatabaseEngine.MYSQL)
                 .id(TARGET_ID)
                 .name("production")
                 .host("db.internal")

@@ -22,8 +22,9 @@ spring:
   application:
     name: database-backup-utility
 
-  # PostgreSQL is where this tool keeps its own metadata. It is not, and is not
-  # yet, an engine that can be backed up — see docs/architecture/overview.md.
+  # PostgreSQL is where this tool keeps its own metadata. That datasource is
+  # not automatically a backup target: targets are registered separately with
+  # their own credentials — see docs/architecture/overview.md.
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/dbbackup}
     username: ${DB_USERNAME:dbbackup}
@@ -69,6 +70,14 @@ dbbackup:
     dump-path: ${MYSQLDUMP_PATH:/usr/bin/mysqldump}
     # Passed to the clients as --connect-timeout, so an unreachable host fails
     # in seconds instead of holding the request open.
+    connect-timeout: 10s
+
+  postgresql:
+    # PostgreSQL is also the metadata store, but these binaries are only for
+    # PostgreSQL targets explicitly registered in the console.
+    psql-path: ${PSQL_PATH:/usr/bin/psql}
+    dump-path: ${PG_DUMP_PATH:/usr/bin/pg_dump}
+    restore-path: ${PG_RESTORE_PATH:/usr/bin/pg_restore}
     connect-timeout: 10s
 
   jobs:

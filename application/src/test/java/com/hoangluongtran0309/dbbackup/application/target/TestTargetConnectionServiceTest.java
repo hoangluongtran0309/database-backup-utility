@@ -24,12 +24,14 @@ import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import com.hoangluongtran0309.dbbackup.application.EngineAdapterRegistry;
 import com.hoangluongtran0309.dbbackup.core.model.ConnectionCheck;
+import com.hoangluongtran0309.dbbackup.core.model.DatabaseEngine;
 import com.hoangluongtran0309.dbbackup.core.model.DatabaseTarget;
-import com.hoangluongtran0309.dbbackup.core.model.MysqlConnection;
+import com.hoangluongtran0309.dbbackup.core.model.DatabaseConnection;
 import com.hoangluongtran0309.dbbackup.core.port.DatabaseTargetRepository;
 import com.hoangluongtran0309.dbbackup.core.port.EncryptionPort;
-import com.hoangluongtran0309.dbbackup.core.port.MysqlConnectionTestPort;
+import com.hoangluongtran0309.dbbackup.core.port.ConnectionTestPort;
 
 @ExtendWith(MockitoExtension.class)
 class TestTargetConnectionServiceTest {
@@ -41,13 +43,16 @@ class TestTargetConnectionServiceTest {
     private DatabaseTargetRepository repository;
 
     @Mock
-    private MysqlConnectionTestPort connectionTest;
+    private ConnectionTestPort connectionTest;
+
+    @Mock
+    private EngineAdapterRegistry adapters;
 
     @Mock
     private EncryptionPort encryption;
 
     @Captor
-    private ArgumentCaptor<MysqlConnection> connection;
+    private ArgumentCaptor<DatabaseConnection> connection;
 
     @Captor
     private ArgumentCaptor<ConnectionCheck> recorded;
@@ -56,8 +61,9 @@ class TestTargetConnectionServiceTest {
 
     @BeforeEach
     void setUp() {
+        org.mockito.Mockito.lenient().when(adapters.connectionTestFor(DatabaseEngine.MYSQL)).thenReturn(connectionTest);
         service = new TestTargetConnectionService(
-                repository, connectionTest, encryption, Clock.fixed(NOW, ZoneOffset.UTC));
+                repository, adapters, encryption, Clock.fixed(NOW, ZoneOffset.UTC));
     }
 
     /**
@@ -68,7 +74,7 @@ class TestTargetConnectionServiceTest {
     void decryptsThePasswordAndHandsTheAdapterPlainText() {
         givenTarget();
         when(encryption.decrypt("sealed")).thenReturn("s3cr3t");
-        when(connectionTest.test(any())).thenReturn(MysqlConnectionTestPort.Result.ok());
+        when(connectionTest.test(any())).thenReturn(ConnectionTestPort.Result.ok());
 
         service.test(TARGET_ID);
 
@@ -84,7 +90,7 @@ class TestTargetConnectionServiceTest {
     void recordsASuccessfulCheckStampedWithTheInjectedClock() {
         givenTarget();
         when(encryption.decrypt(any())).thenReturn("s3cr3t");
-        when(connectionTest.test(any())).thenReturn(MysqlConnectionTestPort.Result.ok());
+        when(connectionTest.test(any())).thenReturn(ConnectionTestPort.Result.ok());
 
         ConnectionCheck returned = service.test(TARGET_ID);
 
@@ -99,7 +105,7 @@ class TestTargetConnectionServiceTest {
         givenTarget();
         when(encryption.decrypt(any())).thenReturn("s3cr3t");
         when(connectionTest.test(any())).thenReturn(
-                MysqlConnectionTestPort.Result.failed("ERROR 1045 (28000): Access denied for user 'backup'@'%'"));
+                ConnectionTestPort.Result.failed("ERROR 1045 (28000): Access denied for user 'backup'@'%'"));
 
         service.test(TARGET_ID);
 
@@ -118,7 +124,7 @@ class TestTargetConnectionServiceTest {
     void neverSavesTheWholeTarget() {
         givenTarget();
         when(encryption.decrypt(any())).thenReturn("s3cr3t");
-        when(connectionTest.test(any())).thenReturn(MysqlConnectionTestPort.Result.ok());
+        when(connectionTest.test(any())).thenReturn(ConnectionTestPort.Result.ok());
 
         service.test(TARGET_ID);
 
@@ -137,7 +143,7 @@ class TestTargetConnectionServiceTest {
     }
 
     private void givenTarget() {
-        when(repository.findById(TARGET_ID)).thenReturn(Optional.of(DatabaseTarget.builder()
+        when(repository.findById(TARGET_ID)).thenReturn(Optional.of(DatabaseTarget.builder().engine(com.hoangluongtran0309.dbbackup.core.model.DatabaseEngine.MYSQL)
                 .id(TARGET_ID)
                 .name("production")
                 .host("db.internal")

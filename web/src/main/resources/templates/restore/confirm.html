@@ -26,7 +26,7 @@
       </select>
       <p class="field-hint" id="target-help">
         The target it was taken from, unless you choose another — for a restore drill
-        into a scratch schema, say, that leaves the original alone.
+        into a scratch database, say, that leaves the original alone.
       </p>
     </div>
     <div class="form-actions">
@@ -41,10 +41,10 @@
       <code th:text="${target.address}">127.0.0.1:3306/shop</code>.
     </p>
     <!-- Said plainly because it is the thing people assume wrongly: this
-         applies a dump, it does not reset the schema. -->
+         applies a dump, it does not reset the database. -->
     <p>
       Tables that are <em>not</em> in the backup are left untouched. This applies
-      the backup over the schema; it does not reset it.
+      the backup over the database; it does not reset it.
     </p>
     <p th:if="${elsewhere and source != null}">
       The backup was taken from <strong th:text="${source.name}">production</strong>
@@ -61,6 +61,8 @@
                       'yyyy-MM-dd HH:mm:ss')} + ' UTC'">…</dd>
       <dt>Taken from</dt>
       <dd th:text="${source != null ? source.name : '(removed)'}">production</dd>
+      <dt>Engine</dt>
+      <dd><span class="badge badge-neutral" th:text="${target.engine.displayName}">MySQL</span></dd>
       <dt>Artifact</dt>
       <dd th:replace="~{fragments/artifact-path :: artifactPath(${backup.artifactPath})}">…</dd>
       <dt>Restore into</dt>
@@ -82,7 +84,7 @@
     </div>
 
     <div class="form-actions">
-      <button class="button button-danger-solid" type="submit" data-busy-label="Starting restore…">Restore, overwriting the schema</button>
+      <button class="button button-danger-solid" type="submit" data-busy-label="Starting restore…">Restore, overwriting the database</button>
       <a class="button button-ghost" th:href="@{/executions/{id}(id=${backup.id})}">Cancel</a>
     </div>
   </form>

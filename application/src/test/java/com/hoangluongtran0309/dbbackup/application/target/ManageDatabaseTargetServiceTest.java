@@ -118,7 +118,9 @@ class ManageDatabaseTargetServiceTest {
         when(encryption.encrypt(any())).thenReturn("sealed");
 
         assertThatThrownBy(() -> service.register(
-                new RegisterTargetCommand("production", "127.0.0.1", 70000, "shop", "backup", "s3cr3t")))
+                new RegisterTargetCommand("production",
+                        com.hoangluongtran0309.dbbackup.core.model.DatabaseEngine.MYSQL,
+                        "127.0.0.1", 70000, "shop", "backup", "s3cr3t")))
                 .isInstanceOf(InvalidTargetException.class);
 
         verify(repository, never()).save(any());
@@ -127,7 +129,9 @@ class ManageDatabaseTargetServiceTest {
     @Test
     void rejectsABlankPasswordBeforeItCanBeEncryptedIntoSomethingNonBlank() {
         assertThatThrownBy(() -> new RegisterTargetCommand(
-                "production", "127.0.0.1", 3306, "shop", "backup", "  "))
+                "production",
+                com.hoangluongtran0309.dbbackup.core.model.DatabaseEngine.MYSQL,
+                "127.0.0.1", 3306, "shop", "backup", "  "))
                 .isInstanceOf(InvalidTargetException.class)
                 .extracting("field").isEqualTo("password");
     }
@@ -314,7 +318,9 @@ class ManageDatabaseTargetServiceTest {
     }
 
     private static RegisterTargetCommand command() {
-        return new RegisterTargetCommand("production", "127.0.0.1", 3306, "shop", "backup", "s3cr3t");
+        return new RegisterTargetCommand("production",
+                com.hoangluongtran0309.dbbackup.core.model.DatabaseEngine.MYSQL,
+                "127.0.0.1", 3306, "shop", "backup", "s3cr3t");
     }
 
     private static BackupExecution backupOf(DatabaseTarget target) {
@@ -323,7 +329,7 @@ class ManageDatabaseTargetServiceTest {
     }
 
     private static DatabaseTarget stored() {
-        return DatabaseTarget.builder()
+        return DatabaseTarget.builder().engine(com.hoangluongtran0309.dbbackup.core.model.DatabaseEngine.MYSQL)
                 .id(UUID.randomUUID())
                 .name("production")
                 .host("127.0.0.1")

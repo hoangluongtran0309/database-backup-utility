@@ -25,6 +25,7 @@ import com.hoangluongtran0309.dbbackup.core.exception.InvalidTargetException;
 import com.hoangluongtran0309.dbbackup.core.exception.TargetInUseException;
 import com.hoangluongtran0309.dbbackup.core.model.BackupExecution;
 import com.hoangluongtran0309.dbbackup.core.model.ConnectionCheck;
+import com.hoangluongtran0309.dbbackup.core.model.DatabaseEngine;
 import com.hoangluongtran0309.dbbackup.core.model.DatabaseTarget;
 import com.hoangluongtran0309.dbbackup.core.port.BackupExecutionRepository;
 import com.hoangluongtran0309.dbbackup.web.dto.DatabaseTargetForm;
@@ -50,6 +51,7 @@ public class DatabaseTargetController {
      */
     private static final Map<String, String> FORM_FIELDS = Map.of(
             "name", "name",
+            "engine", "engine",
             "host", "host",
             "port", "port",
             "databaseName", "database",
@@ -60,6 +62,11 @@ public class DatabaseTargetController {
     private final TestTargetConnectionService connectionTest;
     private final RunBackupService backups;
     private final BackupExecutionRepository executions;
+
+    @ModelAttribute("engines")
+    DatabaseEngine[] engines() {
+        return DatabaseEngine.values();
+    }
 
     /**
      * Beside each target, its newest backup attempt and its newest successful

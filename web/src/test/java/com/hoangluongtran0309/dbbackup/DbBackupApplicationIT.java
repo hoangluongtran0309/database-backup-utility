@@ -37,8 +37,9 @@ import com.hoangluongtran0309.dbbackup.application.backup.RunBackupService;
 import com.hoangluongtran0309.dbbackup.application.target.ManageDatabaseTargetService;
 import com.hoangluongtran0309.dbbackup.application.target.RegisterTargetCommand;
 import com.hoangluongtran0309.dbbackup.core.model.DatabaseTarget;
-import com.hoangluongtran0309.dbbackup.core.port.MysqlConnectionTestPort;
-import com.hoangluongtran0309.dbbackup.core.port.MysqlLogicalBackupPort;
+import com.hoangluongtran0309.dbbackup.core.port.ConnectionTestPort;
+import com.hoangluongtran0309.dbbackup.core.port.LogicalBackupPort;
+import com.hoangluongtran0309.dbbackup.core.port.LogicalRestorePort;
 import com.hoangluongtran0309.dbbackup.core.port.StoragePort;
 
 /**
@@ -90,11 +91,12 @@ class DbBackupApplicationIT {
         assertThat(context).isNotNull();
     }
 
-    /** Each port is satisfied by exactly one adapter, and the executor exists. */
+    /** Each engine contributes one complete adapter set, and the executor exists. */
     @Test
     void everyPortIsWiredToAnAdapter() {
-        assertThat(context.getBeanNamesForType(MysqlLogicalBackupPort.class)).hasSize(1);
-        assertThat(context.getBeanNamesForType(MysqlConnectionTestPort.class)).hasSize(1);
+        assertThat(context.getBeanNamesForType(LogicalBackupPort.class)).hasSize(2);
+        assertThat(context.getBeanNamesForType(LogicalRestorePort.class)).hasSize(2);
+        assertThat(context.getBeanNamesForType(ConnectionTestPort.class)).hasSize(2);
         assertThat(context.getBeanNamesForType(StoragePort.class)).hasSize(1);
         assertThat(context.getBean(RunBackupService.class)).isNotNull();
         assertThat(context.getBean(Executor.class)).isNotNull();
@@ -171,7 +173,9 @@ class DbBackupApplicationIT {
     @Test
     void aSignedInPostWithoutItsCsrfTokenChangesNothing() throws Exception {
         DatabaseTarget target = targets.register(new RegisterTargetCommand(
-                "csrf-" + UUID.randomUUID(), "127.0.0.1", 3306, "shop", "backup", "secret"));
+                "csrf-" + UUID.randomUUID(),
+                com.hoangluongtran0309.dbbackup.core.model.DatabaseEngine.MYSQL,
+                "127.0.0.1", 3306, "shop", "backup", "secret"));
         signIn();
         get("/databases");
 

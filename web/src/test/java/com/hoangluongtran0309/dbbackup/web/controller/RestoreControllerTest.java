@@ -32,6 +32,7 @@ import com.hoangluongtran0309.dbbackup.application.target.ManageDatabaseTargetSe
 import com.hoangluongtran0309.dbbackup.core.exception.RestoreFailedException;
 import com.hoangluongtran0309.dbbackup.core.model.BackupExecution;
 import com.hoangluongtran0309.dbbackup.core.model.DatabaseTarget;
+import com.hoangluongtran0309.dbbackup.core.model.DatabaseEngine;
 import com.hoangluongtran0309.dbbackup.core.model.RestoreExecution;
 import com.hoangluongtran0309.dbbackup.core.port.BackupExecutionRepository;
 import com.hoangluongtran0309.dbbackup.core.port.HistoryPage;
@@ -159,6 +160,32 @@ class RestoreControllerTest {
                 .andExpect(content().string(containsString("drill — scratch:3306/shop_drill")))
                 .andExpect(content().string(containsString("value=\"" + TARGET_ID + "\" selected")))
                 .andExpect(content().string(containsString("name=\"target\" value=\"" + TARGET_ID + "\"")));
+    }
+
+    @Test
+    void theConfirmationPageOffersOnlyTargetsFromTheBackupsEngine() throws Exception {
+        DatabaseTarget postgres = postgresTarget();
+        when(backups.findById(BACKUP_ID)).thenReturn(Optional.of(backup()));
+        when(targets.listAll()).thenReturn(List.of(target(), drill(), postgres));
+
+        mockMvc.perform(get("/restores/new").param("backup", BACKUP_ID.toString()))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("drill — scratch:3306/shop_drill")))
+                .andExpect(content().string(org.hamcrest.Matchers.not(
+                        containsString(postgres.getId().toString()))));
+    }
+
+    @Test
+    void choosingATargetFromAnotherEngineIsRejected() throws Exception {
+        DatabaseTarget postgres = postgresTarget();
+        when(backups.findById(BACKUP_ID)).thenReturn(Optional.of(backup()));
+        when(targets.listAll()).thenReturn(List.of(target(), postgres));
+
+        mockMvc.perform(get("/restores/new")
+                        .param("backup", BACKUP_ID.toString())
+                        .param("target", postgres.getId().toString()))
+                .andExpect(redirectedUrl("/restores/new?backup=" + BACKUP_ID))
+                .andExpect(flash().attribute("error", "Choose a MySQL target for this backup"));
     }
 
     /** Everything that names the overwritten schema follows the choice. */
@@ -332,10 +359,18 @@ class RestoreControllerTest {
     }
 
     private static DatabaseTarget drill() {
-        return DatabaseTarget.builder()
+        return DatabaseTarget.builder().engine(com.hoangluongtran0309.dbbackup.core.model.DatabaseEngine.MYSQL)
                 .id(DRILL_ID).name("drill").host("scratch").port(3306)
                 .databaseName("shop_drill").username("drill")
                 .passwordCiphertext("ZHJpbGw=").createdAt(STARTED)
+                .build();
+    }
+
+    private static DatabaseTarget postgresTarget() {
+        return DatabaseTarget.builder().engine(DatabaseEngine.POSTGRESQL)
+                .id(UUID.randomUUID()).name("analytics").host("postgres.internal").port(5432)
+                .databaseName("warehouse").username("backup")
+                .passwordCiphertext("cG9zdGdyZXM=").createdAt(STARTED)
                 .build();
     }
 
@@ -345,7 +380,7 @@ class RestoreControllerTest {
     }
 
     private static DatabaseTarget target() {
-        return DatabaseTarget.builder()
+        return DatabaseTarget.builder().engine(com.hoangluongtran0309.dbbackup.core.model.DatabaseEngine.MYSQL)
                 .id(TARGET_ID).name("production").host("127.0.0.1").port(3306)
                 .databaseName("shop").username("backup")
                 .passwordCiphertext("Y2lwaGVydGV4dA==").createdAt(STARTED)

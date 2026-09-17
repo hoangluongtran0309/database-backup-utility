@@ -1,24 +1,27 @@
 # database-backup-utility
 
-MySQL logical backup and restore, driven from a small web console.
+MySQL and PostgreSQL logical backup and restore, driven from a small web
+console.
 
-The scope is deliberately narrow: **MySQL, logical dumps, local disk.** There is
-no PostgreSQL or MongoDB engine, no physical backup, no scheduler, and no cloud
-storage — not "not yet configured", but genuinely absent from the code. Each
-capability arrives as one complete vertical slice, code and documentation
+The scope is deliberately narrow: **full logical dumps, same-engine restores,
+local disk**. MySQL and PostgreSQL are implemented; MongoDB and the later
+engines in the roadmap are genuinely absent from the code. There is no physical
+backup, incremental chain, point-in-time recovery, scheduler or cloud storage.
+Each capability arrives as one complete vertical slice, code and documentation
 together. See [ROADMAP.md](ROADMAP.md) for what exists and what is next.
 
 ## What works today
 
-Registering a MySQL target, testing that it is reachable, running a full
-logical backup of it, restoring one of those backups, downloading or deleting
-its artifact, and reading the history of all of it. The target's
-password is encrypted with AES-256-GCM before it is stored.
+Registering a MySQL or PostgreSQL target, testing that it is reachable, running
+a full logical backup of it, restoring one of those backups into a target of the
+same engine, downloading or deleting its artifact, and reading the history of
+all of it. The target's password is encrypted with AES-256-GCM before it is
+stored.
 
 A target's connection details — name, host, port, user, password — can be
-edited without touching its backups, so a rotated MySQL password is an edit
-rather than a new target. Its schema is fixed once registered: a different
-schema is a different target. See
+edited without touching its backups, so a rotated password is an edit rather
+than a new target. Its engine and database are fixed once registered: changing
+either means registering another target. See
 [ADR-012](docs/adr/012-editing-a-target-keeps-its-schema.md).
 
 The console asks you to sign in first. There is one operator account, set from
@@ -31,8 +34,10 @@ restore lists show fifty at a time, newest first, with links to newer and older
 pages. See
 [ADR-010](docs/adr/010-the-detail-page-follows-a-running-job.md). The target
 list shows each target's newest good backup, and flags a newer attempt that
-failed. Artifacts are gzipped and named `<schema>_<timestamp>.sql.gz`, readable
-with `zcat` like any other archive.
+failed. MySQL artifacts are gzipped SQL named
+`<database>_<timestamp>.sql.gz`; PostgreSQL artifacts are custom-format
+archives named `<database>_<timestamp>.dump` and can be inspected with
+`pg_restore --list`.
 
 Each backup records the SHA-256 of its artifact — the same value `sha256sum`
 prints for the download. The backup's page can verify the file against it, and
@@ -41,14 +46,16 @@ applied. Backups made before 0.2.0 show "Not recorded". See
 [ADR-013](docs/adr/013-a-checksum-for-every-artifact.md).
 
 Restoring overwrites live data, so it asks: the confirmation page names the
-schema and you type the target's name to proceed. It applies the dump rather
-than resetting the schema — tables the backup does not contain are left alone.
+database and you type the target's name to proceed. It applies the dump rather
+than recreating the database — objects the backup does not contain are left
+alone.
 See [ADR-007](docs/adr/007-restore-applies-a-dump-and-asks-first.md).
 
-A backup can be restored into any registered target, not only the one it was
-taken from — so a restore drill can go into a scratch schema and leave
-production alone. The name to type is the destination's. Removing a target
-removes the records of restores into it. See
+A backup can be restored into any registered target of the same engine, not
+only the one it was taken from — so a restore drill can go into a scratch
+database and leave production alone. Cross-engine conversion is not supported.
+The name to type is the destination's. Removing a target removes the records of
+restores into it. See
 [ADR-014](docs/adr/014-restore-into-any-registered-target.md).
 
 Deleting a backup removes its file, its row and any restore records that refer
@@ -81,14 +88,15 @@ docker compose up --build
 ```
 
 Then open <http://localhost:8080> and sign in as `admin` with that password
-(`OPERATOR_USERNAME` changes the name). The image carries the MySQL client
-tools, so the host needs only Docker.
+(`OPERATOR_USERNAME` changes the name). The image carries the MySQL and
+PostgreSQL client tools, so the host needs only Docker.
 
 Keep that key. Passwords encrypted under one key cannot be read back under
 another, and there is no recovery path.
 
-A MySQL running on the Docker host is reachable from the container as
-`host.docker.internal` — use that as the target's host, not `localhost`.
+A MySQL or PostgreSQL server running on the Docker host is reachable from the
+container as `host.docker.internal` — use that as the target's host, not
+`localhost`.
 
 Backups live in a named volume, `backups`, so they survive the container. If the
 application will not start, `docker compose logs app` says why; note that with
@@ -97,10 +105,12 @@ application will not start, `docker compose logs app` says why; note that with
 
 ### From source
 
-Requires JDK 21, Maven, Docker, and the MySQL client binaries (`mysql` and
-`mysqldump`) on the host — the application drives those directly and refuses to
-start if it cannot find them, see
-[ADR-003](docs/adr/003-shelling-out-to-the-mysql-client.md).
+Requires JDK 21, Maven, Docker, the MySQL client binaries (`mysql` and
+`mysqldump`) and the PostgreSQL client binaries (`psql`, `pg_dump` and
+`pg_restore`) on the host. The application drives those directly and refuses
+to start if it cannot find them; see
+[ADR-003](docs/adr/003-shelling-out-to-the-mysql-client.md) and
+[ADR-017](docs/adr/017-route-logical-backups-by-database-engine.md).
 
 ```bash
 docker compose up -d postgres
@@ -127,6 +137,9 @@ would also try to run the parent pom, which has no main class.)
 | `DB_PASSWORD` | `dbbackup` | Metadata store password |
 | `MYSQL_CLIENT_PATH` | `/usr/bin/mysql` | The `mysql` client binary; checked for executability at startup |
 | `MYSQLDUMP_PATH` | `/usr/bin/mysqldump` | The `mysqldump` binary; likewise checked at startup |
+| `PSQL_PATH` | `/usr/bin/psql` | The `psql` client used to test PostgreSQL targets |
+| `PG_DUMP_PATH` | `/usr/bin/pg_dump` | The PostgreSQL custom-format dump client |
+| `PG_RESTORE_PATH` | `/usr/bin/pg_restore` | The PostgreSQL custom-archive restore client |
 | `BACKUP_DIR` | `./backups` | Where dumps are written; created at startup. Relative, so it follows the working directory — `mvn -pl web spring-boot:run` puts it under `web/`. The image sets it to `/var/lib/dbbackup/backups`. |
 | `JOB_CONCURRENCY` | `2` | How many backups and restores may run at once, together |
 | `JOB_QUEUE_CAPACITY` | `20` | Beyond this, a job is refused and recorded as failed |
