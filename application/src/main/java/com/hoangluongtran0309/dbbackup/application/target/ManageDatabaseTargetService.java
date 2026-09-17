@@ -71,6 +71,7 @@ public class ManageDatabaseTargetService {
         DatabaseTarget target = DatabaseTarget.builder()
                 .id(UUID.randomUUID())
                 .name(command.name())
+                .engine(command.engine())
                 .host(command.host())
                 .port(command.port())
                 .databaseName(command.database())

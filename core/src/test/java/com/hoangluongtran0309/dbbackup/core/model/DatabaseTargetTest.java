@@ -15,7 +15,7 @@ import com.hoangluongtran0309.dbbackup.core.exception.InvalidTargetException;
 class DatabaseTargetTest {
 
     private static DatabaseTarget.DatabaseTargetBuilder valid() {
-        return DatabaseTarget.builder()
+        return DatabaseTarget.builder().engine(com.hoangluongtran0309.dbbackup.core.model.DatabaseEngine.MYSQL)
                 .id(UUID.randomUUID())
                 .name("production")
                 .host("127.0.0.1")
@@ -106,11 +106,31 @@ class DatabaseTargetTest {
         DatabaseTarget edited = original.edited("staging", "db.internal", 3307, "reader", null);
 
         assertThat(edited.getId()).isEqualTo(original.getId());
+        assertThat(edited.getEngine()).isEqualTo(DatabaseEngine.MYSQL);
         assertThat(edited.getDatabaseName()).isEqualTo("shop");
         assertThat(edited.getCreatedAt()).isEqualTo(original.getCreatedAt());
         assertThat(edited.getName()).isEqualTo("staging");
         assertThat(edited.address()).isEqualTo("db.internal:3307/shop");
         assertThat(edited.getUsername()).isEqualTo("reader");
+    }
+
+    @Test
+    void appliesPostgresqlIdentifierLimits() {
+        assertThatThrownBy(() -> valid()
+                .engine(DatabaseEngine.POSTGRESQL)
+                .port(5432)
+                .databaseName("d".repeat(64))
+                .build())
+                .isInstanceOf(InvalidTargetException.class)
+                .extracting("field").isEqualTo("databaseName");
+
+        assertThatThrownBy(() -> valid()
+                .engine(DatabaseEngine.POSTGRESQL)
+                .port(5432)
+                .username("u".repeat(64))
+                .build())
+                .isInstanceOf(InvalidTargetException.class)
+                .extracting("field").isEqualTo("username");
     }
 
     @Test

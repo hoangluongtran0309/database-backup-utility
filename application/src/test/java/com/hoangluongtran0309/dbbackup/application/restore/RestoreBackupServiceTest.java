@@ -32,16 +32,18 @@ import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import com.hoangluongtran0309.dbbackup.application.EngineAdapterRegistry;
 import com.hoangluongtran0309.dbbackup.core.exception.RestoreFailedException;
 import com.hoangluongtran0309.dbbackup.core.model.BackupExecution;
+import com.hoangluongtran0309.dbbackup.core.model.DatabaseEngine;
 import com.hoangluongtran0309.dbbackup.core.model.DatabaseTarget;
 import com.hoangluongtran0309.dbbackup.core.model.ExecutionStatus;
-import com.hoangluongtran0309.dbbackup.core.model.MysqlConnection;
+import com.hoangluongtran0309.dbbackup.core.model.DatabaseConnection;
 import com.hoangluongtran0309.dbbackup.core.model.RestoreExecution;
 import com.hoangluongtran0309.dbbackup.core.port.BackupExecutionRepository;
 import com.hoangluongtran0309.dbbackup.core.port.DatabaseTargetRepository;
 import com.hoangluongtran0309.dbbackup.core.port.EncryptionPort;
-import com.hoangluongtran0309.dbbackup.core.port.MysqlLogicalRestorePort;
+import com.hoangluongtran0309.dbbackup.core.port.LogicalRestorePort;
 import com.hoangluongtran0309.dbbackup.core.port.RestoreExecutionRepository;
 import com.hoangluongtran0309.dbbackup.core.port.StoragePort;
 
@@ -57,7 +59,8 @@ class RestoreBackupServiceTest {
     @Mock private BackupExecutionRepository backups;
     @Mock private RestoreExecutionRepository restores;
     @Mock private DatabaseTargetRepository targets;
-    @Mock private MysqlLogicalRestorePort restoreEngine;
+    @Mock private EngineAdapterRegistry adapters;
+    @Mock private LogicalRestorePort restoreEngine;
     @Mock private StoragePort storage;
     @Mock private EncryptionPort encryption;
 
@@ -69,11 +72,12 @@ class RestoreBackupServiceTest {
 
     @BeforeEach
     void setUp() {
+        Mockito.lenient().when(adapters.restoreFor(DatabaseEngine.MYSQL)).thenReturn(restoreEngine);
         service = newService(queue::add);
     }
 
     private RestoreBackupService newService(Executor executor) {
-        return new RestoreBackupService(backups, restores, targets, restoreEngine, storage, encryption,
+        return new RestoreBackupService(backups, restores, targets, adapters, storage, encryption,
                 executor, Clock.fixed(NOW, ZoneOffset.UTC));
     }
 
@@ -192,7 +196,7 @@ class RestoreBackupServiceTest {
 
         runQueuedWork(service.start(BACKUP_ID, TARGET_ID));
 
-        ArgumentCaptor<MysqlConnection> connection = ArgumentCaptor.forClass(MysqlConnection.class);
+        ArgumentCaptor<DatabaseConnection> connection = ArgumentCaptor.forClass(DatabaseConnection.class);
         verify(restoreEngine).restore(connection.capture(), eq(Path.of(ARTIFACT)));
         assertThat(connection.getValue().password()).isEqualTo("s3cr3t");
         assertThat(connection.getValue().database()).isEqualTo("shop");
@@ -235,7 +239,8 @@ class RestoreBackupServiceTest {
     void restoresIntoAnotherTargetWithThatTargetsConnection() {
         UUID otherId = UUID.randomUUID();
         givenSucceededBackup();
-        when(targets.findById(otherId)).thenReturn(Optional.of(DatabaseTarget.builder()
+        givenTarget();
+        when(targets.findById(otherId)).thenReturn(Optional.of(DatabaseTarget.builder().engine(com.hoangluongtran0309.dbbackup.core.model.DatabaseEngine.MYSQL)
                 .id(otherId).name("drill").host("scratch.internal").port(3306)
                 .databaseName("shop_restore_test").username("drill").passwordCiphertext("drill-sealed")
                 .createdAt(NOW).build()));
@@ -248,13 +253,32 @@ class RestoreBackupServiceTest {
                 RestoreExecution.started(restoreId, BACKUP_ID, otherId, NOW)));
         queue.forEach(Runnable::run);
 
-        ArgumentCaptor<MysqlConnection> connection = ArgumentCaptor.forClass(MysqlConnection.class);
+        ArgumentCaptor<DatabaseConnection> connection = ArgumentCaptor.forClass(DatabaseConnection.class);
         verify(restoreEngine).restore(connection.capture(), eq(Path.of(ARTIFACT)));
         assertThat(connection.getValue().host()).isEqualTo("scratch.internal");
         assertThat(connection.getValue().database()).isEqualTo("shop_restore_test");
         assertThat(connection.getValue().password()).isEqualTo("dr1ll");
         assertThat(lastSaved().getTargetId()).isEqualTo(otherId);
-        verify(targets, never()).findById(TARGET_ID);
+        verify(targets).findById(TARGET_ID);
+    }
+
+    @Test
+    void rejectsACrossEngineRestoreBeforePersistingAJob() {
+        UUID postgresId = UUID.randomUUID();
+        givenSucceededBackup();
+        givenTarget();
+        when(targets.findById(postgresId)).thenReturn(Optional.of(DatabaseTarget.builder()
+                .engine(DatabaseEngine.POSTGRESQL)
+                .id(postgresId).name("postgres-drill").host("postgres.internal").port(5432)
+                .databaseName("shop_restore_test").username("drill").passwordCiphertext("sealed")
+                .createdAt(NOW).build()));
+
+        assertThatThrownBy(() -> service.start(BACKUP_ID, postgresId))
+                .isInstanceOf(RestoreFailedException.class)
+                .hasMessageContaining("MySQL backup")
+                .hasMessageContaining("MySQL target");
+        verify(restores, never()).save(any());
+        assertThat(queue).isEmpty();
     }
 
     // --- checking the artifact first ------------------------------------------
@@ -346,7 +370,7 @@ class RestoreBackupServiceTest {
     }
 
     private void givenTarget() {
-        when(targets.findById(TARGET_ID)).thenReturn(Optional.of(DatabaseTarget.builder()
+        when(targets.findById(TARGET_ID)).thenReturn(Optional.of(DatabaseTarget.builder().engine(com.hoangluongtran0309.dbbackup.core.model.DatabaseEngine.MYSQL)
                 .id(TARGET_ID).name("production").host("db.internal").port(3307)
                 .databaseName("shop").username("backup").passwordCiphertext("sealed")
                 .createdAt(NOW).build()));

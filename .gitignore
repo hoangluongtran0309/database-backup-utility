@@ -25,3 +25,7 @@ backups/
 # Never commit a real encryption key or datasource password.
 .env
 .env.local
+
+# Local, tickable implementation ledger. ROADMAP.md is the shared high-level
+# plan; this file is deliberately allowed to change after every small step.
+/FEATURE_PARITY.local.md

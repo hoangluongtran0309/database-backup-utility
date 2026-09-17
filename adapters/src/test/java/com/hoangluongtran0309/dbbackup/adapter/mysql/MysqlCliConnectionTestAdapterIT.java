@@ -13,8 +13,9 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.mysql.MySQLContainer;
 
 import com.hoangluongtran0309.dbbackup.adapter.process.ProcessRunner;
-import com.hoangluongtran0309.dbbackup.core.model.MysqlConnection;
-import com.hoangluongtran0309.dbbackup.core.port.MysqlConnectionTestPort;
+import com.hoangluongtran0309.dbbackup.core.model.DatabaseConnection;
+import com.hoangluongtran0309.dbbackup.core.model.DatabaseEngine;
+import com.hoangluongtran0309.dbbackup.core.port.ConnectionTestPort;
 
 /**
  * Drives the real {@code mysql} client against a real server.
@@ -35,7 +36,7 @@ class MysqlCliConnectionTestAdapterIT {
             .withUsername("backup")
             .withPassword("s3cr3t");
 
-    private MysqlConnectionTestPort adapter;
+    private ConnectionTestPort adapter;
 
     @BeforeAll
     static void requireTheClientBinary() {
@@ -52,7 +53,7 @@ class MysqlCliConnectionTestAdapterIT {
 
     @Test
     void reportsSuccessForValidCredentials() {
-        MysqlConnectionTestPort.Result result = adapter.test(connection("backup", "s3cr3t", "shop"));
+        ConnectionTestPort.Result result = adapter.test(connection("backup", "s3cr3t", "shop"));
 
         assertThat(result.successful()).isTrue();
         assertThat(result.message()).isEmpty();
@@ -60,7 +61,7 @@ class MysqlCliConnectionTestAdapterIT {
 
     @Test
     void reportsMysqlsOwnWordsForABadPassword() {
-        MysqlConnectionTestPort.Result result = adapter.test(connection("backup", "wrong", "shop"));
+        ConnectionTestPort.Result result = adapter.test(connection("backup", "wrong", "shop"));
 
         assertThat(result.successful()).isFalse();
         // The verbatim message is the whole point: this sends an operator to
@@ -77,7 +78,7 @@ class MysqlCliConnectionTestAdapterIT {
      */
     @Test
     void reportsMysqlsOwnWordsForASchemaTheUserCannotReach() {
-        MysqlConnectionTestPort.Result result = adapter.test(connection("backup", "s3cr3t", "no_such_schema"));
+        ConnectionTestPort.Result result = adapter.test(connection("backup", "s3cr3t", "no_such_schema"));
 
         assertThat(result.successful()).isFalse();
         assertThat(result.message())
@@ -87,8 +88,8 @@ class MysqlCliConnectionTestAdapterIT {
 
     @Test
     void reportsAFailureRatherThanThrowingForAnUnreachablePort() {
-        MysqlConnectionTestPort.Result result = adapter.test(
-                new MysqlConnection(MYSQL.getHost(), 1, "shop", "backup", "s3cr3t"));
+        ConnectionTestPort.Result result = adapter.test(
+                new DatabaseConnection(DatabaseEngine.MYSQL, MYSQL.getHost(), 1, "shop", "backup", "s3cr3t"));
 
         assertThat(result.successful()).isFalse();
         assertThat(result.message()).isNotBlank();
@@ -100,19 +101,19 @@ class MysqlCliConnectionTestAdapterIT {
         Files.writeString(missing, "#!/bin/sh\nexit 0\n");
         missing.toFile().setExecutable(true);
 
-        MysqlConnectionTestPort adapterWithBrokenBinary = new MysqlCliConnectionTestAdapter(
+        ConnectionTestPort adapterWithBrokenBinary = new MysqlCliConnectionTestAdapter(
                 new MysqlClient(new ProcessRunner(), missing, Duration.ofSeconds(5)));
         Files.delete(missing);
 
-        MysqlConnectionTestPort.Result result =
+        ConnectionTestPort.Result result =
                 adapterWithBrokenBinary.test(connection("backup", "s3cr3t", "shop"));
 
         assertThat(result.successful()).isFalse();
         assertThat(result.message()).contains("Could not start");
     }
 
-    private static MysqlConnection connection(String user, String password, String database) {
-        return new MysqlConnection(
+    private static DatabaseConnection connection(String user, String password, String database) {
+        return new DatabaseConnection(DatabaseEngine.MYSQL,
                 MYSQL.getHost(), MYSQL.getFirstMappedPort(), database, user, password);
     }
 }

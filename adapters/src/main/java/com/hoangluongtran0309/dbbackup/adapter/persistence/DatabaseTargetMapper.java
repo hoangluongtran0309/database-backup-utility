@@ -16,6 +16,7 @@ final class DatabaseTargetMapper {
         DatabaseTargetEntity entity = new DatabaseTargetEntity();
         entity.setId(target.getId());
         entity.setName(target.getName());
+        entity.setEngine(target.getEngine());
         entity.setHost(target.getHost());
         entity.setPort(target.getPort());
         entity.setDatabaseName(target.getDatabaseName());
@@ -54,6 +55,7 @@ final class DatabaseTargetMapper {
         return DatabaseTarget.builder()
                 .id(entity.getId())
                 .name(entity.getName())
+                .engine(entity.getEngine())
                 .host(entity.getHost())
                 .port(entity.getPort())
                 .databaseName(entity.getDatabaseName())

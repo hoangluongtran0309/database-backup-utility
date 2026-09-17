@@ -9,15 +9,12 @@ import lombok.Builder;
 import lombok.Getter;
 
 /**
- * A MySQL server and schema this tool is allowed to back up.
+ * A database and schema this tool is allowed to back up.
  *
  * <p>Immutable, and it refuses to exist in an invalid state: every constraint
  * is checked in the constructor, so a reference to a {@code DatabaseTarget}
  * is already proof that its values are sane. Callers do not validate first.
  *
- * <p>There is no {@code engine} field. MySQL is the only engine, so a column
- * or an enum naming it would carry no information today; the migration that
- * introduces a second engine is the one that should add it.
  */
 @Getter
 public final class DatabaseTarget {
@@ -25,14 +22,9 @@ public final class DatabaseTarget {
     private static final int MAX_NAME_LENGTH = 100;
     private static final int MAX_HOST_LENGTH = 255;
 
-    /** MySQL's own limit on a schema identifier. */
-    private static final int MAX_DATABASE_NAME_LENGTH = 64;
-
-    /** MySQL 8's limit on a user name. */
-    private static final int MAX_USERNAME_LENGTH = 32;
-
     private final UUID id;
     private final String name;
+    private final DatabaseEngine engine;
     private final String host;
     private final int port;
     private final String databaseName;
@@ -63,6 +55,7 @@ public final class DatabaseTarget {
     private DatabaseTarget(
             UUID id,
             String name,
+            DatabaseEngine engine,
             String host,
             int port,
             String databaseName,
@@ -73,10 +66,11 @@ public final class DatabaseTarget {
 
         this.id = require(id, "id", "Target id is required");
         this.name = text(name, "name", "Name", MAX_NAME_LENGTH);
+        this.engine = require(engine, "engine", "Database engine is required");
         this.host = text(host, "host", "Host", MAX_HOST_LENGTH);
         this.port = port(port);
-        this.databaseName = text(databaseName, "databaseName", "Database name", MAX_DATABASE_NAME_LENGTH);
-        this.username = text(username, "username", "Username", MAX_USERNAME_LENGTH);
+        this.databaseName = text(databaseName, "databaseName", "Database name", databaseNameLimit(engine));
+        this.username = text(username, "username", "Username", usernameLimit(engine));
         this.passwordCiphertext = require(passwordCiphertext, "passwordCiphertext", "Password is required");
         this.createdAt = require(createdAt, "createdAt", "Creation timestamp is required");
         this.lastConnectionCheck = lastConnectionCheck; // absent until the target is first tested
@@ -126,6 +120,14 @@ public final class DatabaseTarget {
     /** {@code host:port/schema} — how a target identifies itself in the console. */
     public String address() {
         return "%s:%d/%s".formatted(host, port, databaseName);
+    }
+
+    private static int databaseNameLimit(DatabaseEngine engine) {
+        return engine == DatabaseEngine.POSTGRESQL ? 63 : 64;
+    }
+
+    private static int usernameLimit(DatabaseEngine engine) {
+        return engine == DatabaseEngine.POSTGRESQL ? 63 : 32;
     }
 
     private static String text(String value, String field, String label, int maxLength) {

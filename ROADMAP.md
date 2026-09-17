@@ -44,6 +44,8 @@ below.
 - [x] **12. Paginate the history.** Backup and restore lists a page at a time,
       and the target list without reading every backup ever made.
 
+All four shipped as **0.2.0** (tag `v0.2.0`).
+
 ## Third round
 
 The disk the backups live on, which nothing but the operator keeps in check.
@@ -57,15 +59,62 @@ The disk the backups live on, which nothing but the operator keeps in check.
       read through once first, so a truncated one still never reaches the
       target. See ADR-016.
 
+Both slices shipped as **0.3.0** (tag `v0.3.0`).
+
+## Fourth round
+
+Break the single-engine boundary without widening what a backup means: each
+engine gets one full logical dump and a restore into that same engine.
+
+- [x] **15. Multi-engine foundation and PostgreSQL logical backup/restore.**
+      Route connection tests, backups and restores by engine; migrate every
+      existing target to `MYSQL`; add PostgreSQL through `psql`, custom-format
+      `pg_dump` and `pg_restore`; expose the choice in the console and package
+      the PostgreSQL clients. See ADR-017.
+
+## Committed engine sequence
+
+Only the engine in the active slice is declared in code. Each item below must
+land as its own complete vertical slice — runtime, tests and documentation
+included — before the next one starts.
+
+- [ ] **16. MongoDB logical backup/restore.** Gzipped archive through
+      `mongodump` and `mongorestore`, including namespace changes for a restore
+      into another MongoDB database.
+- [ ] **17. SQLite logical backup/restore.** Files already mounted below
+      `SQLITE_ROOT`; a gzipped SQL dump, restored through a temporary file and
+      accepted only after `PRAGMA integrity_check`.
+- [ ] **18. Oracle logical backup/restore.** Schema-level Data Pump through an
+      Oracle directory object and a shared directory; the client belongs in an
+      operator-provided image variant, not the base image.
+- [ ] **19. MariaDB logical backup/restore.** Its own `mariadb-dump` and
+      `mariadb` adapter rather than assuming MySQL dump compatibility.
+- [ ] **20. SQL Server logical backup/restore.** BACPAC export/import through
+      SqlPackage, supplied by an image variant or the operator.
+
+## Deferred after engine coverage
+
+These are ordered, but not numbered as slices until the item before them is
+complete and their design is decided.
+
+1. [ ] Backup jobs and a Quartz scheduler.
+2. [ ] Automatic retention.
+3. [ ] Storage profiles and S3-compatible storage, then GCS and Azure.
+4. [ ] Notifications.
+5. [ ] Restore verification in a temporary database.
+6. [ ] A CLI inbound adapter.
+7. [ ] CI/CD, security scanning and end-to-end hardening.
+
 ## Deliberately out of scope
 
 Not "later" — absent, and not to be reintroduced without a decision that
 supersedes this line:
 
-- MySQL physical backup, XtraBackup, binlog point-in-time recovery
-- PostgreSQL and MongoDB as backup engines
-- Differential and incremental backups, backup chains, retention cascades
-- A scheduler; backups run when asked
-- Notification channels; results are read from the execution history
-- Cloud storage backends
-- A CLI; the web console is the only inbound adapter
+- Physical backups for any engine
+- Differential or incremental backups, and backup chains
+- Binlog, WAL or oplog replay, and point-in-time recovery
+- Conversion or restore between different database engines
+
+SSH tunnels, IAM authentication, Oracle Wallets and custom TLS configuration
+are not part of the first engine slices. They may be considered in a later
+hardening round; none is implied by the engine checklist above.

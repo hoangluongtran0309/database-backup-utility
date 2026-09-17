@@ -219,12 +219,12 @@ td.actions { display: table-cell; width: 1%; }
 .badge-warning { background: var(--warning-bg); border-color: color-mix(in srgb, var(--warning) 55%, var(--border)); color: var(--warning); }
 .badge-neutral { color: var(--muted); }
 
-/* A connection check: badge, when it ran, and MySQL's own error text. */
+/* A connection check: badge, when it ran, and the engine client's own error text. */
 .check-cell { min-width: 15rem; }
 /* A timestamp is one token; broken over four lines it is unreadable. */
 .nowrap { white-space: nowrap; }
 .checked-at { margin-left: .45rem; color: var(--muted); font-size: .75rem; white-space: nowrap; }
-/* Shown in full rather than truncated: MySQL's words are what tell an operator
+/* Shown in full rather than truncated: the client's words tell an operator
    which thing to go and fix. Allowed to wrap, never to widen the table. */
 /* Several short facts about one thing, one per line, none stretched. */
 .cell-stack { display: grid; gap: .3rem; justify-items: start; }
@@ -262,7 +262,7 @@ td.select { width: 1%; }
 .field-error { margin: .15rem 0 0; color: var(--danger); font-size: .82rem; }
 .field-error span { display: block; }
 input[aria-invalid="true"] { border-color: var(--danger); }
-/* Shown for context, never sent: a target's schema, once it is registered. */
+/* Shown for context, never sent: a target's database, once it is registered. */
 input[readonly] { background: var(--surface); color: var(--muted); border-style: dashed; }
 .form-actions { margin-top: 1.4rem; }
 .alert ul { margin: .35rem 0 0; padding-left: 1.2rem; }

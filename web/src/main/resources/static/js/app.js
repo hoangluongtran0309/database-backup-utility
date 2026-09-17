@@ -194,6 +194,17 @@
         });
     }
 
+    /* A new target starts on the selected engine's conventional port. */
+    function initEnginePortDefault() {
+        var engine = document.querySelector('[data-engine-select]');
+        var port = document.getElementById('port');
+        if (!engine || !port) return;
+        engine.addEventListener('change', function () {
+            var option = engine.options[engine.selectedIndex];
+            if (option && option.dataset.defaultPort) port.value = option.dataset.defaultPort;
+        });
+    }
+
     /*
      * Follows a running backup or restore (ADR-010). The page marks the block
      * that can change with data-live, and data-live-active="true" while the
@@ -293,6 +304,7 @@
         initConfirmDialog();
         initSubmitGuard();
         initAutoSubmit();
+        initEnginePortDefault();
         initLiveRegion();
         // A flash reports the navigation that rendered this page; once read it
         // can go. Removed rather than hidden so the layout closes up.

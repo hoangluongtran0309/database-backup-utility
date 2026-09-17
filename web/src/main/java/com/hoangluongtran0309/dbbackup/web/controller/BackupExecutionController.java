@@ -57,8 +57,13 @@ public class BackupExecutionController {
     String detail(@PathVariable UUID id, Model model) {
         BackupExecution execution = executions.findById(id)
                 .orElseThrow(() -> new NoSuchElementException("No backup execution with id " + id));
+        DatabaseTarget target = targets.listAll().stream()
+                .filter(candidate -> candidate.getId().equals(execution.getTargetId()))
+                .findFirst()
+                .orElse(null);
         model.addAttribute("execution", execution);
-        model.addAttribute("targetName", targetNames().get(execution.getTargetId()));
+        model.addAttribute("targetName", target == null ? null : target.getName());
+        model.addAttribute("targetEngine", target == null ? null : target.getEngine());
         model.addAttribute("artifactOnDisk", artifacts.isOnDisk(execution));
         return "execution/detail";
     }

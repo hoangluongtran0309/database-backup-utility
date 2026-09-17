@@ -3,8 +3,12 @@ package com.hoangluongtran0309.dbbackup.adapter.persistence;
 import java.time.Instant;
 import java.util.UUID;
 
+import com.hoangluongtran0309.dbbackup.core.model.DatabaseEngine;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.Getter;
@@ -31,6 +35,10 @@ class DatabaseTargetEntity {
     @Column(nullable = false, length = 100)
     private String name;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private DatabaseEngine engine;
+
     @Column(nullable = false, length = 255)
     private String host;
 
@@ -40,7 +48,7 @@ class DatabaseTargetEntity {
     @Column(name = "database_name", nullable = false, length = 64)
     private String databaseName;
 
-    @Column(nullable = false, length = 32)
+    @Column(nullable = false, length = 63)
     private String username;
 
     @Column(name = "password_enc", nullable = false, columnDefinition = "text")

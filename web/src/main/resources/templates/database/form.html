@@ -9,7 +9,7 @@
       <div class="eyebrow">Setup</div>
       <th:block th:if="${editing == null}">
         <h1>Add a backup target</h1>
-        <p>A MySQL schema to back up. The connection is not tried until you press Test.</p>
+        <p>A database to back up. The connection is not tried until you press Test.</p>
       </th:block>
       <th:block th:unless="${editing == null}">
         <h1>Edit <span th:text="${editing.name}">production</span></h1>
@@ -31,6 +31,23 @@
                th:attr="aria-invalid=${#fields.hasErrors('name')} ? 'true' : null">
         <p class="field-hint" id="name-help">How this target is listed. Must be unique.</p>
         <div th:replace="~{fragments/field-error :: fieldError('name')}"></div>
+      </div>
+
+      <div class="form-group" th:if="${editing == null}">
+        <label for="engine">Engine</label>
+        <select id="engine" th:field="*{engine}" data-engine-select>
+          <option th:each="candidate : ${engines}"
+                  th:value="${candidate}"
+                  th:text="${candidate.displayName}"
+                  th:attr="data-default-port=${candidate.defaultPort}">MySQL</option>
+        </select>
+        <div th:replace="~{fragments/field-error :: fieldError('engine')}"></div>
+      </div>
+
+      <div class="form-group" th:unless="${editing == null}">
+        <label for="engine-readonly">Engine</label>
+        <input id="engine-readonly" type="text" readonly th:value="${editing.engine.displayName}">
+        <p class="field-hint">Fixed once registered.</p>
       </div>
 
       <div class="form-group">
@@ -55,12 +72,12 @@
       </div>
 
       <!-- Shown, not sent: every backup of this target is a dump of this
-           schema, so it cannot change. See ADR-012. -->
+           database, so it cannot change. See ADR-012. -->
       <div class="form-group" th:unless="${editing == null}">
         <label for="database">Database</label>
         <input id="database" type="text" readonly th:value="${editing.databaseName}"
                aria-describedby="database-help">
-        <p class="field-hint" id="database-help">Fixed once registered. A different schema is a different target.</p>
+        <p class="field-hint" id="database-help">Fixed once registered. A different database is a different target.</p>
       </div>
 
       <div class="form-group">

@@ -20,8 +20,9 @@ import org.testcontainers.mysql.MySQLContainer;
 
 import com.hoangluongtran0309.dbbackup.adapter.process.ProcessRunner;
 import com.hoangluongtran0309.dbbackup.core.exception.BackupFailedException;
-import com.hoangluongtran0309.dbbackup.core.model.MysqlConnection;
-import com.hoangluongtran0309.dbbackup.core.port.MysqlLogicalBackupPort;
+import com.hoangluongtran0309.dbbackup.core.model.DatabaseConnection;
+import com.hoangluongtran0309.dbbackup.core.model.DatabaseEngine;
+import com.hoangluongtran0309.dbbackup.core.port.LogicalBackupPort;
 
 /**
  * Runs the real {@code mysqldump} against a real server and reads the file it
@@ -41,7 +42,7 @@ class MysqlDumpBackupAdapterIT {
     @TempDir
     Path outputDir;
 
-    private MysqlLogicalBackupPort adapter;
+    private LogicalBackupPort adapter;
 
     @BeforeAll
     static void seed() throws Exception {
@@ -154,7 +155,7 @@ class MysqlDumpBackupAdapterIT {
     @Test
     void reportsMysqldumpsOwnWordsForAnUnreachableServer() {
         assertThatThrownBy(() -> adapter.dumpTo(
-                new MysqlConnection(MYSQL.getHost(), 1, "shop", "backup", "s3cr3t"),
+                new DatabaseConnection(DatabaseEngine.MYSQL, MYSQL.getHost(), 1, "shop", "backup", "s3cr3t"),
                 outputDir.resolve("shop.sql.gz")))
                 .isInstanceOf(BackupFailedException.class)
                 .hasMessageContaining("mysqldump exited with");
@@ -176,8 +177,8 @@ class MysqlDumpBackupAdapterIT {
         }
     }
 
-    private static MysqlConnection connection(String user, String password) {
-        return new MysqlConnection(
+    private static DatabaseConnection connection(String user, String password) {
+        return new DatabaseConnection(DatabaseEngine.MYSQL,
                 MYSQL.getHost(), MYSQL.getFirstMappedPort(), "shop", user, password);
     }
 

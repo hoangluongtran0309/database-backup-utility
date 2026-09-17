@@ -35,7 +35,7 @@ public class EditTargetForm {
     private Integer port;
 
     @NotBlank(message = "Username is required")
-    @Size(max = 32, message = "Username must be at most 32 characters")
+    @Size(max = 63, message = "Username must be at most 63 characters")
     private String username;
 
     /** Blank keeps the stored password. */

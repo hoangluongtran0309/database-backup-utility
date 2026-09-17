@@ -8,7 +8,7 @@
     <div>
       <div class="eyebrow">Setup</div>
       <h1>Backup targets</h1>
-      <p>The MySQL schemas this tool can back up and restore into.</p>
+      <p>The databases this tool can back up and restore into.</p>
     </div>
     <div class="actions">
       <a class="button button-primary" th:href="@{/databases/new}">Add target</a>
@@ -24,6 +24,7 @@
       <thead>
         <tr>
           <th scope="col">Name</th>
+          <th scope="col">Engine</th>
           <th scope="col">Address</th>
           <th scope="col">Last check</th>
           <th scope="col">Last backup</th>
@@ -33,6 +34,7 @@
       <tbody>
         <tr th:each="target : ${targets}">
           <td data-label="Name"><strong th:text="${target.name}">prod</strong></td>
+          <td data-label="Engine"><span class="badge badge-neutral" th:text="${target.engine.displayName}">MySQL</span></td>
           <!-- The user rides under the address rather than in a column of its
                own: with Last backup added the row no longer fitted, and who a
                target connects as is secondary to where it points. -->

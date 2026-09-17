@@ -15,8 +15,9 @@ import org.springframework.stereotype.Component;
 
 import com.hoangluongtran0309.dbbackup.adapter.process.ProcessRunner;
 import com.hoangluongtran0309.dbbackup.core.exception.RestoreFailedException;
-import com.hoangluongtran0309.dbbackup.core.model.MysqlConnection;
-import com.hoangluongtran0309.dbbackup.core.port.MysqlLogicalRestorePort;
+import com.hoangluongtran0309.dbbackup.core.model.DatabaseConnection;
+import com.hoangluongtran0309.dbbackup.core.model.DatabaseEngine;
+import com.hoangluongtran0309.dbbackup.core.port.LogicalRestorePort;
 
 /**
  * Loads a gzipped dump into a schema by feeding it to the {@code mysql} client.
@@ -29,7 +30,7 @@ import com.hoangluongtran0309.dbbackup.core.port.MysqlLogicalRestorePort;
  * started, every statement before the bad bytes has already been applied.
  */
 @Component
-class MysqlRestoreAdapter implements MysqlLogicalRestorePort {
+class MysqlRestoreAdapter implements LogicalRestorePort {
 
     private final ProcessRunner processRunner;
     private final Path binary;
@@ -49,7 +50,12 @@ class MysqlRestoreAdapter implements MysqlLogicalRestorePort {
     }
 
     @Override
-    public void restore(MysqlConnection connection, Path artifact) {
+    public DatabaseEngine engine() {
+        return DatabaseEngine.MYSQL;
+    }
+
+    @Override
+    public void restore(DatabaseConnection connection, Path artifact) {
         if (!Files.isReadable(artifact)) {
             throw new RestoreFailedException(
                     "The backup artifact '%s' is missing or unreadable".formatted(artifact));
@@ -78,7 +84,7 @@ class MysqlRestoreAdapter implements MysqlLogicalRestorePort {
         }
     }
 
-    List<String> command(MysqlConnection connection) {
+    List<String> command(DatabaseConnection connection) {
         return List.of(
                 binary.toString(),
                 // See MysqlClient: a literal "localhost" makes the client use a
