@@ -27,17 +27,20 @@ import org.springframework.context.annotation.Import;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.mockito.ArgumentCaptor;
 
 import com.hoangluongtran0309.dbbackup.application.backup.BackupArtifactService.BulkDeletionPreview;
 import com.hoangluongtran0309.dbbackup.application.backup.RunBackupService;
 import com.hoangluongtran0309.dbbackup.application.target.EditTargetCommand;
 import com.hoangluongtran0309.dbbackup.application.target.ManageDatabaseTargetService;
 import com.hoangluongtran0309.dbbackup.application.target.ManageDatabaseTargetService.TargetRemovalPreview;
+import com.hoangluongtran0309.dbbackup.application.target.RegisterTargetCommand;
 import com.hoangluongtran0309.dbbackup.application.target.TestTargetConnectionService;
 import com.hoangluongtran0309.dbbackup.core.exception.DuplicateTargetNameException;
 import com.hoangluongtran0309.dbbackup.core.exception.TargetInUseException;
 import com.hoangluongtran0309.dbbackup.core.model.BackupExecution;
 import com.hoangluongtran0309.dbbackup.core.model.ConnectionCheck;
+import com.hoangluongtran0309.dbbackup.core.model.DatabaseEngine;
 import com.hoangluongtran0309.dbbackup.core.model.DatabaseTarget;
 import com.hoangluongtran0309.dbbackup.core.port.BackupExecutionRepository;
 import com.hoangluongtran0309.dbbackup.web.security.SecurityConfig;
@@ -156,10 +159,21 @@ class DatabaseTargetControllerTest {
     }
 
     @Test
+    void newFormOffersOnlyImplementedEnginesWithTheirDefaultPorts() throws Exception {
+        mockMvc.perform(get("/databases/new"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.matchesPattern(
+                        "(?s).*value=\"MYSQL\".*?data-default-port=\"3306\".*")))
+                .andExpect(content().string(org.hamcrest.Matchers.matchesPattern(
+                        "(?s).*value=\"POSTGRESQL\".*?data-default-port=\"5432\".*")));
+    }
+
+    @Test
     void registersAValidTargetAndRedirects() throws Exception {
         when(service.register(any())).thenReturn(target("production"));
 
         mockMvc.perform(post("/databases").with(csrf())
+                        .param("engine", "MYSQL")
                         .param("name", "production")
                         .param("host", "127.0.0.1")
                         .param("port", "3306")
@@ -173,8 +187,30 @@ class DatabaseTargetControllerTest {
     }
 
     @Test
+    void registersAPostgresqlTargetWithTheSelectedEngine() throws Exception {
+        when(service.register(any())).thenReturn(target("analytics"));
+
+        mockMvc.perform(post("/databases").with(csrf())
+                        .param("engine", "POSTGRESQL")
+                        .param("name", "analytics")
+                        .param("host", "postgres.internal")
+                        .param("port", "5432")
+                        .param("database", "warehouse")
+                        .param("username", "backup")
+                        .param("password", "s3cr3t"))
+                .andExpect(status().is3xxRedirection());
+
+        ArgumentCaptor<RegisterTargetCommand> command = ArgumentCaptor.forClass(RegisterTargetCommand.class);
+        verify(service).register(command.capture());
+        org.assertj.core.api.Assertions.assertThat(command.getValue().engine())
+                .isEqualTo(DatabaseEngine.POSTGRESQL);
+        org.assertj.core.api.Assertions.assertThat(command.getValue().port()).isEqualTo(5432);
+    }
+
+    @Test
     void redisplaysTheFormWithTheTypedValuesWhenAFieldIsInvalid() throws Exception {
         mockMvc.perform(post("/databases").with(csrf())
+                        .param("engine", "MYSQL")
                         .param("name", "")
                         .param("host", "db.internal")
                         .param("port", "3306")
@@ -195,6 +231,7 @@ class DatabaseTargetControllerTest {
         when(service.register(any())).thenThrow(new DuplicateTargetNameException("production"));
 
         mockMvc.perform(post("/databases").with(csrf())
+                        .param("engine", "MYSQL")
                         .param("name", "production")
                         .param("host", "127.0.0.1")
                         .param("port", "3306")
@@ -210,6 +247,7 @@ class DatabaseTargetControllerTest {
     @Test
     void neverRendersTheSubmittedPasswordBackIntoThePage() throws Exception {
         mockMvc.perform(post("/databases").with(csrf())
+                        .param("engine", "MYSQL")
                         .param("name", "")
                         .param("host", "127.0.0.1")
                         .param("port", "3306")
@@ -235,6 +273,9 @@ class DatabaseTargetControllerTest {
                         "action=\"/databases/" + target.getId() + "\"")))
                 // The schema is shown read-only and has no name, so it is never sent.
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("readonly value=\"shop\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("readonly value=\"MySQL\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.not(
+                        org.hamcrest.Matchers.containsString("name=\"engine\""))))
                 .andExpect(content().string(org.hamcrest.Matchers.not(
                         org.hamcrest.Matchers.containsString("name=\"database\""))))
                 .andExpect(content().string(org.hamcrest.Matchers.not(
@@ -575,7 +616,7 @@ class DatabaseTargetControllerTest {
     }
 
     private static DatabaseTarget target(String name, ConnectionCheck check) {
-        return DatabaseTarget.builder()
+        return DatabaseTarget.builder().engine(com.hoangluongtran0309.dbbackup.core.model.DatabaseEngine.MYSQL)
                 .id(UUID.randomUUID())
                 .name(name)
                 .host("127.0.0.1")

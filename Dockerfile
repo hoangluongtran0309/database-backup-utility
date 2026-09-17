@@ -29,6 +29,7 @@ FROM eclipse-temurin:21-jre
 RUN apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         mysql-client \
+        postgresql-client \
         curl \
     && rm -rf /var/lib/apt/lists/*
 
@@ -43,6 +44,9 @@ COPY --from=build /src/web/target/web-*.jar /app/app.jar
 ENV BACKUP_DIR=/var/lib/dbbackup/backups \
     MYSQL_CLIENT_PATH=/usr/bin/mysql \
     MYSQLDUMP_PATH=/usr/bin/mysqldump \
+    PSQL_PATH=/usr/bin/psql \
+    PG_DUMP_PATH=/usr/bin/pg_dump \
+    PG_RESTORE_PATH=/usr/bin/pg_restore \
     JAVA_OPTS="-XX:MaxRAMPercentage=75"
 
 # Backups are the point of this tool. Mount a volume here or they die with the

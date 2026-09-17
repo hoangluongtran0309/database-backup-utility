@@ -603,7 +603,7 @@ class BackupExecutionControllerTest {
     }
 
     private static DatabaseTarget target(String name) {
-        return DatabaseTarget.builder()
+        return DatabaseTarget.builder().engine(com.hoangluongtran0309.dbbackup.core.model.DatabaseEngine.MYSQL)
                 .id(TARGET_ID).name(name).host("127.0.0.1").port(3306)
                 .databaseName("shop").username("backup")
                 .passwordCiphertext("Y2lwaGVydGV4dA==").createdAt(STARTED)

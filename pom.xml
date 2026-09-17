@@ -13,11 +13,11 @@
 
   <groupId>com.hoangluongtran0309</groupId>
   <artifactId>database-backup-utility</artifactId>
-  <version>0.3.0</version>
+  <version>0.4.0</version>
   <packaging>pom</packaging>
 
   <name>database-backup-utility</name>
-  <description>MySQL logical backup and restore, driven from a web console</description>
+  <description>Multi-database logical backup and restore, driven from a web console</description>
 
   <modules>
     <module>core</module>
@@ -29,6 +29,9 @@
   <properties>
     <java.version>21</java.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <!-- Mockito 5's inline mock maker must start as an agent on JDK 21.
+         Self-attachment is disabled by several supported JDK distributions. -->
+    <argLine>-javaagent:${settings.localRepository}/org/mockito/mockito-core/${mockito.version}/mockito-core-${mockito.version}.jar</argLine>
   </properties>
 
   <dependencies>

@@ -70,19 +70,29 @@ public class RestoreController {
             return "redirect:/executions";
         }
         List<DatabaseTarget> all = targets.listAll();
-        DatabaseTarget destination = byId(all, targetId != null ? targetId : backup.getTargetId());
+        DatabaseTarget source = byId(all, backup.getTargetId());
+        if (source == null) {
+            flash.addFlashAttribute("error", "The target this backup came from no longer exists");
+            return "redirect:/executions/" + backupExecutionId;
+        }
+        DatabaseTarget requested = byId(all, targetId != null ? targetId : backup.getTargetId());
+        if (requested != null && requested.getEngine() != source.getEngine()) {
+            flash.addFlashAttribute("error",
+                    "Choose a %s target for this backup".formatted(source.getEngine().displayName()));
+            return "redirect:/restores/new?backup=" + backupExecutionId;
+        }
+        List<DatabaseTarget> compatible = all.stream()
+                .filter(candidate -> candidate.getEngine() == source.getEngine())
+                .toList();
+        DatabaseTarget destination = byId(compatible, targetId != null ? targetId : backup.getTargetId());
         if (destination == null && targetId != null) {
             flash.addFlashAttribute("error", "That target no longer exists");
             return "redirect:/restores/new?backup=" + backupExecutionId;
         }
-        if (destination == null) {
-            flash.addFlashAttribute("error", "The target this backup came from no longer exists");
-            return "redirect:/executions/" + backupExecutionId;
-        }
         model.addAttribute("backup", backup);
-        model.addAttribute("source", byId(all, backup.getTargetId()));
+        model.addAttribute("source", source);
         model.addAttribute("target", destination);
-        model.addAttribute("targets", all);
+        model.addAttribute("targets", compatible);
         return "restore/confirm";
     }
 

@@ -18,9 +18,10 @@ import org.testcontainers.mysql.MySQLContainer;
 
 import com.hoangluongtran0309.dbbackup.adapter.process.ProcessRunner;
 import com.hoangluongtran0309.dbbackup.core.exception.RestoreFailedException;
-import com.hoangluongtran0309.dbbackup.core.model.MysqlConnection;
-import com.hoangluongtran0309.dbbackup.core.port.MysqlLogicalBackupPort;
-import com.hoangluongtran0309.dbbackup.core.port.MysqlLogicalRestorePort;
+import com.hoangluongtran0309.dbbackup.core.model.DatabaseConnection;
+import com.hoangluongtran0309.dbbackup.core.model.DatabaseEngine;
+import com.hoangluongtran0309.dbbackup.core.port.LogicalBackupPort;
+import com.hoangluongtran0309.dbbackup.core.port.LogicalRestorePort;
 
 /**
  * The test this project exists for: back up a real schema, destroy it, restore
@@ -44,8 +45,8 @@ class BackupRestoreRoundTripIT {
     @TempDir
     Path artifacts;
 
-    private MysqlLogicalBackupPort backup;
-    private MysqlLogicalRestorePort restore;
+    private LogicalBackupPort backup;
+    private LogicalRestorePort restore;
 
     @BeforeAll
     static void requireTheBinaries() {
@@ -158,7 +159,7 @@ class BackupRestoreRoundTripIT {
         backup.dumpTo(connection("s3cr3t"), artifact);
         sql("INSERT INTO orders (customer, total) VALUES ('Only in the source', 1.00);");
 
-        restore.restore(new MysqlConnection(
+        restore.restore(new DatabaseConnection(DatabaseEngine.MYSQL,
                 SERVER.getHost(), SERVER.getFirstMappedPort(), "shop_drill", "backup", "s3cr3t"), artifact);
 
         assertThat(queryIn("shop_drill",
@@ -271,8 +272,8 @@ class BackupRestoreRoundTripIT {
         }
     }
 
-    private static MysqlConnection connection(String password) {
-        return new MysqlConnection(
+    private static DatabaseConnection connection(String password) {
+        return new DatabaseConnection(DatabaseEngine.MYSQL,
                 SERVER.getHost(), SERVER.getFirstMappedPort(), "shop", "backup", password);
     }
 

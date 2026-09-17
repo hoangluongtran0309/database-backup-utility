@@ -12,16 +12,16 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import com.hoangluongtran0309.dbbackup.application.EngineAdapterRegistry;
 import com.hoangluongtran0309.dbbackup.core.exception.RestoreFailedException;
 import com.hoangluongtran0309.dbbackup.core.model.BackupExecution;
+import com.hoangluongtran0309.dbbackup.core.model.DatabaseConnection;
 import com.hoangluongtran0309.dbbackup.core.model.DatabaseTarget;
 import com.hoangluongtran0309.dbbackup.core.model.ExecutionStatus;
-import com.hoangluongtran0309.dbbackup.core.model.MysqlConnection;
 import com.hoangluongtran0309.dbbackup.core.model.RestoreExecution;
 import com.hoangluongtran0309.dbbackup.core.port.BackupExecutionRepository;
 import com.hoangluongtran0309.dbbackup.core.port.DatabaseTargetRepository;
 import com.hoangluongtran0309.dbbackup.core.port.EncryptionPort;
-import com.hoangluongtran0309.dbbackup.core.port.MysqlLogicalRestorePort;
 import com.hoangluongtran0309.dbbackup.core.port.RestoreExecutionRepository;
 import com.hoangluongtran0309.dbbackup.core.port.StoragePort;
 
@@ -44,7 +44,7 @@ public class RestoreBackupService {
     private final BackupExecutionRepository backups;
     private final RestoreExecutionRepository restores;
     private final DatabaseTargetRepository targets;
-    private final MysqlLogicalRestorePort restoreEngine;
+    private final EngineAdapterRegistry adapters;
     private final StoragePort storage;
     private final EncryptionPort encryption;
     private final Executor jobExecutor;
@@ -75,6 +75,13 @@ public class RestoreBackupService {
 
         DatabaseTarget target = targets.findById(targetId)
                 .orElseThrow(() -> new NoSuchElementException("The target to restore into no longer exists"));
+        DatabaseTarget source = targets.findById(backup.getTargetId())
+                .orElseThrow(() -> new NoSuchElementException("The target this backup came from no longer exists"));
+        if (source.getEngine() != target.getEngine()) {
+            throw new RestoreFailedException(
+                    "A %s backup can only be restored into a %s target"
+                            .formatted(source.getEngine().displayName(), source.getEngine().displayName()));
+        }
 
         RestoreExecution execution = restores.save(
                 RestoreExecution.started(UUID.randomUUID(), backupExecutionId, targetId, clock.instant()));
@@ -94,10 +101,10 @@ public class RestoreBackupService {
         try {
             requireIntact(backup, artifact);
 
-            MysqlConnection connection =
-                    MysqlConnection.to(target, encryption.decrypt(target.getPasswordCiphertext()));
+            DatabaseConnection connection =
+                    DatabaseConnection.to(target, encryption.decrypt(target.getPasswordCiphertext()));
 
-            restoreEngine.restore(connection, artifact);
+            adapters.restoreFor(target.getEngine()).restore(connection, artifact);
             restores.save(execution.succeeded(clock.instant()));
             log.info("Restore {} of {} into target {} succeeded", restoreId, artifact, target.getName());
 

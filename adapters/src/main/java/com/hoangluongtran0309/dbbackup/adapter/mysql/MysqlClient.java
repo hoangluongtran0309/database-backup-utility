@@ -10,7 +10,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import com.hoangluongtran0309.dbbackup.adapter.process.ProcessRunner;
-import com.hoangluongtran0309.dbbackup.core.model.MysqlConnection;
+import com.hoangluongtran0309.dbbackup.core.model.DatabaseConnection;
 
 /**
  * Assembles and runs {@code mysql} command lines.
@@ -51,7 +51,7 @@ public class MysqlClient {
      * <p>The password reaches the child through {@code MYSQL_PWD} and never
      * appears in {@code command}, so it is not visible in {@code ps}.
      */
-    public ProcessRunner.Result execute(MysqlConnection connection, String sql) {
+    public ProcessRunner.Result execute(DatabaseConnection connection, String sql) {
         List<String> command = new ArrayList<>(baseArguments(connection));
         command.add("--batch");
         command.add("--skip-column-names");
@@ -67,7 +67,7 @@ public class MysqlClient {
                 connectTimeout.plusSeconds(5));
     }
 
-    private List<String> baseArguments(MysqlConnection connection) {
+    private List<String> baseArguments(DatabaseConnection connection) {
         return List.of(
                 binary.toString(),
                 "--host=" + tcpHost(connection.host()),

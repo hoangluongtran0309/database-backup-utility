@@ -24,6 +24,7 @@ import com.hoangluongtran0309.dbbackup.core.exception.DuplicateTargetNameExcepti
 import com.hoangluongtran0309.dbbackup.core.exception.TargetInUseException;
 import com.hoangluongtran0309.dbbackup.core.model.BackupExecution;
 import com.hoangluongtran0309.dbbackup.core.model.ConnectionCheck;
+import com.hoangluongtran0309.dbbackup.core.model.DatabaseEngine;
 import com.hoangluongtran0309.dbbackup.core.model.DatabaseTarget;
 import com.hoangluongtran0309.dbbackup.core.port.BackupExecutionRepository;
 import com.hoangluongtran0309.dbbackup.core.port.DatabaseTargetRepository;
@@ -59,6 +60,7 @@ class DatabaseTargetRepositoryAdapterIT {
         DatabaseTarget saved = repository.save(target("production", "shop"));
 
         DatabaseTarget found = repository.findById(saved.getId()).orElseThrow();
+        assertThat(found.getEngine()).isEqualTo(DatabaseEngine.MYSQL);
         assertThat(found.getName()).isEqualTo("production");
         assertThat(found.getHost()).isEqualTo("127.0.0.1");
         assertThat(found.getPort()).isEqualTo(3306);
@@ -66,6 +68,20 @@ class DatabaseTargetRepositoryAdapterIT {
         assertThat(found.getUsername()).isEqualTo("backup");
         assertThat(found.getPasswordCiphertext()).isEqualTo("Y2lwaGVydGV4dA==");
         assertThat(found.getCreatedAt()).isEqualTo(Instant.parse("2026-09-09T10:15:30Z"));
+    }
+
+    @Test
+    void savesAPostgresqlTargetWithItsLongerUsername() {
+        DatabaseTarget postgres = target("analytics", "warehouse").toBuilder()
+                .engine(DatabaseEngine.POSTGRESQL)
+                .port(5432)
+                .username("u".repeat(63))
+                .build();
+
+        DatabaseTarget found = repository.findById(repository.save(postgres).getId()).orElseThrow();
+
+        assertThat(found.getEngine()).isEqualTo(DatabaseEngine.POSTGRESQL);
+        assertThat(found.getUsername()).hasSize(63);
     }
 
     @Test
@@ -266,7 +282,7 @@ class DatabaseTargetRepositoryAdapterIT {
     }
 
     private static DatabaseTarget target(String name, String database) {
-        return DatabaseTarget.builder()
+        return DatabaseTarget.builder().engine(com.hoangluongtran0309.dbbackup.core.model.DatabaseEngine.MYSQL)
                 .id(UUID.randomUUID())
                 .name(name)
                 .host("127.0.0.1")

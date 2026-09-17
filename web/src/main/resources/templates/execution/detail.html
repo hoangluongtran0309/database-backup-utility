@@ -53,6 +53,9 @@
       <dt>Target</dt>
       <dd th:text="${targetName != null ? targetName : '(removed)'}">production</dd>
 
+      <dt>Engine</dt>
+      <dd><span class="badge badge-neutral" th:text="${targetEngine != null ? targetEngine.displayName : '—'}">MySQL</span></dd>
+
       <dt>Started</dt>
       <dd class="mono"
           th:text="${#temporals.format(
@@ -86,7 +89,7 @@
 
   <div th:if="${execution.errorMessage != null}">
     <div class="section-heading"><h2>Why it failed</h2></div>
-    <!-- mysqldump's own output, in full. Summarising it here would remove the
+    <!-- The engine client's own output, in full. Summarising it here would remove the
          one thing that says which knob to turn. -->
     <pre class="error-output" th:text="${execution.errorMessage}"></pre>
   </div>
