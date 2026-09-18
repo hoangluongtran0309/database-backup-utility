@@ -193,13 +193,13 @@ public class ProcessRunner {
         // blocked on a full pipe until the timeout, minutes or hours later.
         stdout.whenComplete((ignored, failure) -> {
             if (failure != null) {
-                process.destroyForcibly();
+                kill(process);
             }
         });
 
         try {
             if (!process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
-                process.destroyForcibly();
+                kill(process);
                 settle(stdin);
                 throw new ProcessFailedException(
                         "'%s' did not finish within %ds and was killed"
@@ -210,7 +210,7 @@ public class ProcessRunner {
             joinFeeder(stdin, command);
             return new Result(process.exitValue(), join(stdout, command), join(stderr, command));
         } catch (InterruptedException e) {
-            process.destroyForcibly();
+            kill(process);
             settle(stdin);
             // Restore the flag: swallowing it strands whoever is trying to shut
             // this thread down.
@@ -248,13 +248,26 @@ public class ProcessRunner {
         try {
             return source.read(buffer);
         } catch (IOException e) {
-            process.destroyForcibly();
+            kill(process);
             try {
                 process.waitFor(10, TimeUnit.SECONDS);
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
             }
             throw new UncheckedIOException(e);
+        }
+    }
+
+    /**
+     * Kills without synchronously closing the process streams. Calling
+     * {@link Process#destroyForcibly()} can block while closing stdin when the
+     * feeder thread is itself blocked in a write and owns the stream lock.
+     * The handle API signals the process directly; its death then unblocks the
+     * feeder with a broken pipe.
+     */
+    private static void kill(Process process) {
+        if (process.isAlive()) {
+            process.toHandle().destroyForcibly();
         }
     }
 
