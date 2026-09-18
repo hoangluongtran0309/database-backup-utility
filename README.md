@@ -1,25 +1,26 @@
 # database-backup-utility
 
-MySQL and PostgreSQL logical backup and restore, driven from a small web
+MySQL, PostgreSQL and MongoDB logical backup and restore, driven from a small web
 console.
 
 The scope is deliberately narrow: **full logical dumps, same-engine restores,
-local disk**. MySQL and PostgreSQL are implemented; MongoDB and the later
-engines in the roadmap are genuinely absent from the code. There is no physical
+local disk**. MySQL, PostgreSQL and MongoDB are implemented; the later engines
+in the roadmap are genuinely absent from the code. There is no physical
 backup, incremental chain, point-in-time recovery, scheduler or cloud storage.
 Each capability arrives as one complete vertical slice, code and documentation
 together. See [ROADMAP.md](ROADMAP.md) for what exists and what is next.
 
 ## What works today
 
-Registering a MySQL or PostgreSQL target, testing that it is reachable, running
+Registering a MySQL, PostgreSQL or MongoDB target, testing that it is reachable, running
 a full logical backup of it, restoring one of those backups into a target of the
 same engine, downloading or deleting its artifact, and reading the history of
 all of it. The target's password is encrypted with AES-256-GCM before it is
 stored.
 
-A target's connection details — name, host, port, user, password — can be
-edited without touching its backups, so a rotated password is an edit rather
+A target's connection details — name, host, port, user, password and, for
+MongoDB, its authentication database — can be edited without touching its
+backups, so a rotated password is an edit rather
 than a new target. Its engine and database are fixed once registered: changing
 either means registering another target. See
 [ADR-012](docs/adr/012-editing-a-target-keeps-its-schema.md).
@@ -37,7 +38,8 @@ list shows each target's newest good backup, and flags a newer attempt that
 failed. MySQL artifacts are gzipped SQL named
 `<database>_<timestamp>.sql.gz`; PostgreSQL artifacts are custom-format
 archives named `<database>_<timestamp>.dump` and can be inspected with
-`pg_restore --list`.
+`pg_restore --list`; MongoDB artifacts are compressed archives named
+`<database>_<timestamp>.archive.gz`.
 
 Each backup records the SHA-256 of its artifact — the same value `sha256sum`
 prints for the download. The backup's page can verify the file against it, and
@@ -54,6 +56,8 @@ See [ADR-007](docs/adr/007-restore-applies-a-dump-and-asks-first.md).
 A backup can be restored into any registered target of the same engine, not
 only the one it was taken from — so a restore drill can go into a scratch
 database and leave production alone. Cross-engine conversion is not supported.
+MongoDB restores rewrite `<source>.*` namespaces to `<destination>.*`, replace
+the collections present in the archive, and leave unrelated collections alone.
 The name to type is the destination's. Removing a target removes the records of
 restores into it. See
 [ADR-014](docs/adr/014-restore-into-any-registered-target.md).
@@ -88,13 +92,13 @@ docker compose up --build
 ```
 
 Then open <http://localhost:8080> and sign in as `admin` with that password
-(`OPERATOR_USERNAME` changes the name). The image carries the MySQL and
-PostgreSQL client tools, so the host needs only Docker.
+(`OPERATOR_USERNAME` changes the name). The image carries the MySQL,
+PostgreSQL and MongoDB client tools, so the host needs only Docker.
 
 Keep that key. Passwords encrypted under one key cannot be read back under
 another, and there is no recovery path.
 
-A MySQL or PostgreSQL server running on the Docker host is reachable from the
+A MySQL, PostgreSQL or MongoDB server running on the Docker host is reachable from the
 container as `host.docker.internal` — use that as the target's host, not
 `localhost`.
 
@@ -106,8 +110,9 @@ application will not start, `docker compose logs app` says why; note that with
 ### From source
 
 Requires JDK 21, Maven, Docker, the MySQL client binaries (`mysql` and
-`mysqldump`) and the PostgreSQL client binaries (`psql`, `pg_dump` and
-`pg_restore`) on the host. The application drives those directly and refuses
+`mysqldump`), the PostgreSQL client binaries (`psql`, `pg_dump` and
+`pg_restore`), and MongoDB Database Tools (`mongodump` and `mongorestore`) on
+the host. The application drives those directly and refuses
 to start if it cannot find them; see
 [ADR-003](docs/adr/003-shelling-out-to-the-mysql-client.md) and
 [ADR-017](docs/adr/017-route-logical-backups-by-database-engine.md).
@@ -140,6 +145,8 @@ would also try to run the parent pom, which has no main class.)
 | `PSQL_PATH` | `/usr/bin/psql` | The `psql` client used to test PostgreSQL targets |
 | `PG_DUMP_PATH` | `/usr/bin/pg_dump` | The PostgreSQL custom-format dump client |
 | `PG_RESTORE_PATH` | `/usr/bin/pg_restore` | The PostgreSQL custom-archive restore client |
+| `MONGODUMP_PATH` | `/usr/bin/mongodump` | The MongoDB connection-test and compressed-archive client |
+| `MONGORESTORE_PATH` | `/usr/bin/mongorestore` | The MongoDB archive restore client |
 | `BACKUP_DIR` | `./backups` | Where dumps are written; created at startup. Relative, so it follows the working directory — `mvn -pl web spring-boot:run` puts it under `web/`. The image sets it to `/var/lib/dbbackup/backups`. |
 | `JOB_CONCURRENCY` | `2` | How many backups and restores may run at once, together |
 | `JOB_QUEUE_CAPACITY` | `20` | Beyond this, a job is refused and recorded as failed |

@@ -3,16 +3,19 @@
 One image, one compose file. See
 [ADR-009](adr/009-one-image-that-carries-the-mysql-client.md) for the original
 packaging decision and [ADR-017](adr/017-route-logical-backups-by-database-engine.md)
-for the PostgreSQL client added to it.
+for the PostgreSQL client added to it. MongoDB packaging is recorded in
+[ADR-018](adr/018-mongodb-archives-and-explicit-authentication-database.md).
 
 ## What the image contains
 
-A JRE, the application jar, Ubuntu's `mysql-client` and
-`postgresql-client`. The MySQL package is Oracle's MySQL, not MariaDB. That
+A JRE, the application jar, Ubuntu's `mysql-client` and `postgresql-client`,
+and MongoDB's `mongodb-database-tools`. The MySQL package is Oracle's MySQL,
+not MariaDB. That
 distinction is load-bearing: MariaDB's `mysqldump` rejects
 `--set-gtid-purged`, which this tool always passes, so every MySQL backup would
-fail. The PostgreSQL package supplies `psql`, `pg_dump` and `pg_restore`.
-Anyone changing the base image must check all five binaries again.
+fail. The PostgreSQL package supplies `psql`, `pg_dump` and `pg_restore`; the
+MongoDB package supplies `mongodump` and `mongorestore`. Anyone changing the
+base image must check all seven binaries again.
 
 It runs as an unprivileged user, `dbbackup` (uid 10001), and its healthcheck
 asks `/actuator/health`, so it only reports healthy once the application is up
@@ -51,7 +54,7 @@ grows until somebody deletes backups through the console — several at a time
 from the backup list, or all of a target's with the target
 ([ADR-015](adr/015-deleting-many-backups-and-a-target-with-them.md)).
 
-**Reaching the databases to be backed up.** A MySQL or PostgreSQL server on the
+**Reaching the databases to be backed up.** A MySQL, PostgreSQL or MongoDB server on the
 Docker host is `host.docker.internal` from inside the container; compose maps
 that name explicitly because on Linux it does not otherwise exist. A server
 elsewhere just needs to be routable from the container.
@@ -62,9 +65,14 @@ target automatically. Backing it up requires registering a PostgreSQL target
 explicitly, with credentials that have the required access.
 
 **Client paths.** The image sets `MYSQL_CLIENT_PATH`, `MYSQLDUMP_PATH`,
-`PSQL_PATH`, `PG_DUMP_PATH` and `PG_RESTORE_PATH` to `/usr/bin/...`. A source or
-custom-image deployment may override them, but every configured file must be
-executable or startup fails.
+`PSQL_PATH`, `PG_DUMP_PATH`, `PG_RESTORE_PATH`, `MONGODUMP_PATH` and
+`MONGORESTORE_PATH` to `/usr/bin/...`. A source or custom-image deployment may
+override them, but every configured file must be executable or startup fails.
+
+MongoDB credentials may belong to a database other than the one being backed
+up. The registration form therefore asks for an authentication database and
+defaults it to `admin`. Passwords are handed to each tool through a temporary
+owner-only config file, never through its visible command line.
 
 PostgreSQL's dump tools have major-version compatibility rules: a client that
 can read a source is not necessarily able to produce an archive loadable by an

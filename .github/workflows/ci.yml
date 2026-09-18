@@ -44,12 +44,20 @@ jobs:
       - name: Install the database client tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y mysql-client postgresql-client
+          sudo apt-get install -y curl gnupg
+          curl -fsSL https://pgp.mongodb.com/server-8.0.asc \
+            | sudo gpg --dearmor --yes -o /usr/share/keyrings/mongodb-server-8.0.gpg
+          echo "deb [arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-8.0.gpg] https://repo.mongodb.org/apt/ubuntu noble/mongodb-org/8.0 multiverse" \
+            | sudo tee /etc/apt/sources.list.d/mongodb-org-8.0.list >/dev/null
+          sudo apt-get update
+          sudo apt-get install -y mongodb-database-tools mysql-client postgresql-client
           test -x /usr/bin/mysql
           test -x /usr/bin/mysqldump
           test -x /usr/bin/psql
           test -x /usr/bin/pg_dump
           test -x /usr/bin/pg_restore
+          test -x /usr/bin/mongodump
+          test -x /usr/bin/mongorestore
 
       - name: Verify
         run: mvn --batch-mode --no-transfer-progress verify

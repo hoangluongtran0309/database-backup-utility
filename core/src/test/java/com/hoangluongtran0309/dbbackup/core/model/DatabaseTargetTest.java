@@ -134,6 +134,48 @@ class DatabaseTargetTest {
     }
 
     @Test
+    void mongodbRequiresItsAuthenticationDatabaseAndAllowsA63CharacterUsername() {
+        DatabaseTarget mongo = valid()
+                .engine(DatabaseEngine.MONGODB)
+                .port(27017)
+                .username("u".repeat(63))
+                .authenticationDatabase(" admin ")
+                .build();
+
+        assertThat(mongo.getAuthenticationDatabase()).isEqualTo("admin");
+        assertThatThrownBy(() -> valid()
+                .engine(DatabaseEngine.MONGODB)
+                .port(27017)
+                .authenticationDatabase(" ")
+                .build())
+                .isInstanceOf(InvalidTargetException.class)
+                .extracting("field").isEqualTo("authenticationDatabase");
+    }
+
+    @Test
+    void sqlTargetsRejectAMongodbAuthenticationDatabase() {
+        assertThatThrownBy(() -> valid().authenticationDatabase("admin").build())
+                .isInstanceOf(InvalidTargetException.class)
+                .extracting("field").isEqualTo("authenticationDatabase");
+    }
+
+    @Test
+    void changingMongoAuthenticationDatabaseDropsTheLastConnectionCheck() {
+        DatabaseTarget tested = valid()
+                .engine(DatabaseEngine.MONGODB)
+                .port(27017)
+                .authenticationDatabase("admin")
+                .lastConnectionCheck(ConnectionCheck.passed(Instant.now()))
+                .build();
+
+        DatabaseTarget edited = tested.edited(
+                "production", "127.0.0.1", 27017, "backup", "users", null);
+
+        assertThat(edited.getAuthenticationDatabase()).isEqualTo("users");
+        assertThat(edited.hasBeenTested()).isFalse();
+    }
+
+    @Test
     void anEditWithoutANewPasswordKeepsTheStoredOne() {
         DatabaseTarget edited = valid().build().edited("production", "127.0.0.1", 3306, "backup", null);
 

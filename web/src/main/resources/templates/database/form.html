@@ -87,6 +87,19 @@
         <div th:replace="~{fragments/field-error :: fieldError('username')}"></div>
       </div>
 
+      <div class="form-group"
+           th:if="${editing == null or editing.engine.name() == 'MONGODB'}"
+           data-mongodb-auth-group>
+        <label for="authenticationDatabase">Authentication database</label>
+        <input id="authenticationDatabase" type="text" th:field="*{authenticationDatabase}"
+               maxlength="64" placeholder="admin" aria-describedby="authentication-database-help"
+               th:attr="aria-invalid=${#fields.hasErrors('authenticationDatabase')} ? 'true' : null">
+        <p class="field-hint" id="authentication-database-help">
+          Where this MongoDB user was created. Usually <code>admin</code>.
+        </p>
+        <div th:replace="~{fragments/field-error :: fieldError('authenticationDatabase')}"></div>
+      </div>
+
       <div class="form-group form-group-full">
         <label for="password">Password</label>
         <input id="password" type="password" th:field="*{password}"

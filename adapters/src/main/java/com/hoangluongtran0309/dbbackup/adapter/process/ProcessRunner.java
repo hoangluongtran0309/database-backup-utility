@@ -34,9 +34,10 @@ import org.springframework.stereotype.Component;
  *       it blocks writing, we block reading, and neither side moves again.</li>
  *   <li><b>There is a timeout.</b> A plain {@code waitFor()} against a hung
  *       server blocks its thread for the life of the JVM.</li>
- *   <li><b>Secrets travel in the environment.</b> {@code environment()} is
- *       per-process; {@code System.setProperty} is JVM-global and would leak
- *       between jobs running at the same time.</li>
+ *   <li><b>Per-process environment is supported.</b> SQL credentials use it;
+ *       MongoDB uses an owner-only config file because its tools have no
+ *       password environment variable. {@code System.setProperty} is
+ *       JVM-global and would leak between concurrent jobs.</li>
  * </ol>
  *
  * <p>Every pipe gets a thread of its own, started for it and gone when it is

@@ -80,6 +80,14 @@ dbbackup:
     restore-path: ${PG_RESTORE_PATH:/usr/bin/pg_restore}
     connect-timeout: 10s
 
+  mongodb:
+    # Both operations come from MongoDB Database Tools. The dump binary also
+    # performs the lightweight connection probe, so no shell or driver is
+    # needed solely for Test.
+    dump-path: ${MONGODUMP_PATH:/usr/bin/mongodump}
+    restore-path: ${MONGORESTORE_PATH:/usr/bin/mongorestore}
+    connect-timeout: 10s
+
   jobs:
     # How many backups and restores may run at once, together. Each is a child
     # process competing for the same disk, so more is not faster.

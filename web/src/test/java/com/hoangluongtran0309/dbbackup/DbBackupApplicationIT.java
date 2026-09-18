@@ -94,9 +94,9 @@ class DbBackupApplicationIT {
     /** Each engine contributes one complete adapter set, and the executor exists. */
     @Test
     void everyPortIsWiredToAnAdapter() {
-        assertThat(context.getBeanNamesForType(LogicalBackupPort.class)).hasSize(2);
-        assertThat(context.getBeanNamesForType(LogicalRestorePort.class)).hasSize(2);
-        assertThat(context.getBeanNamesForType(ConnectionTestPort.class)).hasSize(2);
+        assertThat(context.getBeanNamesForType(LogicalBackupPort.class)).hasSize(3);
+        assertThat(context.getBeanNamesForType(LogicalRestorePort.class)).hasSize(3);
+        assertThat(context.getBeanNamesForType(ConnectionTestPort.class)).hasSize(3);
         assertThat(context.getBeanNamesForType(StoragePort.class)).hasSize(1);
         assertThat(context.getBean(RunBackupService.class)).isNotNull();
         assertThat(context.getBean(Executor.class)).isNotNull();
