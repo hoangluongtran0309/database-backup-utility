@@ -198,11 +198,26 @@
     function initEnginePortDefault() {
         var engine = document.querySelector('[data-engine-select]');
         var port = document.getElementById('port');
-        if (!engine || !port) return;
-        engine.addEventListener('change', function () {
+        var authGroup = document.querySelector('[data-mongodb-auth-group]');
+        var authDatabase = document.getElementById('authenticationDatabase');
+        if (!engine) return;
+
+        function renderEngineFields(changePort) {
             var option = engine.options[engine.selectedIndex];
-            if (option && option.dataset.defaultPort) port.value = option.dataset.defaultPort;
-        });
+            if (changePort && port && option && option.dataset.defaultPort) {
+                port.value = option.dataset.defaultPort;
+            }
+            if (authGroup && authDatabase) {
+                var mongo = engine.value === 'MONGODB';
+                authGroup.hidden = !mongo;
+                authDatabase.disabled = !mongo;
+                authDatabase.required = mongo;
+                if (changePort && mongo && !authDatabase.value) authDatabase.value = 'admin';
+            }
+        }
+
+        renderEngineFields(false);
+        engine.addEventListener('change', function () { renderEngineFields(true); });
     }
 
     /*

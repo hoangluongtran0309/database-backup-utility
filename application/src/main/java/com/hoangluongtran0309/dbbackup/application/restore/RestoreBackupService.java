@@ -56,8 +56,9 @@ public class RestoreBackupService {
      * <p>Not {@code @Transactional}, deliberately — see ADR-004.
      *
      * @param targetId where the data goes — the backup's own target, or any
-     *        other. The dump carries no {@code USE}, so a schema of another
-     *        name takes it as readily (ADR-005).
+     *        other same-engine target. SQL dumps are directed at the selected
+     *        database; MongoDB archives are namespace-rewritten from the
+     *        source database to it (ADR-018).
      * @throws NoSuchElementException if the backup or the target no longer exists
      * @throws RestoreFailedException if the backup never produced an artifact
      */
@@ -87,7 +88,7 @@ public class RestoreBackupService {
                 RestoreExecution.started(UUID.randomUUID(), backupExecutionId, targetId, clock.instant()));
 
         try {
-            jobExecutor.execute(() -> run(execution.getId(), target, backup));
+            jobExecutor.execute(() -> run(execution.getId(), source.getDatabaseName(), target, backup));
         } catch (RejectedExecutionException e) {
             finish(execution, "Too many jobs are already running or queued. Try again shortly.");
         }
@@ -95,7 +96,7 @@ public class RestoreBackupService {
     }
 
     /** Runs one accepted restore. Called on a background thread; never throws. */
-    void run(UUID restoreId, DatabaseTarget target, BackupExecution backup) {
+    void run(UUID restoreId, String sourceDatabase, DatabaseTarget target, BackupExecution backup) {
         RestoreExecution execution = restores.findById(restoreId).orElseThrow();
         Path artifact = Path.of(backup.getArtifactPath());
         try {
@@ -104,7 +105,7 @@ public class RestoreBackupService {
             DatabaseConnection connection =
                     DatabaseConnection.to(target, encryption.decrypt(target.getPasswordCiphertext()));
 
-            adapters.restoreFor(target.getEngine()).restore(connection, artifact);
+            adapters.restoreFor(target.getEngine()).restore(connection, sourceDatabase, artifact);
             restores.save(execution.succeeded(clock.instant()));
             log.info("Restore {} of {} into target {} succeeded", restoreId, artifact, target.getName());
 

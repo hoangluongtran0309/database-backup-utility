@@ -51,6 +51,9 @@ class DatabaseTargetEntity {
     @Column(nullable = false, length = 63)
     private String username;
 
+    @Column(name = "authentication_database", length = 64)
+    private String authenticationDatabase;
+
     @Column(name = "password_enc", nullable = false, columnDefinition = "text")
     private String passwordEnc;
 

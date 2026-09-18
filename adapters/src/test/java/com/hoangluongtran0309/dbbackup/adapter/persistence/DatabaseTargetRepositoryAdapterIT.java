@@ -85,6 +85,20 @@ class DatabaseTargetRepositoryAdapterIT {
     }
 
     @Test
+    void savesAMongodbTargetWithItsAuthenticationDatabase() {
+        DatabaseTarget mongo = target("documents", "shop").toBuilder()
+                .engine(DatabaseEngine.MONGODB)
+                .port(27017)
+                .authenticationDatabase("admin")
+                .build();
+
+        DatabaseTarget found = repository.findById(repository.save(mongo).getId()).orElseThrow();
+
+        assertThat(found.getEngine()).isEqualTo(DatabaseEngine.MONGODB);
+        assertThat(found.getAuthenticationDatabase()).isEqualTo("admin");
+    }
+
+    @Test
     void findByIdIsEmptyForAnUnknownId() {
         assertThat(repository.findById(UUID.randomUUID())).isEmpty();
     }

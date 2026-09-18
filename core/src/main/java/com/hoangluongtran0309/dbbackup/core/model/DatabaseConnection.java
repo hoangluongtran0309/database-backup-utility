@@ -2,8 +2,9 @@ package com.hoangluongtran0309.dbbackup.core.model;
 
 /**
  * Short-lived, decrypted connection details handed from the application layer
- * to one engine adapter. Passwords must be passed to child processes through
- * their environment, never through command-line arguments or logs.
+ * to one engine adapter. Passwords must reach child processes through an
+ * engine-specific protected channel (an environment variable or owner-only
+ * config file), never through command-line arguments or logs.
  */
 public record DatabaseConnection(
         DatabaseEngine engine,
@@ -11,7 +12,19 @@ public record DatabaseConnection(
         int port,
         String database,
         String username,
-        String password) {
+        String password,
+        String authenticationDatabase) {
+
+    /** Convenience for engines whose credentials belong to the target database itself. */
+    public DatabaseConnection(
+            DatabaseEngine engine,
+            String host,
+            int port,
+            String database,
+            String username,
+            String password) {
+        this(engine, host, port, database, username, password, null);
+    }
 
     public static DatabaseConnection to(DatabaseTarget target, String plainPassword) {
         return new DatabaseConnection(
@@ -20,7 +33,8 @@ public record DatabaseConnection(
                 target.getPort(),
                 target.getDatabaseName(),
                 target.getUsername(),
-                plainPassword);
+                plainPassword,
+                target.getAuthenticationDatabase());
     }
 
     @Override

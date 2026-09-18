@@ -30,6 +30,7 @@ import com.hoangluongtran0309.dbbackup.application.backup.BackupArtifactService.
 import com.hoangluongtran0309.dbbackup.core.exception.InvalidTargetException;
 import com.hoangluongtran0309.dbbackup.core.exception.TargetInUseException;
 import com.hoangluongtran0309.dbbackup.core.model.BackupExecution;
+import com.hoangluongtran0309.dbbackup.core.model.DatabaseEngine;
 import com.hoangluongtran0309.dbbackup.core.model.DatabaseTarget;
 import com.hoangluongtran0309.dbbackup.core.model.RestoreExecution;
 import com.hoangluongtran0309.dbbackup.core.port.BackupExecutionRepository;
@@ -111,6 +112,20 @@ class ManageDatabaseTargetServiceTest {
         assertThat(target.getPort()).isEqualTo(3306);
         assertThat(target.getDatabaseName()).isEqualTo("shop");
         assertThat(target.getUsername()).isEqualTo("backup");
+    }
+
+    @Test
+    void registersAMongodbAuthenticationDatabase() {
+        when(encryption.encrypt(any())).thenReturn("sealed");
+        when(repository.save(any())).thenAnswer(call -> call.getArgument(0));
+
+        service.register(new RegisterTargetCommand(
+                "documents", DatabaseEngine.MONGODB, "mongo.internal", 27017,
+                "shop", "backup", "s3cr3t", "admin"));
+
+        verify(repository).save(savedTarget.capture());
+        assertThat(savedTarget.getValue().getEngine()).isEqualTo(DatabaseEngine.MONGODB);
+        assertThat(savedTarget.getValue().getAuthenticationDatabase()).isEqualTo("admin");
     }
 
     @Test

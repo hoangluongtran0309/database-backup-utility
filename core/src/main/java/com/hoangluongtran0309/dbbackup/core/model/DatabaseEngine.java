@@ -3,7 +3,8 @@ package com.hoangluongtran0309.dbbackup.core.model;
 /** Database engines with a complete logical backup and restore adapter. */
 public enum DatabaseEngine {
     MYSQL("MySQL", 3306),
-    POSTGRESQL("PostgreSQL", 5432);
+    POSTGRESQL("PostgreSQL", 5432),
+    MONGODB("MongoDB", 27017);
 
     private final String displayName;
     private final int defaultPort;

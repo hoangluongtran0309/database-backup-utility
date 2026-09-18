@@ -56,6 +56,7 @@ public class DatabaseTargetController {
             "port", "port",
             "databaseName", "database",
             "username", "username",
+            "authenticationDatabase", "authenticationDatabase",
             "password", "password");
 
     private final ManageDatabaseTargetService service;

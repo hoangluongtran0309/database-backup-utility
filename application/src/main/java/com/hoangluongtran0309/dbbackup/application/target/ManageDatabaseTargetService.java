@@ -76,6 +76,7 @@ public class ManageDatabaseTargetService {
                 .port(command.port())
                 .databaseName(command.database())
                 .username(command.username())
+                .authenticationDatabase(command.authenticationDatabase())
                 .passwordCiphertext(encryption.encrypt(command.password()))
                 .createdAt(clock.instant())
                 .build();
@@ -106,6 +107,7 @@ public class ManageDatabaseTargetService {
                 command.host(),
                 command.port(),
                 command.username(),
+                command.authenticationDatabase(),
                 command.changesPassword() ? encryption.encrypt(command.password()) : null);
 
         return repository.save(edited);

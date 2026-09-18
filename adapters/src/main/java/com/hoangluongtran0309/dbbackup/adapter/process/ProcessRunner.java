@@ -34,9 +34,10 @@ import org.springframework.stereotype.Component;
  *       it blocks writing, we block reading, and neither side moves again.</li>
  *   <li><b>There is a timeout.</b> A plain {@code waitFor()} against a hung
  *       server blocks its thread for the life of the JVM.</li>
- *   <li><b>Secrets travel in the environment.</b> {@code environment()} is
- *       per-process; {@code System.setProperty} is JVM-global and would leak
- *       between jobs running at the same time.</li>
+ *   <li><b>Per-process environment is supported.</b> SQL credentials use it;
+ *       MongoDB uses an owner-only config file because its tools have no
+ *       password environment variable. {@code System.setProperty} is
+ *       JVM-global and would leak between concurrent jobs.</li>
  * </ol>
  *
  * <p>Every pipe gets a thread of its own, started for it and gone when it is
@@ -192,13 +193,13 @@ public class ProcessRunner {
         // blocked on a full pipe until the timeout, minutes or hours later.
         stdout.whenComplete((ignored, failure) -> {
             if (failure != null) {
-                process.destroyForcibly();
+                kill(process);
             }
         });
 
         try {
             if (!process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
-                process.destroyForcibly();
+                kill(process);
                 settle(stdin);
                 throw new ProcessFailedException(
                         "'%s' did not finish within %ds and was killed"
@@ -209,7 +210,7 @@ public class ProcessRunner {
             joinFeeder(stdin, command);
             return new Result(process.exitValue(), join(stdout, command), join(stderr, command));
         } catch (InterruptedException e) {
-            process.destroyForcibly();
+            kill(process);
             settle(stdin);
             // Restore the flag: swallowing it strands whoever is trying to shut
             // this thread down.
@@ -247,13 +248,26 @@ public class ProcessRunner {
         try {
             return source.read(buffer);
         } catch (IOException e) {
-            process.destroyForcibly();
+            kill(process);
             try {
                 process.waitFor(10, TimeUnit.SECONDS);
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
             }
             throw new UncheckedIOException(e);
+        }
+    }
+
+    /**
+     * Kills without synchronously closing the process streams. Calling
+     * {@link Process#destroyForcibly()} can block while closing stdin when the
+     * feeder thread is itself blocked in a write and owns the stream lock.
+     * The handle API signals the process directly; its death then unblocks the
+     * feeder with a broken pipe.
+     */
+    private static void kill(Process process) {
+        if (process.isAlive()) {
+            process.toHandle().destroyForcibly();
         }
     }
 

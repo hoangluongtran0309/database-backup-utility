@@ -71,6 +71,21 @@ class DatabaseEngineMigrationIT {
             assertThat(single(statement,
                     "SELECT count(*)::text FROM restore_executions WHERE id = '" + restoreId + "'"))
                     .isEqualTo("1");
+            assertThat(single(statement,
+                    "SELECT authentication_database FROM database_targets WHERE id = '" + targetId + "'"))
+                    .isNull();
+
+            UUID mongoId = UUID.randomUUID();
+            statement.executeUpdate("""
+                    INSERT INTO database_targets
+                        (id, name, engine, host, port, database_name, username,
+                         authentication_database, password_enc, created_at)
+                    VALUES ('%s', 'mongo', 'MONGODB', 'mongo.internal', 27017,
+                            'shop', 'backup', 'admin', 'sealed', now())
+                    """.formatted(mongoId));
+            assertThat(single(statement,
+                    "SELECT authentication_database FROM database_targets WHERE id = '" + mongoId + "'"))
+                    .isEqualTo("admin");
         }
     }
 

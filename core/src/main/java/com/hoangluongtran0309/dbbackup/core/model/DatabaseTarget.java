@@ -21,6 +21,7 @@ public final class DatabaseTarget {
 
     private static final int MAX_NAME_LENGTH = 100;
     private static final int MAX_HOST_LENGTH = 255;
+    private static final int MAX_DATABASE_NAME_LENGTH = 64;
 
     private final UUID id;
     private final String name;
@@ -29,6 +30,7 @@ public final class DatabaseTarget {
     private final int port;
     private final String databaseName;
     private final String username;
+    private final String authenticationDatabase;
 
     /**
      * The target's password, AES-256-GCM encrypted, Base64 encoded.
@@ -60,6 +62,7 @@ public final class DatabaseTarget {
             int port,
             String databaseName,
             String username,
+            String authenticationDatabase,
             String passwordCiphertext,
             Instant createdAt,
             ConnectionCheck lastConnectionCheck) {
@@ -71,6 +74,7 @@ public final class DatabaseTarget {
         this.port = port(port);
         this.databaseName = text(databaseName, "databaseName", "Database name", databaseNameLimit(engine));
         this.username = text(username, "username", "Username", usernameLimit(engine));
+        this.authenticationDatabase = authenticationDatabase(engine, authenticationDatabase);
         this.passwordCiphertext = require(passwordCiphertext, "passwordCiphertext", "Password is required");
         this.createdAt = require(createdAt, "createdAt", "Creation timestamp is required");
         this.lastConnectionCheck = lastConnectionCheck; // absent until the target is first tested
@@ -93,7 +97,12 @@ public final class DatabaseTarget {
      * @throws InvalidTargetException if a value is missing or out of range
      */
     public DatabaseTarget edited(
-            String name, String host, int port, String username, String newPasswordCiphertext) {
+            String name,
+            String host,
+            int port,
+            String username,
+            String authenticationDatabase,
+            String newPasswordCiphertext) {
 
         // Built before comparing, so the comparison sees the values as the
         // constructor normalises them — " db " and "db" are the same host.
@@ -102,14 +111,22 @@ public final class DatabaseTarget {
                 .host(host)
                 .port(port)
                 .username(username)
+                .authenticationDatabase(authenticationDatabase)
                 .passwordCiphertext(newPasswordCiphertext != null ? newPasswordCiphertext : passwordCiphertext)
                 .build();
 
         boolean connectionChanged = newPasswordCiphertext != null
                 || !edited.host.equals(this.host)
                 || edited.port != this.port
-                || !edited.username.equals(this.username);
+                || !edited.username.equals(this.username)
+                || !java.util.Objects.equals(edited.authenticationDatabase, this.authenticationDatabase);
         return connectionChanged ? edited.toBuilder().lastConnectionCheck(null).build() : edited;
+    }
+
+    /** Existing SQL callers have no separate authentication database. */
+    public DatabaseTarget edited(
+            String name, String host, int port, String username, String newPasswordCiphertext) {
+        return edited(name, host, port, username, authenticationDatabase, newPasswordCiphertext);
     }
 
     /** True once this target has been probed at least once, whatever the outcome. */
@@ -123,11 +140,22 @@ public final class DatabaseTarget {
     }
 
     private static int databaseNameLimit(DatabaseEngine engine) {
-        return engine == DatabaseEngine.POSTGRESQL ? 63 : 64;
+        return engine == DatabaseEngine.POSTGRESQL ? 63 : MAX_DATABASE_NAME_LENGTH;
     }
 
     private static int usernameLimit(DatabaseEngine engine) {
-        return engine == DatabaseEngine.POSTGRESQL ? 63 : 32;
+        return engine == DatabaseEngine.MYSQL ? 32 : 63;
+    }
+
+    private static String authenticationDatabase(DatabaseEngine engine, String value) {
+        if (engine == DatabaseEngine.MONGODB) {
+            return text(value, "authenticationDatabase", "Authentication database", MAX_DATABASE_NAME_LENGTH);
+        }
+        if (value != null && !value.isBlank()) {
+            throw new InvalidTargetException(
+                    "authenticationDatabase", "Authentication database is only used by MongoDB targets");
+        }
+        return null;
     }
 
     private static String text(String value, String field, String label, int maxLength) {

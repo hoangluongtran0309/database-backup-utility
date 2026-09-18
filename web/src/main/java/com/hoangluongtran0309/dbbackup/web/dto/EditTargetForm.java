@@ -38,6 +38,9 @@ public class EditTargetForm {
     @Size(max = 63, message = "Username must be at most 63 characters")
     private String username;
 
+    @Size(max = 64, message = "Authentication database must be at most 64 characters")
+    private String authenticationDatabase;
+
     /** Blank keeps the stored password. */
     private String password;
 
@@ -48,10 +51,11 @@ public class EditTargetForm {
         form.setHost(target.getHost());
         form.setPort(target.getPort());
         form.setUsername(target.getUsername());
+        form.setAuthenticationDatabase(target.getAuthenticationDatabase());
         return form;
     }
 
     public EditTargetCommand toCommand() {
-        return new EditTargetCommand(name, host, port, username, password);
+        return new EditTargetCommand(name, host, port, username, password, authenticationDatabase);
     }
 }
