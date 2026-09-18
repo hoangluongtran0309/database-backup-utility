@@ -16,7 +16,19 @@ public record RegisterTargetCommand(
         int port,
         String database,
         String username,
-        String password) {
+        String password,
+        String authenticationDatabase) {
+
+    public RegisterTargetCommand(
+            String name,
+            DatabaseEngine engine,
+            String host,
+            int port,
+            String database,
+            String username,
+            String password) {
+        this(name, engine, host, port, database, username, password, null);
+    }
 
     public RegisterTargetCommand {
         if (engine == null) {

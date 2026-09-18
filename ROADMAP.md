@@ -78,9 +78,9 @@ Only the engine in the active slice is declared in code. Each item below must
 land as its own complete vertical slice — runtime, tests and documentation
 included — before the next one starts.
 
-- [ ] **16. MongoDB logical backup/restore.** Gzipped archive through
+- [x] **16. MongoDB logical backup/restore.** Gzipped archive through
       `mongodump` and `mongorestore`, including namespace changes for a restore
-      into another MongoDB database.
+      into another MongoDB database. See ADR-018.
 - [ ] **17. SQLite logical backup/restore.** Files already mounted below
       `SQLITE_ROOT`; a gzipped SQL dump, restored through a temporary file and
       accepted only after `PRAGMA integrity_check`.

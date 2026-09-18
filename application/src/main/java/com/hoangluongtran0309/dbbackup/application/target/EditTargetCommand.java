@@ -17,7 +17,12 @@ public record EditTargetCommand(
         String host,
         int port,
         String username,
-        String password) {
+        String password,
+        String authenticationDatabase) {
+
+    public EditTargetCommand(String name, String host, int port, String username, String password) {
+        this(name, host, port, username, password, null);
+    }
 
     public boolean changesPassword() {
         return password != null && !password.isBlank();
