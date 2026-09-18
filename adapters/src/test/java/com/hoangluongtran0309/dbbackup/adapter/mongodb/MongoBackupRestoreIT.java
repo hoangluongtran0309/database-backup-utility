@@ -4,13 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
@@ -31,8 +31,7 @@ class MongoBackupRestoreIT {
     static final GenericContainer<?> MONGO = new GenericContainer<>("mongo:8.0")
             .withEnv("MONGO_INITDB_ROOT_USERNAME", USERNAME)
             .withEnv("MONGO_INITDB_ROOT_PASSWORD", PASSWORD)
-            .withExposedPorts(27017)
-            .waitingFor(Wait.forLogMessage(".*Waiting for connections.*", 1));
+            .withExposedPorts(27017);
 
     @TempDir
     Path artifacts;
@@ -42,9 +41,30 @@ class MongoBackupRestoreIT {
     private MongoRestoreAdapter restore;
 
     @BeforeAll
-    static void requireClientBinaries() {
+    static void requireClientBinariesAndAuthenticatedMongo() throws Exception {
         assertThat(MONGODUMP).isExecutable();
         assertThat(MONGORESTORE).isExecutable();
+
+        // The official image briefly starts an unauthenticated mongod while
+        // creating the root user. A listening-port or log wait can therefore
+        // finish before authentication is ready, depending on where Docker
+        // sends the temporary server's logs. Probe the actual contract.
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(30);
+        org.testcontainers.containers.Container.ExecResult result;
+        do {
+            result = MONGO.execInContainer(
+                    "mongosh", "--quiet", "mongodb://127.0.0.1:27017/admin",
+                    "--username", USERNAME,
+                    "--password", PASSWORD,
+                    "--authenticationDatabase", "admin",
+                    "--eval", "db.runCommand({ping: 1})");
+            if (result.getExitCode() == 0) {
+                return;
+            }
+            Thread.sleep(250);
+        } while (System.nanoTime() < deadline);
+
+        assertThat(result.getExitCode()).as(result.getStderr()).isZero();
     }
 
     @BeforeEach
