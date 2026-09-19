@@ -4,12 +4,13 @@ package com.hoangluongtran0309.dbbackup.core.model;
 public enum DatabaseEngine {
     MYSQL("MySQL", 3306),
     POSTGRESQL("PostgreSQL", 5432),
-    MONGODB("MongoDB", 27017);
+    MONGODB("MongoDB", 27017),
+    SQLITE("SQLite", null);
 
     private final String displayName;
-    private final int defaultPort;
+    private final Integer defaultPort;
 
-    DatabaseEngine(String displayName, int defaultPort) {
+    DatabaseEngine(String displayName, Integer defaultPort) {
         this.displayName = displayName;
         this.defaultPort = defaultPort;
     }
@@ -18,7 +19,11 @@ public enum DatabaseEngine {
         return displayName;
     }
 
-    public int defaultPort() {
+    public Integer defaultPort() {
         return defaultPort;
+    }
+
+    public boolean isFileBased() {
+        return this == SQLITE;
     }
 }

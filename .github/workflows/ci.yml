@@ -50,7 +50,7 @@ jobs:
           echo "deb [arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-8.0.gpg] https://repo.mongodb.org/apt/ubuntu noble/mongodb-org/8.0 multiverse" \
             | sudo tee /etc/apt/sources.list.d/mongodb-org-8.0.list >/dev/null
           sudo apt-get update
-          sudo apt-get install -y mongodb-database-tools mysql-client postgresql-client
+          sudo apt-get install -y mongodb-database-tools mysql-client postgresql-client sqlite3
           test -x /usr/bin/mysql
           test -x /usr/bin/mysqldump
           test -x /usr/bin/psql
@@ -58,6 +58,7 @@ jobs:
           test -x /usr/bin/pg_restore
           test -x /usr/bin/mongodump
           test -x /usr/bin/mongorestore
+          test -x /usr/bin/sqlite3
 
       - name: Verify
         run: mvn --batch-mode --no-transfer-progress verify

@@ -39,22 +39,21 @@ class DatabaseTargetEntity {
     @Column(nullable = false, length = 20)
     private DatabaseEngine engine;
 
-    @Column(nullable = false, length = 255)
+    @Column(length = 255)
     private String host;
 
-    @Column(nullable = false)
-    private int port;
+    private Integer port;
 
-    @Column(name = "database_name", nullable = false, length = 64)
+    @Column(name = "database_name", nullable = false, length = 1024)
     private String databaseName;
 
-    @Column(nullable = false, length = 63)
+    @Column(length = 63)
     private String username;
 
     @Column(name = "authentication_database", length = 64)
     private String authenticationDatabase;
 
-    @Column(name = "password_enc", nullable = false, columnDefinition = "text")
+    @Column(name = "password_enc", columnDefinition = "text")
     private String passwordEnc;
 
     @Column(name = "created_at", nullable = false)

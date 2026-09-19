@@ -48,8 +48,9 @@ split rather than side effects of it:
 - **Only `application` calls `EncryptionPort`.** Adapters never hold the key, so
   there is exactly one place in the system where a secret is unwrapped, and one
   place to review. `DatabaseTarget.passwordCiphertext` holds ciphertext at every
-  moment of its life; a plaintext password belongs in a separate type named for
-  what it carries.
+  moment of a credential-bearing target's life; SQLite targets have no
+  ciphertext. A plaintext password belongs in a separate type named for what it
+  carries.
 
 ## Metadata PostgreSQL and PostgreSQL targets are separate
 
@@ -122,6 +123,14 @@ the database being backed up. `mongodump` writes a gzip-compressed archive;
 when the destination database has another name. See
 [ADR-018](../adr/018-mongodb-archives-and-explicit-authentication-database.md).
 
+SQLite is file-based rather than networked. Its registered relative path is
+resolved to a real file below `SQLITE_ROOT` for every operation, including a
+real-path check that rejects escaping symlinks. Backup streams `.dump` through
+gzip. Restore loads the SQL into an owner-only temporary database, accepts only
+an exact `ok` from `PRAGMA integrity_check`, then uses SQLite's `.restore` to
+replace the destination. See
+[ADR-019](../adr/019-sqlite-files-below-one-root.md).
+
 The use cases do not know those commands. `DatabaseConnection` carries the
 short-lived plaintext credential and `EngineAdapterRegistry` selects a
 `ConnectionTestPort`, `LogicalBackupPort` or `LogicalRestorePort` by
@@ -145,7 +154,8 @@ are separate on purpose — see
    artifact goes, and writes the outcome onto the same row. MySQL streams
    gzipped SQL to `<database>_<timestamp>.sql.gz`; PostgreSQL writes a custom
    archive to `<database>_<timestamp>.dump`; MongoDB writes a compressed archive
-   to `<database>_<timestamp>.archive.gz`.
+   to `<database>_<timestamp>.archive.gz`; SQLite streams gzipped SQL to
+   `<file>_<timestamp>.sql.gz` without decrypting a credential.
 
 Meanwhile the detail page follows the row: it re-fetches itself every two
 seconds and swaps in the part that changed, until the row reaches a finished
@@ -200,7 +210,7 @@ Flyway output, and H2 would misreport all three.
 
 No test may skip itself because something it needs is absent. A test that turns
 green by not running is worse than no test at all — so the integration tests
-assert that all MySQL, PostgreSQL and MongoDB client binaries are present rather
+assert that all MySQL, PostgreSQL, MongoDB and SQLite client binaries are present rather
 than assuming it, and CI installs them explicitly.
 
 ## Database migrations
@@ -220,3 +230,7 @@ V7 and proves the ciphertext and history survived.
 `V8` adds MongoDB's nullable `authentication_database`, keeps it absent for
 existing SQL targets, and requires it for new MongoDB rows while widening the
 engine constraint to include `MONGODB`.
+
+`V9` adds `SQLITE`, widens `database_name` for relative file paths, and makes
+network and credential columns nullable only for SQLite rows. A database
+constraint preserves the old required connection shape for every other engine.

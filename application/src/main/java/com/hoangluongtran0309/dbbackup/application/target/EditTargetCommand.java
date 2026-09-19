@@ -15,12 +15,12 @@ package com.hoangluongtran0309.dbbackup.application.target;
 public record EditTargetCommand(
         String name,
         String host,
-        int port,
+        Integer port,
         String username,
         String password,
         String authenticationDatabase) {
 
-    public EditTargetCommand(String name, String host, int port, String username, String password) {
+    public EditTargetCommand(String name, String host, Integer port, String username, String password) {
         this(name, host, port, username, password, null);
     }
 

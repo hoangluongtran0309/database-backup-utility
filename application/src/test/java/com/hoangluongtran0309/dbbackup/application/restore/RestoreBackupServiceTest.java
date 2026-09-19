@@ -205,6 +205,26 @@ class RestoreBackupServiceTest {
     }
 
     @Test
+    void sqliteRestoreDoesNotDecryptCredentials() {
+        givenSucceededBackup();
+        DatabaseTarget sqlite = DatabaseTarget.builder()
+                .engine(DatabaseEngine.SQLITE)
+                .id(TARGET_ID).name("local").databaseName("shop.db")
+                .createdAt(NOW).build();
+        when(targets.findById(TARGET_ID)).thenReturn(Optional.of(sqlite));
+        when(adapters.restoreFor(DatabaseEngine.SQLITE)).thenReturn(restoreEngine);
+        givenSaveEchoes();
+        givenArtifactIntact();
+
+        runQueuedWork(service.start(BACKUP_ID, TARGET_ID));
+
+        ArgumentCaptor<DatabaseConnection> connection = ArgumentCaptor.forClass(DatabaseConnection.class);
+        verify(restoreEngine).restore(connection.capture(), eq("shop.db"), eq(Path.of(ARTIFACT)));
+        assertThat(connection.getValue().password()).isNull();
+        verifyNoInteractions(encryption);
+    }
+
+    @Test
     void recordsTheEnginesOwnMessageOnFailure() {
         givenSucceededBackup();
         givenTarget();

@@ -28,27 +28,23 @@ public class DatabaseTargetForm {
     @NotNull(message = "Database engine is required")
     private DatabaseEngine engine;
 
-    @NotBlank(message = "Host is required")
     @Size(max = 255, message = "Host must be at most 255 characters")
     private String host;
 
-    @NotNull(message = "Port is required")
     @Min(value = 1, message = "Port must be between 1 and 65535")
     @Max(value = 65535, message = "Port must be between 1 and 65535")
     private Integer port;
 
     @NotBlank(message = "Database name is required")
-    @Size(max = 64, message = "Database name must be at most 64 characters")
+    @Size(max = 1024, message = "Database must be at most 1024 characters")
     private String database;
 
-    @NotBlank(message = "Username is required")
     @Size(max = 63, message = "Username must be at most 63 characters")
     private String username;
 
     @Size(max = 64, message = "Authentication database must be at most 64 characters")
     private String authenticationDatabase;
 
-    @NotBlank(message = "Password is required")
     private String password;
 
     public static DatabaseTargetForm blank() {

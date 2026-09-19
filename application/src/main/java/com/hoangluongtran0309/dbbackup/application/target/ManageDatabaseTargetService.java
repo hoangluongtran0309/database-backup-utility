@@ -77,7 +77,7 @@ public class ManageDatabaseTargetService {
                 .databaseName(command.database())
                 .username(command.username())
                 .authenticationDatabase(command.authenticationDatabase())
-                .passwordCiphertext(encryption.encrypt(command.password()))
+                .passwordCiphertext(command.engine().isFileBased() ? null : encryption.encrypt(command.password()))
                 .createdAt(clock.instant())
                 .build();
 
@@ -102,7 +102,12 @@ public class ManageDatabaseTargetService {
      *         if the new name is taken by another target
      */
     public DatabaseTarget edit(UUID id, EditTargetCommand command) {
-        DatabaseTarget edited = get(id).edited(
+        DatabaseTarget current = get(id);
+        if (current.getEngine().isFileBased() && command.changesPassword()) {
+            throw new com.hoangluongtran0309.dbbackup.core.exception.InvalidTargetException(
+                    "password", "Password is not used by SQLite targets");
+        }
+        DatabaseTarget edited = current.edited(
                 command.name(),
                 command.host(),
                 command.port(),

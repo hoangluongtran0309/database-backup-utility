@@ -81,9 +81,9 @@ included — before the next one starts.
 - [x] **16. MongoDB logical backup/restore.** Gzipped archive through
       `mongodump` and `mongorestore`, including namespace changes for a restore
       into another MongoDB database. See ADR-018.
-- [ ] **17. SQLite logical backup/restore.** Files already mounted below
+- [x] **17. SQLite logical backup/restore.** Files already mounted below
       `SQLITE_ROOT`; a gzipped SQL dump, restored through a temporary file and
-      accepted only after `PRAGMA integrity_check`.
+      accepted only after `PRAGMA integrity_check`. See ADR-019.
 - [ ] **18. Oracle logical backup/restore.** Schema-level Data Pump through an
       Oracle directory object and a shared directory; the client belongs in an
       operator-provided image variant, not the base image.

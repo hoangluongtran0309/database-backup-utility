@@ -81,6 +81,8 @@ class DbBackupApplicationIT {
         registry.add("dbbackup.encryption.key", () -> "ZGJiYWNrdXAtaW50ZWdyYXRpb24tdGVzdC1rZXktMzI=");
         registry.add("dbbackup.storage.local.root",
                 () -> System.getProperty("java.io.tmpdir") + "/dbbackup-context-it");
+        registry.add("dbbackup.sqlite.root",
+                () -> System.getProperty("java.io.tmpdir") + "/dbbackup-context-it/sqlite");
     }
 
     @Autowired
@@ -94,9 +96,9 @@ class DbBackupApplicationIT {
     /** Each engine contributes one complete adapter set, and the executor exists. */
     @Test
     void everyPortIsWiredToAnAdapter() {
-        assertThat(context.getBeanNamesForType(LogicalBackupPort.class)).hasSize(3);
-        assertThat(context.getBeanNamesForType(LogicalRestorePort.class)).hasSize(3);
-        assertThat(context.getBeanNamesForType(ConnectionTestPort.class)).hasSize(3);
+        assertThat(context.getBeanNamesForType(LogicalBackupPort.class)).hasSize(4);
+        assertThat(context.getBeanNamesForType(LogicalRestorePort.class)).hasSize(4);
+        assertThat(context.getBeanNamesForType(ConnectionTestPort.class)).hasSize(4);
         assertThat(context.getBeanNamesForType(StoragePort.class)).hasSize(1);
         assertThat(context.getBean(RunBackupService.class)).isNotNull();
         assertThat(context.getBean(Executor.class)).isNotNull();

@@ -50,6 +50,8 @@ class MongoBackupRestoreIT {
         // finish before authentication is ready, depending on where Docker
         // sends the temporary server's logs. Probe the actual contract.
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(30);
+        long readySince = 0;
+        boolean stablyReady = false;
         org.testcontainers.containers.Container.ExecResult result;
         do {
             result = MONGO.execInContainer(
@@ -59,12 +61,22 @@ class MongoBackupRestoreIT {
                     "--authenticationDatabase", "admin",
                     "--eval", "db.runCommand({ping: 1})");
             if (result.getExitCode() == 0) {
-                return;
+                if (readySince == 0) {
+                    readySince = System.nanoTime();
+                } else if (System.nanoTime() - readySince >= TimeUnit.SECONDS.toNanos(2)) {
+                    stablyReady = true;
+                    break;
+                }
+            } else {
+                // The temporary bootstrap server can accept one authenticated
+                // command immediately before it shuts down. Only a continuous
+                // ready window proves that the final server is running.
+                readySince = 0;
             }
             Thread.sleep(250);
         } while (System.nanoTime() < deadline);
 
-        assertThat(result.getExitCode()).as(result.getStderr()).isZero();
+        assertThat(stablyReady).as(result.getStderr()).isTrue();
     }
 
     @BeforeEach

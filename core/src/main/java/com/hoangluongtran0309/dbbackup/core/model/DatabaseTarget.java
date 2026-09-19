@@ -1,6 +1,9 @@
 package com.hoangluongtran0309.dbbackup.core.model;
 
+import java.nio.file.InvalidPathException;
+import java.nio.file.Path;
 import java.time.Instant;
+import java.util.Objects;
 import java.util.UUID;
 
 import com.hoangluongtran0309.dbbackup.core.exception.InvalidTargetException;
@@ -22,12 +25,13 @@ public final class DatabaseTarget {
     private static final int MAX_NAME_LENGTH = 100;
     private static final int MAX_HOST_LENGTH = 255;
     private static final int MAX_DATABASE_NAME_LENGTH = 64;
+    private static final int MAX_SQLITE_PATH_LENGTH = 1024;
 
     private final UUID id;
     private final String name;
     private final DatabaseEngine engine;
     private final String host;
-    private final int port;
+    private final Integer port;
     private final String databaseName;
     private final String username;
     private final String authenticationDatabase;
@@ -35,10 +39,11 @@ public final class DatabaseTarget {
     /**
      * The target's password, AES-256-GCM encrypted, Base64 encoded.
      *
-     * <p>This field holds ciphertext at every point in the object's life, and
-     * the name says so. A plaintext password must never be assigned here:
-     * when a slice needs one, it belongs in a separate short-lived type that
-     * is named for what it carries.
+     * <p>For credential-bearing targets this field holds ciphertext at every
+     * point in the object's life, and the name says so. A plaintext password
+     * must never be assigned here: when a slice needs one, it belongs in a
+     * separate short-lived type that is named for what it carries. SQLite
+     * targets do not have credentials, so the field is {@code null} for them.
      */
     private final String passwordCiphertext;
 
@@ -59,7 +64,7 @@ public final class DatabaseTarget {
             String name,
             DatabaseEngine engine,
             String host,
-            int port,
+            Integer port,
             String databaseName,
             String username,
             String authenticationDatabase,
@@ -70,12 +75,22 @@ public final class DatabaseTarget {
         this.id = require(id, "id", "Target id is required");
         this.name = text(name, "name", "Name", MAX_NAME_LENGTH);
         this.engine = require(engine, "engine", "Database engine is required");
-        this.host = text(host, "host", "Host", MAX_HOST_LENGTH);
-        this.port = port(port);
-        this.databaseName = text(databaseName, "databaseName", "Database name", databaseNameLimit(engine));
-        this.username = text(username, "username", "Username", usernameLimit(engine));
+        this.host = engine.isFileBased()
+                ? absent(host, "host", "Host is not used by SQLite targets")
+                : text(host, "host", "Host", MAX_HOST_LENGTH);
+        this.port = engine.isFileBased()
+                ? absent(port, "port", "Port is not used by SQLite targets")
+                : port(port);
+        this.databaseName = engine.isFileBased()
+                ? sqlitePath(databaseName)
+                : text(databaseName, "databaseName", "Database name", databaseNameLimit(engine));
+        this.username = engine.isFileBased()
+                ? absent(username, "username", "Username is not used by SQLite targets")
+                : text(username, "username", "Username", usernameLimit(engine));
         this.authenticationDatabase = authenticationDatabase(engine, authenticationDatabase);
-        this.passwordCiphertext = require(passwordCiphertext, "passwordCiphertext", "Password is required");
+        this.passwordCiphertext = engine.isFileBased()
+                ? absent(passwordCiphertext, "passwordCiphertext", "Password is not used by SQLite targets")
+                : require(passwordCiphertext, "passwordCiphertext", "Password is required");
         this.createdAt = require(createdAt, "createdAt", "Creation timestamp is required");
         this.lastConnectionCheck = lastConnectionCheck; // absent until the target is first tested
     }
@@ -99,7 +114,7 @@ public final class DatabaseTarget {
     public DatabaseTarget edited(
             String name,
             String host,
-            int port,
+            Integer port,
             String username,
             String authenticationDatabase,
             String newPasswordCiphertext) {
@@ -116,16 +131,16 @@ public final class DatabaseTarget {
                 .build();
 
         boolean connectionChanged = newPasswordCiphertext != null
-                || !edited.host.equals(this.host)
-                || edited.port != this.port
-                || !edited.username.equals(this.username)
-                || !java.util.Objects.equals(edited.authenticationDatabase, this.authenticationDatabase);
+                || !Objects.equals(edited.host, this.host)
+                || !Objects.equals(edited.port, this.port)
+                || !Objects.equals(edited.username, this.username)
+                || !Objects.equals(edited.authenticationDatabase, this.authenticationDatabase);
         return connectionChanged ? edited.toBuilder().lastConnectionCheck(null).build() : edited;
     }
 
     /** Existing SQL callers have no separate authentication database. */
     public DatabaseTarget edited(
-            String name, String host, int port, String username, String newPasswordCiphertext) {
+            String name, String host, Integer port, String username, String newPasswordCiphertext) {
         return edited(name, host, port, username, authenticationDatabase, newPasswordCiphertext);
     }
 
@@ -136,7 +151,15 @@ public final class DatabaseTarget {
 
     /** {@code host:port/schema} — how a target identifies itself in the console. */
     public String address() {
+        if (engine.isFileBased()) {
+            return databaseName;
+        }
         return "%s:%d/%s".formatted(host, port, databaseName);
+    }
+
+    /** Safe basename used in the artifact filename for both schemas and files. */
+    public String artifactBaseName() {
+        return engine.isFileBased() ? Path.of(databaseName).getFileName().toString() : databaseName;
     }
 
     private static int databaseNameLimit(DatabaseEngine engine) {
@@ -158,6 +181,29 @@ public final class DatabaseTarget {
         return null;
     }
 
+    private static String sqlitePath(String value) {
+        String path = text(value, "databaseName", "Database file", MAX_SQLITE_PATH_LENGTH);
+        if (path.contains("\\")) {
+            throw new InvalidTargetException("databaseName", "Database file must use '/' as its separator");
+        }
+        try {
+            Path parsed = Path.of(path);
+            if (parsed.isAbsolute()) {
+                throw new InvalidTargetException(
+                        "databaseName", "Database file must be relative to SQLITE_ROOT");
+            }
+            for (Path part : parsed) {
+                if (part.toString().equals(".") || part.toString().equals("..")) {
+                    throw new InvalidTargetException(
+                            "databaseName", "Database file must not contain '.' or '..' segments");
+                }
+            }
+            return parsed.normalize().toString();
+        } catch (InvalidPathException e) {
+            throw new InvalidTargetException("databaseName", "Database file is not a valid path");
+        }
+    }
+
     private static String text(String value, String field, String label, int maxLength) {
         if (value == null || value.isBlank()) {
             throw new InvalidTargetException(field, label + " is required");
@@ -170,11 +216,28 @@ public final class DatabaseTarget {
         return trimmed;
     }
 
-    private static int port(int value) {
+    private static Integer port(Integer value) {
+        if (value == null) {
+            throw new InvalidTargetException("port", "Port is required");
+        }
         if (value < 1 || value > 65535) {
             throw new InvalidTargetException("port", "Port must be between 1 and 65535");
         }
         return value;
+    }
+
+    private static String absent(String value, String field, String message) {
+        if (value != null && !value.isBlank()) {
+            throw new InvalidTargetException(field, message);
+        }
+        return null;
+    }
+
+    private static Integer absent(Integer value, String field, String message) {
+        if (value != null) {
+            throw new InvalidTargetException(field, message);
+        }
+        return null;
     }
 
     private static <T> T require(T value, String field, String message) {

@@ -40,10 +40,11 @@ RUN apt-get update \
         mongodb-database-tools \
         mysql-client \
         postgresql-client \
+        sqlite3 \
     && rm -rf /var/lib/apt/lists/*
 
 RUN useradd --system --create-home --uid 10001 dbbackup \
-    && mkdir -p /var/lib/dbbackup/backups \
+    && mkdir -p /var/lib/dbbackup/backups /var/lib/dbbackup/sqlite \
     && chown -R dbbackup:dbbackup /var/lib/dbbackup
 
 COPY --from=build /src/web/target/web-*.jar /app/app.jar
@@ -58,11 +59,13 @@ ENV BACKUP_DIR=/var/lib/dbbackup/backups \
     PG_RESTORE_PATH=/usr/bin/pg_restore \
     MONGODUMP_PATH=/usr/bin/mongodump \
     MONGORESTORE_PATH=/usr/bin/mongorestore \
+    SQLITE_PATH=/usr/bin/sqlite3 \
+    SQLITE_ROOT=/var/lib/dbbackup/sqlite \
     JAVA_OPTS="-XX:MaxRAMPercentage=75"
 
 # Backups are the point of this tool. Mount a volume here or they die with the
 # container.
-VOLUME ["/var/lib/dbbackup/backups"]
+VOLUME ["/var/lib/dbbackup/backups", "/var/lib/dbbackup/sqlite"]
 
 USER dbbackup
 EXPOSE 8080

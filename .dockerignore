@@ -7,6 +7,8 @@ target/
 # Real dumps. They must never end up in a build context, let alone an image.
 backups/
 */backups/
+sqlite/
+*/sqlite/
 
 .env
 .env.local
