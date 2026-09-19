@@ -231,6 +231,24 @@ class RunBackupServiceTest {
     }
 
     @Test
+    void sqliteBackupDoesNotDecryptCredentialsAndUsesTheFileBasename() {
+        when(targets.findById(TARGET_ID)).thenReturn(Optional.of(sqliteTarget()));
+        when(adapters.backupFor(DatabaseEngine.SQLITE)).thenReturn(backupEngine);
+        givenSaveEchoes();
+        when(storage.locationFor("shop.db_20260909_101530.sql.gz")).thenReturn(ARTIFACT);
+        when(backupEngine.dumpTo(any(), eq(ARTIFACT))).thenReturn(1L);
+        when(storage.sha256Of(ARTIFACT)).thenReturn(SHA256);
+
+        runQueuedWork(service.start(TARGET_ID));
+
+        ArgumentCaptor<DatabaseConnection> connection = ArgumentCaptor.forClass(DatabaseConnection.class);
+        verify(backupEngine).dumpTo(connection.capture(), eq(ARTIFACT));
+        assertThat(connection.getValue().database()).isEqualTo("apps/shop.db");
+        assertThat(connection.getValue().password()).isNull();
+        verifyNoInteractions(encryption);
+    }
+
+    @Test
     void recordsTheEnginesOwnMessageOnFailure() {
         givenTarget();
         givenSaveEchoes();
@@ -342,6 +360,15 @@ class RunBackupServiceTest {
                 .databaseName(schema)
                 .username("backup")
                 .passwordCiphertext("sealed")
+                .createdAt(NOW)
+                .build();
+    }
+
+    private static DatabaseTarget sqliteTarget() {
+        return DatabaseTarget.builder().engine(DatabaseEngine.SQLITE)
+                .id(TARGET_ID)
+                .name("local")
+                .databaseName("apps/shop.db")
                 .createdAt(NOW)
                 .build();
     }

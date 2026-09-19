@@ -102,8 +102,9 @@ public class RestoreBackupService {
         try {
             requireIntact(backup, artifact);
 
-            DatabaseConnection connection =
-                    DatabaseConnection.to(target, encryption.decrypt(target.getPasswordCiphertext()));
+            DatabaseConnection connection = DatabaseConnection.to(target, target.getPasswordCiphertext() == null
+                    ? null
+                    : encryption.decrypt(target.getPasswordCiphertext()));
 
             adapters.restoreFor(target.getEngine()).restore(connection, sourceDatabase, artifact);
             restores.save(execution.succeeded(clock.instant()));

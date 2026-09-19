@@ -13,7 +13,8 @@
       </th:block>
       <th:block th:unless="${editing == null}">
         <h1>Edit <span th:text="${editing.name}">production</span></h1>
-        <p>Its backups stay with it. Changing how it connects clears the last connection check.</p>
+        <p th:if="${editing.engine.name() != 'SQLITE'}">Its backups stay with it. Changing how it connects clears the last connection check.</p>
+        <p th:if="${editing.engine.name() == 'SQLITE'}">Its backups and database file stay with it. Only the display name can change.</p>
       </th:block>
     </div>
   </div>
@@ -50,14 +51,16 @@
         <p class="field-hint">Fixed once registered.</p>
       </div>
 
-      <div class="form-group">
+      <div class="form-group" th:if="${editing == null or editing.engine.name() != 'SQLITE'}"
+           data-network-target-field>
         <label for="host">Host</label>
         <input id="host" type="text" th:field="*{host}" placeholder="127.0.0.1"
                th:attr="aria-invalid=${#fields.hasErrors('host')} ? 'true' : null">
         <div th:replace="~{fragments/field-error :: fieldError('host')}"></div>
       </div>
 
-      <div class="form-group">
+      <div class="form-group" th:if="${editing == null or editing.engine.name() != 'SQLITE'}"
+           data-network-target-field>
         <label for="port">Port</label>
         <input id="port" type="number" min="1" max="65535" th:field="*{port}"
                th:attr="aria-invalid=${#fields.hasErrors('port')} ? 'true' : null">
@@ -65,22 +68,29 @@
       </div>
 
       <div class="form-group" th:if="${editing == null}">
-        <label for="database">Database</label>
-        <input id="database" type="text" th:field="*{database}" placeholder="shop"
+        <label for="database">
+          <span data-network-database-label>Database</span>
+          <span data-sqlite-database-label hidden>Database file</span>
+        </label>
+        <input id="database" type="text" th:field="*{database}" placeholder="shop" maxlength="1024"
                th:attr="aria-invalid=${#fields.hasErrors('database')} ? 'true' : null">
+        <p class="field-hint" data-sqlite-database-help hidden>
+          Relative to <code>SQLITE_ROOT</code>, for example <code>apps/shop.db</code>.
+        </p>
         <div th:replace="~{fragments/field-error :: fieldError('database')}"></div>
       </div>
 
       <!-- Shown, not sent: every backup of this target is a dump of this
            database, so it cannot change. See ADR-012. -->
       <div class="form-group" th:unless="${editing == null}">
-        <label for="database">Database</label>
+        <label for="database" th:text="${editing.engine.name() == 'SQLITE' ? 'Database file' : 'Database'}">Database</label>
         <input id="database" type="text" readonly th:value="${editing.databaseName}"
                aria-describedby="database-help">
         <p class="field-hint" id="database-help">Fixed once registered. A different database is a different target.</p>
       </div>
 
-      <div class="form-group">
+      <div class="form-group" th:if="${editing == null or editing.engine.name() != 'SQLITE'}"
+           data-network-target-field>
         <label for="username">Username</label>
         <input id="username" type="text" th:field="*{username}" autocomplete="off"
                th:attr="aria-invalid=${#fields.hasErrors('username')} ? 'true' : null">
@@ -100,7 +110,9 @@
         <div th:replace="~{fragments/field-error :: fieldError('authenticationDatabase')}"></div>
       </div>
 
-      <div class="form-group form-group-full">
+      <div class="form-group form-group-full"
+           th:if="${editing == null or editing.engine.name() != 'SQLITE'}"
+           data-network-target-field>
         <label for="password">Password</label>
         <input id="password" type="password" th:field="*{password}"
                autocomplete="new-password" aria-describedby="password-help"

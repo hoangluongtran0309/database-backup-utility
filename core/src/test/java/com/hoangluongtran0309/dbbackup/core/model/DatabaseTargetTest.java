@@ -160,6 +160,57 @@ class DatabaseTargetTest {
     }
 
     @Test
+    void sqliteUsesOnlyARelativeDatabaseFile() {
+        DatabaseTarget target = sqlite().databaseName(" apps/shop.db ").build();
+
+        assertThat(target.getEngine()).isEqualTo(DatabaseEngine.SQLITE);
+        assertThat(target.getDatabaseName()).isEqualTo("apps/shop.db");
+        assertThat(target.address()).isEqualTo("apps/shop.db");
+        assertThat(target.artifactBaseName()).isEqualTo("shop.db");
+        assertThat(target.getHost()).isNull();
+        assertThat(target.getPort()).isNull();
+        assertThat(target.getUsername()).isNull();
+        assertThat(target.getPasswordCiphertext()).isNull();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"/var/data/shop.db", "../shop.db", "apps/../shop.db", "./shop.db", "apps\\shop.db"})
+    void sqliteRejectsPathsThatAreNotPortableAndRelative(String path) {
+        assertThatThrownBy(() -> sqlite().databaseName(path).build())
+                .isInstanceOf(InvalidTargetException.class)
+                .extracting("field").isEqualTo("databaseName");
+    }
+
+    @Test
+    void sqliteRejectsNetworkAndCredentialFields() {
+        assertThatThrownBy(() -> sqlite().host("localhost").build())
+                .isInstanceOf(InvalidTargetException.class)
+                .extracting("field").isEqualTo("host");
+        assertThatThrownBy(() -> sqlite().port(1).build())
+                .isInstanceOf(InvalidTargetException.class)
+                .extracting("field").isEqualTo("port");
+        assertThatThrownBy(() -> sqlite().username("backup").build())
+                .isInstanceOf(InvalidTargetException.class)
+                .extracting("field").isEqualTo("username");
+        assertThatThrownBy(() -> sqlite().passwordCiphertext("sealed").build())
+                .isInstanceOf(InvalidTargetException.class)
+                .extracting("field").isEqualTo("passwordCiphertext");
+    }
+
+    @Test
+    void sqliteEditOnlyAllowsARenameAndKeepsItsCheck() {
+        DatabaseTarget tested = sqlite()
+                .lastConnectionCheck(ConnectionCheck.passed(Instant.now()))
+                .build();
+
+        DatabaseTarget renamed = tested.edited("archive", null, null, null, null);
+
+        assertThat(renamed.getName()).isEqualTo("archive");
+        assertThat(renamed.getDatabaseName()).isEqualTo("shop.db");
+        assertThat(renamed.hasBeenTested()).isTrue();
+    }
+
+    @Test
     void changingMongoAuthenticationDatabaseDropsTheLastConnectionCheck() {
         DatabaseTarget tested = valid()
                 .engine(DatabaseEngine.MONGODB)
@@ -232,5 +283,14 @@ class DatabaseTargetTest {
                 .isInstanceOf(InvalidTargetException.class);
         assertThatThrownBy(() -> valid().createdAt(null).build())
                 .isInstanceOf(InvalidTargetException.class);
+    }
+
+    private static DatabaseTarget.DatabaseTargetBuilder sqlite() {
+        return DatabaseTarget.builder()
+                .engine(DatabaseEngine.SQLITE)
+                .id(UUID.randomUUID())
+                .name("local shop")
+                .databaseName("shop.db")
+                .createdAt(Instant.parse("2026-09-09T10:15:30Z"));
     }
 }

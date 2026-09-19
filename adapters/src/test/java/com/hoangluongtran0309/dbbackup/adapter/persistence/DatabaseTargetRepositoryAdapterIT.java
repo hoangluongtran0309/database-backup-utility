@@ -99,6 +99,26 @@ class DatabaseTargetRepositoryAdapterIT {
     }
 
     @Test
+    void savesASqliteTargetWithoutNetworkCredentials() {
+        DatabaseTarget sqlite = DatabaseTarget.builder()
+                .engine(DatabaseEngine.SQLITE)
+                .id(UUID.randomUUID())
+                .name("local shop")
+                .databaseName("apps/shop.db")
+                .createdAt(Instant.parse("2026-09-09T10:15:30Z"))
+                .build();
+
+        DatabaseTarget found = repository.findById(repository.save(sqlite).getId()).orElseThrow();
+
+        assertThat(found.getEngine()).isEqualTo(DatabaseEngine.SQLITE);
+        assertThat(found.getDatabaseName()).isEqualTo("apps/shop.db");
+        assertThat(found.getHost()).isNull();
+        assertThat(found.getPort()).isNull();
+        assertThat(found.getUsername()).isNull();
+        assertThat(found.getPasswordCiphertext()).isNull();
+    }
+
+    @Test
     void findByIdIsEmptyForAnUnknownId() {
         assertThat(repository.findById(UUID.randomUUID())).isEmpty();
     }

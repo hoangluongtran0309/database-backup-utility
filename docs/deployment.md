@@ -5,17 +5,19 @@ One image, one compose file. See
 packaging decision and [ADR-017](adr/017-route-logical-backups-by-database-engine.md)
 for the PostgreSQL client added to it. MongoDB packaging is recorded in
 [ADR-018](adr/018-mongodb-archives-and-explicit-authentication-database.md).
+SQLite file mounting is recorded in
+[ADR-019](adr/019-sqlite-files-below-one-root.md).
 
 ## What the image contains
 
-A JRE, the application jar, Ubuntu's `mysql-client` and `postgresql-client`,
-and MongoDB's `mongodb-database-tools`. The MySQL package is Oracle's MySQL,
+A JRE, the application jar, Ubuntu's `mysql-client`, `postgresql-client`,
+MongoDB's `mongodb-database-tools`, and `sqlite3`. The MySQL package is Oracle's MySQL,
 not MariaDB. That
 distinction is load-bearing: MariaDB's `mysqldump` rejects
 `--set-gtid-purged`, which this tool always passes, so every MySQL backup would
 fail. The PostgreSQL package supplies `psql`, `pg_dump` and `pg_restore`; the
 MongoDB package supplies `mongodump` and `mongorestore`. Anyone changing the
-base image must check all seven binaries again.
+base image must check all eight binaries again.
 
 It runs as an unprivileged user, `dbbackup` (uid 10001), and its healthcheck
 asks `/actuator/health`, so it only reports healthy once the application is up
@@ -59,6 +61,13 @@ Docker host is `host.docker.internal` from inside the container; compose maps
 that name explicitly because on Linux it does not otherwise exist. A server
 elsewhere just needs to be routable from the container.
 
+**Mounting SQLite databases.** Compose bind-mounts
+`${SQLITE_HOST_DIR:-./sqlite}` at `/var/lib/dbbackup/sqlite`. Register paths
+relative to that root, never container-absolute paths. The application resolves
+symlinks and refuses files whose real path escapes the root. The container runs
+as uid 10001, which needs read access for Test/backup and write access to the
+file and its parent for restore and SQLite journal files.
+
 **Metadata PostgreSQL is not a target.** The `postgres` service in compose holds
 the application's target and execution records. It is not offered as a backup
 target automatically. Backing it up requires registering a PostgreSQL target
@@ -66,7 +75,8 @@ explicitly, with credentials that have the required access.
 
 **Client paths.** The image sets `MYSQL_CLIENT_PATH`, `MYSQLDUMP_PATH`,
 `PSQL_PATH`, `PG_DUMP_PATH`, `PG_RESTORE_PATH`, `MONGODUMP_PATH` and
-`MONGORESTORE_PATH` to `/usr/bin/...`. A source or custom-image deployment may
+`MONGORESTORE_PATH` and `SQLITE_PATH` to `/usr/bin/...`. `SQLITE_ROOT` is
+`/var/lib/dbbackup/sqlite`. A source or custom-image deployment may
 override them, but every configured file must be executable or startup fails.
 
 MongoDB credentials may belong to a database other than the one being backed

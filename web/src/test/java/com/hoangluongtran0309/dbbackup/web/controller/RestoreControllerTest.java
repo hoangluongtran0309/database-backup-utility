@@ -1,6 +1,7 @@
 package com.hoangluongtran0309.dbbackup.web.controller;
 
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -319,6 +320,22 @@ class RestoreControllerTest {
                 .andExpect(content().string(containsString("ERROR 1142 at line 40")))
                 .andExpect(content().string(containsString("production")))
                 .andExpect(content().string(containsString("data-live-active=\"false\"")));
+    }
+
+    @Test
+    void sqliteRestoreWarnsThatTheWholeDestinationIsReplaced() throws Exception {
+        DatabaseTarget sqlite = DatabaseTarget.builder()
+                .engine(DatabaseEngine.SQLITE)
+                .id(TARGET_ID).name("local shop").databaseName("apps/shop.db")
+                .createdAt(STARTED).build();
+        when(backups.findById(BACKUP_ID)).thenReturn(Optional.of(backup()));
+        when(targets.listAll()).thenReturn(List.of(sqlite));
+
+        mockMvc.perform(get("/restores/new").param("backup", BACKUP_ID.toString()))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("complete SQLite database")))
+                .andExpect(content().string(containsString("Objects and data not present in the backup will be removed")))
+                .andExpect(content().string(not(containsString("Tables that are <em>not</em>"))));
     }
 
     /** Followed until it finishes, like a running backup (ADR-010). */

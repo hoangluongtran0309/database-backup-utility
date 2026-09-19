@@ -1,6 +1,7 @@
 package com.hoangluongtran0309.dbbackup.adapter.persistence;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -15,7 +16,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
-/** Proves V7 upgrades real pre-engine data rather than only building a fresh schema. */
+/** Proves V7-V9 upgrade real pre-engine data rather than only building a fresh schema. */
 @Testcontainers
 class DatabaseEngineMigrationIT {
 
@@ -86,6 +87,25 @@ class DatabaseEngineMigrationIT {
             assertThat(single(statement,
                     "SELECT authentication_database FROM database_targets WHERE id = '" + mongoId + "'"))
                     .isEqualTo("admin");
+
+            UUID sqliteId = UUID.randomUUID();
+            statement.executeUpdate("""
+                    INSERT INTO database_targets
+                        (id, name, engine, host, port, database_name, username,
+                         authentication_database, password_enc, created_at)
+                    VALUES ('%s', 'sqlite', 'SQLITE', NULL, NULL,
+                            'apps/shop.db', NULL, NULL, NULL, now())
+                    """.formatted(sqliteId));
+            assertThat(single(statement,
+                    "SELECT database_name FROM database_targets WHERE id = '" + sqliteId + "'"))
+                    .isEqualTo("apps/shop.db");
+            assertThatThrownBy(() -> statement.executeUpdate("""
+                    INSERT INTO database_targets
+                        (id, name, engine, host, port, database_name, username, password_enc, created_at)
+                    VALUES ('%s', 'bad sqlite', 'SQLITE', 'localhost', NULL,
+                            'bad.db', NULL, NULL, now())
+                    """.formatted(UUID.randomUUID())))
+                    .hasMessageContaining("ck_database_targets_connection_shape");
         }
     }
 

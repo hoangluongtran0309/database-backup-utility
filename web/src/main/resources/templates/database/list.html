@@ -25,7 +25,7 @@
         <tr>
           <th scope="col">Name</th>
           <th scope="col">Engine</th>
-          <th scope="col">Address</th>
+          <th scope="col">Location</th>
           <th scope="col">Last check</th>
           <th scope="col">Last backup</th>
           <th scope="col"><span class="visually-hidden">Actions</span></th>
@@ -41,7 +41,8 @@
           <td data-label="Address">
             <div class="cell-stack">
               <span class="mono nowrap" th:text="${target.address}">127.0.0.1:3306/shop</span>
-              <span class="field-hint">as <span class="mono" th:text="${target.username}">backup</span></span>
+              <span class="field-hint" th:if="${target.engine.name() != 'SQLITE'}">as <span class="mono" th:text="${target.username}">backup</span></span>
+              <span class="field-hint" th:if="${target.engine.name() == 'SQLITE'}">below SQLITE_ROOT</span>
             </div>
           </td>
 

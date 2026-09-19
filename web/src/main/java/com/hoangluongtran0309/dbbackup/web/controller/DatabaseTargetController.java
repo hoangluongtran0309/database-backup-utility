@@ -9,6 +9,7 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.validation.BindingResult;
+import org.springframework.validation.ValidationUtils;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -96,6 +97,8 @@ public class DatabaseTargetController {
             BindingResult binding,
             RedirectAttributes flash) {
 
+        validateRegistrationFields(form, binding);
+
         // Re-rendering must not replace the bound `form`: it is what the
         // operator typed, and losing a filled-in page to one bad field is the
         // fastest way to make people stop trusting the console.
@@ -143,6 +146,7 @@ public class DatabaseTargetController {
         } catch (NoSuchElementException e) {
             return targetGone(flash);
         }
+        validateEditFields(current, form, binding);
         if (binding.hasErrors()) {
             return editView(model, current);
         }
@@ -261,6 +265,38 @@ public class DatabaseTargetController {
             binding.reject("target.invalid", e.getMessage());
         } else {
             binding.rejectValue(formField, "target.invalid", e.getMessage());
+        }
+    }
+
+    private static void validateRegistrationFields(DatabaseTargetForm form, BindingResult binding) {
+        if (form.getEngine() == null || form.getEngine().isFileBased()) {
+            return;
+        }
+        ValidationUtils.rejectIfEmptyOrWhitespace(binding, "host", "target.required", "Host is required");
+        if (form.getPort() == null) {
+            binding.rejectValue("port", "target.required", "Port is required");
+        }
+        ValidationUtils.rejectIfEmptyOrWhitespace(binding, "username", "target.required", "Username is required");
+        ValidationUtils.rejectIfEmptyOrWhitespace(binding, "password", "target.required", "Password is required");
+        if (form.getEngine() == DatabaseEngine.MONGODB) {
+            ValidationUtils.rejectIfEmptyOrWhitespace(
+                    binding, "authenticationDatabase", "target.required", "Authentication database is required");
+        }
+    }
+
+    private static void validateEditFields(
+            DatabaseTarget target, EditTargetForm form, BindingResult binding) {
+        if (target.getEngine().isFileBased()) {
+            return;
+        }
+        ValidationUtils.rejectIfEmptyOrWhitespace(binding, "host", "target.required", "Host is required");
+        if (form.getPort() == null) {
+            binding.rejectValue("port", "target.required", "Port is required");
+        }
+        ValidationUtils.rejectIfEmptyOrWhitespace(binding, "username", "target.required", "Username is required");
+        if (target.getEngine() == DatabaseEngine.MONGODB) {
+            ValidationUtils.rejectIfEmptyOrWhitespace(
+                    binding, "authenticationDatabase", "target.required", "Authentication database is required");
         }
     }
 }

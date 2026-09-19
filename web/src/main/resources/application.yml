@@ -88,6 +88,13 @@ dbbackup:
     restore-path: ${MONGORESTORE_PATH:/usr/bin/mongorestore}
     connect-timeout: 10s
 
+  sqlite:
+    # SQLite targets are files already mounted below this root. The stored
+    # target value is always relative to it and is resolved again per operation.
+    client-path: ${SQLITE_PATH:/usr/bin/sqlite3}
+    root: ${SQLITE_ROOT:./sqlite}
+    connect-timeout: 10s
+
   jobs:
     # How many backups and restores may run at once, together. Each is a child
     # process competing for the same disk, so more is not faster.

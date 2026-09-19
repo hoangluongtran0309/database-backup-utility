@@ -1,10 +1,10 @@
 # database-backup-utility
 
-MySQL, PostgreSQL and MongoDB logical backup and restore, driven from a small web
-console.
+MySQL, PostgreSQL, MongoDB and SQLite logical backup and restore, driven from a
+small web console.
 
 The scope is deliberately narrow: **full logical dumps, same-engine restores,
-local disk**. MySQL, PostgreSQL and MongoDB are implemented; the later engines
+local disk**. MySQL, PostgreSQL, MongoDB and SQLite are implemented; later engines
 in the roadmap are genuinely absent from the code. There is no physical
 backup, incremental chain, point-in-time recovery, scheduler or cloud storage.
 Each capability arrives as one complete vertical slice, code and documentation
@@ -12,18 +12,20 @@ together. See [ROADMAP.md](ROADMAP.md) for what exists and what is next.
 
 ## What works today
 
-Registering a MySQL, PostgreSQL or MongoDB target, testing that it is reachable, running
+Registering a MySQL, PostgreSQL, MongoDB or SQLite target, testing it, running
 a full logical backup of it, restoring one of those backups into a target of the
 same engine, downloading or deleting its artifact, and reading the history of
 all of it. The target's password is encrypted with AES-256-GCM before it is
 stored.
 
-A target's connection details — name, host, port, user, password and, for
+A network target's connection details — name, host, port, user, password and, for
 MongoDB, its authentication database — can be edited without touching its
 backups, so a rotated password is an edit rather
 than a new target. Its engine and database are fixed once registered: changing
 either means registering another target. See
-[ADR-012](docs/adr/012-editing-a-target-keeps-its-schema.md).
+[ADR-012](docs/adr/012-editing-a-target-keeps-its-schema.md). A SQLite target
+instead names an immutable relative file below `SQLITE_ROOT` and has no
+credentials.
 
 The console asks you to sign in first. There is one operator account, set from
 the environment with a bcrypt hash, and every form carries a CSRF token. See
@@ -39,7 +41,8 @@ failed. MySQL artifacts are gzipped SQL named
 `<database>_<timestamp>.sql.gz`; PostgreSQL artifacts are custom-format
 archives named `<database>_<timestamp>.dump` and can be inspected with
 `pg_restore --list`; MongoDB artifacts are compressed archives named
-`<database>_<timestamp>.archive.gz`.
+`<database>_<timestamp>.archive.gz`; SQLite artifacts are gzipped SQL named
+`<file>_<timestamp>.sql.gz`.
 
 Each backup records the SHA-256 of its artifact — the same value `sha256sum`
 prints for the download. The backup's page can verify the file against it, and
@@ -48,9 +51,10 @@ applied. Backups made before 0.2.0 show "Not recorded". See
 [ADR-013](docs/adr/013-a-checksum-for-every-artifact.md).
 
 Restoring overwrites live data, so it asks: the confirmation page names the
-database and you type the target's name to proceed. It applies the dump rather
-than recreating the database — objects the backup does not contain are left
-alone.
+database and you type the target's name to proceed. Network-engine restores
+apply the dump rather than recreating the database, so objects the backup does
+not contain are left alone. SQLite instead replaces the complete destination
+after rebuilding and validating a temporary database.
 See [ADR-007](docs/adr/007-restore-applies-a-dump-and-asks-first.md).
 
 A backup can be restored into any registered target of the same engine, not
@@ -93,7 +97,7 @@ docker compose up --build
 
 Then open <http://localhost:8080> and sign in as `admin` with that password
 (`OPERATOR_USERNAME` changes the name). The image carries the MySQL,
-PostgreSQL and MongoDB client tools, so the host needs only Docker.
+PostgreSQL, MongoDB and SQLite client tools, so the host needs only Docker.
 
 Keep that key. Passwords encrypted under one key cannot be read back under
 another, and there is no recovery path.
@@ -101,6 +105,10 @@ another, and there is no recovery path.
 A MySQL, PostgreSQL or MongoDB server running on the Docker host is reachable from the
 container as `host.docker.internal` — use that as the target's host, not
 `localhost`.
+
+SQLite files are mounted from `${SQLITE_HOST_DIR:-./sqlite}` into the image.
+Register their path relative to that directory and ensure uid 10001 can read
+the source and write the destination for restores.
 
 Backups live in a named volume, `backups`, so they survive the container. If the
 application will not start, `docker compose logs app` says why; note that with
@@ -111,8 +119,8 @@ application will not start, `docker compose logs app` says why; note that with
 
 Requires JDK 21, Maven, Docker, the MySQL client binaries (`mysql` and
 `mysqldump`), the PostgreSQL client binaries (`psql`, `pg_dump` and
-`pg_restore`), and MongoDB Database Tools (`mongodump` and `mongorestore`) on
-the host. The application drives those directly and refuses
+`pg_restore`), MongoDB Database Tools (`mongodump` and `mongorestore`), and
+`sqlite3` on the host. The application drives those directly and refuses
 to start if it cannot find them; see
 [ADR-003](docs/adr/003-shelling-out-to-the-mysql-client.md) and
 [ADR-017](docs/adr/017-route-logical-backups-by-database-engine.md).
@@ -147,6 +155,9 @@ would also try to run the parent pom, which has no main class.)
 | `PG_RESTORE_PATH` | `/usr/bin/pg_restore` | The PostgreSQL custom-archive restore client |
 | `MONGODUMP_PATH` | `/usr/bin/mongodump` | The MongoDB connection-test and compressed-archive client |
 | `MONGORESTORE_PATH` | `/usr/bin/mongorestore` | The MongoDB archive restore client |
+| `SQLITE_PATH` | `/usr/bin/sqlite3` | The SQLite CLI used for checks, dumps and restores |
+| `SQLITE_ROOT` | `./sqlite` | Root below which every registered SQLite file must resolve; the image uses `/var/lib/dbbackup/sqlite` |
+| `SQLITE_HOST_DIR` | `./sqlite` | Compose-only host directory bind-mounted at `SQLITE_ROOT` |
 | `BACKUP_DIR` | `./backups` | Where dumps are written; created at startup. Relative, so it follows the working directory — `mvn -pl web spring-boot:run` puts it under `web/`. The image sets it to `/var/lib/dbbackup/backups`. |
 | `JOB_CONCURRENCY` | `2` | How many backups and restores may run at once, together |
 | `JOB_QUEUE_CAPACITY` | `20` | Beyond this, a job is refused and recorded as failed |
