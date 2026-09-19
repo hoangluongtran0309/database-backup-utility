@@ -13,7 +13,7 @@ public record RegisterTargetCommand(
         String name,
         DatabaseEngine engine,
         String host,
-        int port,
+        Integer port,
         String database,
         String username,
         String password,
@@ -23,7 +23,7 @@ public record RegisterTargetCommand(
             String name,
             DatabaseEngine engine,
             String host,
-            int port,
+            Integer port,
             String database,
             String username,
             String password) {
@@ -37,8 +37,11 @@ public record RegisterTargetCommand(
         // Every other field is checked by DatabaseTarget's constructor. The
         // password cannot be: by the time it reaches the model it is
         // ciphertext, and the ciphertext of an empty string is not empty.
-        if (password == null || password.isBlank()) {
+        if (!engine.isFileBased() && (password == null || password.isBlank())) {
             throw new InvalidTargetException("password", "Password is required");
+        }
+        if (engine.isFileBased() && password != null && !password.isBlank()) {
+            throw new InvalidTargetException("password", "Password is not used by SQLite targets");
         }
     }
 }

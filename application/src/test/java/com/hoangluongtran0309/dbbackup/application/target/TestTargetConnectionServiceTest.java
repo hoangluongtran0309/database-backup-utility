@@ -132,6 +132,27 @@ class TestTargetConnectionServiceTest {
     }
 
     @Test
+    void sqliteNeverDecryptsCredentials() {
+        DatabaseTarget sqlite = DatabaseTarget.builder()
+                .engine(DatabaseEngine.SQLITE)
+                .id(TARGET_ID)
+                .name("local")
+                .databaseName("shop.db")
+                .createdAt(NOW)
+                .build();
+        when(repository.findById(TARGET_ID)).thenReturn(Optional.of(sqlite));
+        when(adapters.connectionTestFor(DatabaseEngine.SQLITE)).thenReturn(connectionTest);
+        when(connectionTest.test(any())).thenReturn(ConnectionTestPort.Result.ok());
+
+        service.test(TARGET_ID);
+
+        verify(connectionTest).test(connection.capture());
+        assertThat(connection.getValue().database()).isEqualTo("shop.db");
+        assertThat(connection.getValue().password()).isNull();
+        verifyNoInteractions(encryption);
+    }
+
+    @Test
     void failsForAnUnknownTargetWithoutProbingAnything() {
         when(repository.findById(TARGET_ID)).thenReturn(Optional.empty());
 

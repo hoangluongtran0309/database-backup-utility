@@ -91,8 +91,9 @@ public class RunBackupService {
         try {
             // Decrypted here, at the last moment and on the thread that uses
             // it, rather than being carried through the queue.
-            DatabaseConnection connection =
-                    DatabaseConnection.to(target, encryption.decrypt(target.getPasswordCiphertext()));
+            DatabaseConnection connection = DatabaseConnection.to(target, target.getPasswordCiphertext() == null
+                    ? null
+                    : encryption.decrypt(target.getPasswordCiphertext()));
 
             long sizeBytes = backupEngine.dumpTo(connection, destination);
             // Read back from disk once the engine has closed the file, so the
@@ -143,7 +144,7 @@ public class RunBackupService {
             throw new IllegalArgumentException(
                     "Artifact suffix must begin with a dot and contain only letters, digits or dots");
         }
-        String schema = target.getDatabaseName().replaceAll("[^a-zA-Z0-9._-]", "_");
+        String schema = target.artifactBaseName().replaceAll("[^a-zA-Z0-9._-]", "_");
         return "%s_%s%s".formatted(schema, TIMESTAMP.format(startedAt), suffix);
     }
 }

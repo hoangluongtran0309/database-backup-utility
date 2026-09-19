@@ -16,6 +16,11 @@ dbbackup:
     restore-path: ${MONGORESTORE_PATH:/usr/bin/mongorestore}
     connect-timeout: 10s
 
+  sqlite:
+    client-path: ${SQLITE_PATH:/usr/bin/sqlite3}
+    root: ${java.io.tmpdir}/dbbackup-sqlite-it
+    connect-timeout: 10s
+
   backup:
     timeout: 5m
 

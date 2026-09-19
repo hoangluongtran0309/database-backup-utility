@@ -9,7 +9,7 @@ package com.hoangluongtran0309.dbbackup.core.model;
 public record DatabaseConnection(
         DatabaseEngine engine,
         String host,
-        int port,
+        Integer port,
         String database,
         String username,
         String password,
@@ -19,7 +19,7 @@ public record DatabaseConnection(
     public DatabaseConnection(
             DatabaseEngine engine,
             String host,
-            int port,
+            Integer port,
             String database,
             String username,
             String password) {
@@ -39,6 +39,9 @@ public record DatabaseConnection(
 
     @Override
     public String toString() {
+        if (engine.isFileBased()) {
+            return "DatabaseConnection[%s %s]".formatted(engine, database);
+        }
         return "DatabaseConnection[%s %s:%d/%s as %s]"
                 .formatted(engine, host, port, database, username);
     }

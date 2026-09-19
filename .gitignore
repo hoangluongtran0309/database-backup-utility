@@ -22,6 +22,10 @@
 # outside the checkout.
 backups/
 
+# Default SQLITE_ROOT. Anchored so adapter packages named `sqlite` stay tracked.
+/sqlite/
+/web/sqlite/
+
 # Never commit a real encryption key or datasource password.
 .env
 .env.local

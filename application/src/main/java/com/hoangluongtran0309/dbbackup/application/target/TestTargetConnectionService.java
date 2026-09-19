@@ -41,8 +41,11 @@ public class TestTargetConnectionService {
                 .orElseThrow(() -> new NoSuchElementException(
                         "No database target with id " + targetId));
 
+        String password = target.getPasswordCiphertext() == null
+                ? null
+                : encryption.decrypt(target.getPasswordCiphertext());
         ConnectionTestPort.Result result = adapters.connectionTestFor(target.getEngine()).test(
-                DatabaseConnection.to(target, encryption.decrypt(target.getPasswordCiphertext())));
+                DatabaseConnection.to(target, password));
 
         ConnectionCheck check = result.successful()
                 ? ConnectionCheck.passed(clock.instant())

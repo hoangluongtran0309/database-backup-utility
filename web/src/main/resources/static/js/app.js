@@ -194,18 +194,30 @@
         });
     }
 
-    /* A new target starts on the selected engine's conventional port. */
+    /* A new target shows either network credentials or one SQLite file path. */
     function initEnginePortDefault() {
         var engine = document.querySelector('[data-engine-select]');
         var port = document.getElementById('port');
         var authGroup = document.querySelector('[data-mongodb-auth-group]');
         var authDatabase = document.getElementById('authenticationDatabase');
+        var networkGroups = document.querySelectorAll('[data-network-target-field]');
+        var database = document.getElementById('database');
+        var networkLabel = document.querySelector('[data-network-database-label]');
+        var sqliteLabel = document.querySelector('[data-sqlite-database-label]');
+        var sqliteHelp = document.querySelector('[data-sqlite-database-help]');
         if (!engine) return;
 
         function renderEngineFields(changePort) {
             var option = engine.options[engine.selectedIndex];
-            if (changePort && port && option && option.dataset.defaultPort) {
-                port.value = option.dataset.defaultPort;
+            var sqlite = engine.value === 'SQLITE';
+            networkGroups.forEach(function (group) {
+                group.hidden = sqlite;
+                group.querySelectorAll('input, select').forEach(function (field) {
+                    field.disabled = sqlite;
+                });
+            });
+            if (changePort && port) {
+                port.value = option && option.dataset.defaultPort ? option.dataset.defaultPort : '';
             }
             if (authGroup && authDatabase) {
                 var mongo = engine.value === 'MONGODB';
@@ -213,6 +225,12 @@
                 authDatabase.disabled = !mongo;
                 authDatabase.required = mongo;
                 if (changePort && mongo && !authDatabase.value) authDatabase.value = 'admin';
+            }
+            if (networkLabel) networkLabel.hidden = sqlite;
+            if (sqliteLabel) sqliteLabel.hidden = !sqlite;
+            if (sqliteHelp) sqliteHelp.hidden = !sqlite;
+            if (database && changePort) {
+                database.placeholder = sqlite ? 'apps/shop.db' : 'shop';
             }
         }
 

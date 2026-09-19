@@ -1,5 +1,6 @@
 package com.hoangluongtran0309.dbbackup.web.controller;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -167,7 +168,8 @@ class DatabaseTargetControllerTest {
                 .andExpect(content().string(org.hamcrest.Matchers.matchesPattern(
                         "(?s).*value=\"POSTGRESQL\".*?data-default-port=\"5432\".*")))
                 .andExpect(content().string(org.hamcrest.Matchers.matchesPattern(
-                        "(?s).*value=\"MONGODB\".*?data-default-port=\"27017\".*")));
+                        "(?s).*value=\"MONGODB\".*?data-default-port=\"27017\".*")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("value=\"SQLITE\"")));
     }
 
     @Test
@@ -230,6 +232,26 @@ class DatabaseTargetControllerTest {
                 .isEqualTo(DatabaseEngine.MONGODB);
         org.assertj.core.api.Assertions.assertThat(command.getValue().authenticationDatabase())
                 .isEqualTo("admin");
+    }
+
+    @Test
+    void registersASqliteTargetWithOnlyItsRelativeFile() throws Exception {
+        when(service.register(any())).thenReturn(sqliteTarget("local shop"));
+
+        mockMvc.perform(post("/databases").with(csrf())
+                        .param("engine", "SQLITE")
+                        .param("name", "local shop")
+                        .param("database", "apps/shop.db"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/databases"));
+
+        ArgumentCaptor<RegisterTargetCommand> command = ArgumentCaptor.forClass(RegisterTargetCommand.class);
+        verify(service).register(command.capture());
+        assertThat(command.getValue().engine()).isEqualTo(DatabaseEngine.SQLITE);
+        assertThat(command.getValue().database()).isEqualTo("apps/shop.db");
+        assertThat(command.getValue().host()).isNull();
+        assertThat(command.getValue().port()).isNull();
+        assertThat(command.getValue().password()).isNull();
     }
 
     @Test
@@ -318,6 +340,37 @@ class DatabaseTargetControllerTest {
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("readonly value=\"MongoDB\"")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString(
                         "name=\"authenticationDatabase\" value=\"admin\"")));
+    }
+
+    @Test
+    void sqliteListAndEditFormShowAFileWithoutCredentialFields() throws Exception {
+        DatabaseTarget target = sqliteTarget("local shop");
+        when(service.listAll()).thenReturn(List.of(target));
+
+        mockMvc.perform(get("/databases"))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("apps/shop.db")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("below SQLITE_ROOT")));
+
+        when(service.get(target.getId())).thenReturn(target);
+        mockMvc.perform(get("/databases/{id}/edit", target.getId()))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("readonly value=\"SQLite\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("readonly value=\"apps/shop.db\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("name=\"host\""))))
+                .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("name=\"password\""))));
+    }
+
+    @Test
+    void sqliteEditAcceptsARenameWithoutNetworkFields() throws Exception {
+        DatabaseTarget target = sqliteTarget("local shop");
+        when(service.get(target.getId())).thenReturn(target);
+        when(service.edit(eq(target.getId()), any())).thenReturn(sqliteTarget("renamed"));
+
+        mockMvc.perform(post("/databases/{id}", target.getId()).with(csrf())
+                        .param("name", "renamed"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/databases"));
+
+        verify(service).edit(target.getId(), new EditTargetCommand("renamed", null, null, null, null, null));
     }
 
     @Test
@@ -676,6 +729,15 @@ class DatabaseTargetControllerTest {
                 .username("backup")
                 .authenticationDatabase("admin")
                 .passwordCiphertext("Y2lwaGVydGV4dA==")
+                .createdAt(Instant.parse("2026-09-09T10:15:30Z"))
+                .build();
+    }
+
+    private static DatabaseTarget sqliteTarget(String name) {
+        return DatabaseTarget.builder().engine(DatabaseEngine.SQLITE)
+                .id(UUID.randomUUID())
+                .name(name)
+                .databaseName("apps/shop.db")
                 .createdAt(Instant.parse("2026-09-09T10:15:30Z"))
                 .build();
     }

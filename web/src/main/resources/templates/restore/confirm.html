@@ -36,15 +36,19 @@
 
   <div class="alert alert-danger" role="alert">
     <p><strong>This overwrites live data.</strong></p>
-    <p>
+    <p th:if="${target.engine.name() != 'SQLITE'}">
       Every table in the backup will be dropped and recreated in
       <code th:text="${target.address}">127.0.0.1:3306/shop</code>.
     </p>
     <!-- Said plainly because it is the thing people assume wrongly: this
          applies a dump, it does not reset the database. -->
-    <p>
+    <p th:if="${target.engine.name() != 'SQLITE'}">
       Tables that are <em>not</em> in the backup are left untouched. This applies
       the backup over the database; it does not reset it.
+    </p>
+    <p th:if="${target.engine.name() == 'SQLITE'}">
+      The complete SQLite database at <code th:text="${target.address}">shop.db</code>
+      will be replaced. Objects and data not present in the backup will be removed.
     </p>
     <p th:if="${elsewhere and source != null}">
       The backup was taken from <strong th:text="${source.name}">production</strong>

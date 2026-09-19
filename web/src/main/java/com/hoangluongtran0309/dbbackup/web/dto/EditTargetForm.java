@@ -6,7 +6,6 @@ import com.hoangluongtran0309.dbbackup.core.model.DatabaseTarget;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
@@ -25,16 +24,13 @@ public class EditTargetForm {
     @Size(max = 100, message = "Name must be at most 100 characters")
     private String name;
 
-    @NotBlank(message = "Host is required")
     @Size(max = 255, message = "Host must be at most 255 characters")
     private String host;
 
-    @NotNull(message = "Port is required")
     @Min(value = 1, message = "Port must be between 1 and 65535")
     @Max(value = 65535, message = "Port must be between 1 and 65535")
     private Integer port;
 
-    @NotBlank(message = "Username is required")
     @Size(max = 63, message = "Username must be at most 63 characters")
     private String username;
 

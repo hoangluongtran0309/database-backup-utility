@@ -129,6 +129,31 @@ class ManageDatabaseTargetServiceTest {
     }
 
     @Test
+    void registersSqliteWithoutEncryptingCredentials() {
+        when(repository.save(any())).thenAnswer(call -> call.getArgument(0));
+
+        DatabaseTarget target = service.register(new RegisterTargetCommand(
+                "local shop", DatabaseEngine.SQLITE, null, null,
+                "apps/shop.db", null, null, null));
+
+        assertThat(target.getEngine()).isEqualTo(DatabaseEngine.SQLITE);
+        assertThat(target.getDatabaseName()).isEqualTo("apps/shop.db");
+        assertThat(target.getPasswordCiphertext()).isNull();
+        verify(encryption, never()).encrypt(any());
+    }
+
+    @Test
+    void sqliteRejectsAPasswordBeforeEncryption() {
+        assertThatThrownBy(() -> new RegisterTargetCommand(
+                "local shop", DatabaseEngine.SQLITE, null, null,
+                "shop.db", null, "not-used", null))
+                .isInstanceOf(InvalidTargetException.class)
+                .extracting("field").isEqualTo("password");
+
+        verify(encryption, never()).encrypt(any());
+    }
+
+    @Test
     void doesNotReachTheRepositoryWhenTheModelRejectsTheValues() {
         when(encryption.encrypt(any())).thenReturn("sealed");
 
@@ -187,6 +212,20 @@ class ManageDatabaseTargetServiceTest {
 
         verify(repository).save(savedTarget.capture());
         assertThat(savedTarget.getValue().getPasswordCiphertext()).isEqualTo("new-sealed");
+    }
+
+    @Test
+    void sqliteEditRenamesOnlyAndDoesNotEncrypt() {
+        DatabaseTarget stored = sqliteStored();
+        when(repository.findById(stored.getId())).thenReturn(Optional.of(stored));
+        when(repository.save(any())).thenAnswer(call -> call.getArgument(0));
+
+        DatabaseTarget saved = service.edit(
+                stored.getId(), new EditTargetCommand("renamed", null, null, null, null, null));
+
+        assertThat(saved.getName()).isEqualTo("renamed");
+        assertThat(saved.getDatabaseName()).isEqualTo("shop.db");
+        verify(encryption, never()).encrypt(any());
     }
 
     @Test
@@ -352,6 +391,16 @@ class ManageDatabaseTargetServiceTest {
                 .databaseName("shop")
                 .username("backup")
                 .passwordCiphertext("old-sealed")
+                .createdAt(NOW)
+                .build();
+    }
+
+    private static DatabaseTarget sqliteStored() {
+        return DatabaseTarget.builder()
+                .engine(DatabaseEngine.SQLITE)
+                .id(UUID.randomUUID())
+                .name("local shop")
+                .databaseName("shop.db")
                 .createdAt(NOW)
                 .build();
     }
