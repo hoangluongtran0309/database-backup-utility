@@ -137,6 +137,20 @@ class RunBackupServiceTest {
         assertThat(queue).isEmpty();
     }
 
+    @Test
+    void unavailableEngineIsRejectedBeforeAnExecutionIsPersisted() {
+        givenTarget();
+        when(adapters.backupFor(DatabaseEngine.MYSQL))
+                .thenThrow(new IllegalStateException("No logical backup adapter is configured for MYSQL"));
+
+        assertThatThrownBy(() -> service.start(TARGET_ID))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("MYSQL");
+
+        verifyNoInteractions(executions, encryption, storage);
+        assertThat(queue).isEmpty();
+    }
+
     /**
      * A full queue must produce a visible failure, not a row that stays RUNNING
      * because nothing ever picked it up.
@@ -165,7 +179,7 @@ class RunBackupServiceTest {
         givenSaveEchoes();
         when(encryption.decrypt("sealed")).thenReturn("s3cr3t");
         when(storage.locationFor("shop_20260909_101530.sql.gz")).thenReturn(ARTIFACT);
-        when(backupEngine.dumpTo(any(), eq(ARTIFACT))).thenReturn(8192L);
+        when(backupEngine.dumpTo(any(), eq(ARTIFACT), any())).thenReturn(8192L);
         when(storage.sha256Of(ARTIFACT)).thenReturn(SHA256);
 
         runQueuedWork(service.start(TARGET_ID));
@@ -185,13 +199,13 @@ class RunBackupServiceTest {
         givenSaveEchoes();
         when(encryption.decrypt(any())).thenReturn("s3cr3t");
         when(storage.locationFor(any())).thenReturn(ARTIFACT);
-        when(backupEngine.dumpTo(any(), any())).thenReturn(1L);
+        when(backupEngine.dumpTo(any(), any(), any())).thenReturn(1L);
         when(storage.sha256Of(ARTIFACT)).thenReturn(SHA256);
 
         runQueuedWork(service.start(TARGET_ID));
 
         InOrder order = inOrder(backupEngine, storage);
-        order.verify(backupEngine).dumpTo(any(), eq(ARTIFACT));
+        order.verify(backupEngine).dumpTo(any(), eq(ARTIFACT), any());
         order.verify(storage).sha256Of(ARTIFACT);
     }
 
@@ -202,7 +216,7 @@ class RunBackupServiceTest {
         givenSaveEchoes();
         when(encryption.decrypt(any())).thenReturn("s3cr3t");
         when(storage.locationFor(any())).thenReturn(ARTIFACT);
-        when(backupEngine.dumpTo(any(), any())).thenReturn(1L);
+        when(backupEngine.dumpTo(any(), any(), any())).thenReturn(1L);
         when(storage.sha256Of(ARTIFACT)).thenThrow(new java.io.UncheckedIOException(
                 new java.io.IOException("Input/output error")));
 
@@ -219,13 +233,13 @@ class RunBackupServiceTest {
         givenSaveEchoes();
         when(encryption.decrypt("sealed")).thenReturn("s3cr3t");
         when(storage.locationFor(any())).thenReturn(ARTIFACT);
-        when(backupEngine.dumpTo(any(), any())).thenReturn(1L);
+        when(backupEngine.dumpTo(any(), any(), any())).thenReturn(1L);
         when(storage.sha256Of(ARTIFACT)).thenReturn(SHA256);
 
         runQueuedWork(service.start(TARGET_ID));
 
         ArgumentCaptor<DatabaseConnection> connection = ArgumentCaptor.forClass(DatabaseConnection.class);
-        verify(backupEngine).dumpTo(connection.capture(), eq(ARTIFACT));
+        verify(backupEngine).dumpTo(connection.capture(), eq(ARTIFACT), any());
         assertThat(connection.getValue().password()).isEqualTo("s3cr3t");
         assertThat(connection.getValue().database()).isEqualTo("shop");
     }
@@ -236,13 +250,13 @@ class RunBackupServiceTest {
         when(adapters.backupFor(DatabaseEngine.SQLITE)).thenReturn(backupEngine);
         givenSaveEchoes();
         when(storage.locationFor("shop.db_20260909_101530.sql.gz")).thenReturn(ARTIFACT);
-        when(backupEngine.dumpTo(any(), eq(ARTIFACT))).thenReturn(1L);
+        when(backupEngine.dumpTo(any(), eq(ARTIFACT), any())).thenReturn(1L);
         when(storage.sha256Of(ARTIFACT)).thenReturn(SHA256);
 
         runQueuedWork(service.start(TARGET_ID));
 
         ArgumentCaptor<DatabaseConnection> connection = ArgumentCaptor.forClass(DatabaseConnection.class);
-        verify(backupEngine).dumpTo(connection.capture(), eq(ARTIFACT));
+        verify(backupEngine).dumpTo(connection.capture(), eq(ARTIFACT), any());
         assertThat(connection.getValue().database()).isEqualTo("apps/shop.db");
         assertThat(connection.getValue().password()).isNull();
         verifyNoInteractions(encryption);
@@ -254,7 +268,7 @@ class RunBackupServiceTest {
         givenSaveEchoes();
         when(encryption.decrypt(any())).thenReturn("s3cr3t");
         when(storage.locationFor(any())).thenReturn(ARTIFACT);
-        when(backupEngine.dumpTo(any(), any()))
+        when(backupEngine.dumpTo(any(), any(), any()))
                 .thenThrow(new BackupFailedException("mysqldump exited with 2: Access denied"));
 
         runQueuedWork(service.start(TARGET_ID));
@@ -290,13 +304,18 @@ class RunBackupServiceTest {
     void marksBackupsLeftRunningByAPreviousProcessAsFailed() {
         BackupExecution stranded = BackupExecution.started(UUID.randomUUID(), TARGET_ID, NOW.minusSeconds(600));
         when(executions.findRunning()).thenReturn(List.of(stranded));
+        givenTarget();
         givenSaveEchoes();
+        Path partial = Path.of("/backups/shop_20260909_100530.sql.gz");
+        when(storage.locationFor("shop_20260909_100530.sql.gz")).thenReturn(partial);
 
         assertThat(service.failInterruptedBackups()).isEqualTo(1);
 
         BackupExecution recorded = lastSaved();
         assertThat(recorded.getStatus()).isEqualTo(ExecutionStatus.FAILED);
         assertThat(recorded.getErrorMessage()).contains("the application stopped");
+        verify(backupEngine).abortInterrupted(eq(stranded.getId()), any());
+        verify(storage).delete(partial);
     }
 
     @Test

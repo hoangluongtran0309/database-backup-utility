@@ -47,11 +47,14 @@ class DatabaseTargetEntity {
     @Column(name = "database_name", nullable = false, length = 1024)
     private String databaseName;
 
-    @Column(length = 63)
+    @Column(length = 128)
     private String username;
 
     @Column(name = "authentication_database", length = 64)
     private String authenticationDatabase;
+
+    @Column(name = "data_pump_directory", length = 128)
+    private String dataPumpDirectory;
 
     @Column(name = "password_enc", columnDefinition = "text")
     private String passwordEnc;

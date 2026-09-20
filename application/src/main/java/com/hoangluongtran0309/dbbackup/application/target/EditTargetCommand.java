@@ -18,13 +18,25 @@ public record EditTargetCommand(
         Integer port,
         String username,
         String password,
-        String authenticationDatabase) {
+        String authenticationDatabase,
+        String dataPumpDirectory) {
+
+    public EditTargetCommand(
+            String name,
+            String host,
+            Integer port,
+            String username,
+            String password,
+            String authenticationDatabase) {
+        this(name, host, port, username, password, authenticationDatabase, null);
+    }
 
     public EditTargetCommand(String name, String host, Integer port, String username, String password) {
-        this(name, host, port, username, password, null);
+        this(name, host, port, username, password, null, null);
     }
 
     public boolean changesPassword() {
         return password != null && !password.isBlank();
     }
+
 }

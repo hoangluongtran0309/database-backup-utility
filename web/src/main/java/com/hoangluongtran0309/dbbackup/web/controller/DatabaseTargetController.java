@@ -58,6 +58,7 @@ public class DatabaseTargetController {
             "databaseName", "database",
             "username", "username",
             "authenticationDatabase", "authenticationDatabase",
+            "dataPumpDirectory", "dataPumpDirectory",
             "password", "password");
 
     private final ManageDatabaseTargetService service;
@@ -66,8 +67,8 @@ public class DatabaseTargetController {
     private final BackupExecutionRepository executions;
 
     @ModelAttribute("engines")
-    DatabaseEngine[] engines() {
-        return DatabaseEngine.values();
+    List<DatabaseEngine> engines() {
+        return service.availableEngines();
     }
 
     /**
@@ -82,6 +83,7 @@ public class DatabaseTargetController {
         model.addAttribute("targets", service.listAll());
         model.addAttribute("latestBackups", byTarget(executions.findLatestPerTarget()));
         model.addAttribute("lastSuccessfulBackups", byTarget(executions.findLatestSucceededPerTarget()));
+        model.addAttribute("availableEngines", service.availableEngines());
         return "database/list";
     }
 
@@ -180,6 +182,8 @@ public class DatabaseTargetController {
             }
         } catch (NoSuchElementException e) {
             flash.addFlashAttribute("error", "That target no longer exists");
+        } catch (IllegalStateException e) {
+            flash.addFlashAttribute("error", e.getMessage());
         }
         return "redirect:/databases";
     }
@@ -195,6 +199,9 @@ public class DatabaseTargetController {
             return "redirect:/executions/" + backups.start(id);
         } catch (NoSuchElementException e) {
             flash.addFlashAttribute("error", "That target no longer exists");
+            return "redirect:/databases";
+        } catch (IllegalStateException e) {
+            flash.addFlashAttribute("error", e.getMessage());
             return "redirect:/databases";
         }
     }
@@ -282,6 +289,10 @@ public class DatabaseTargetController {
             ValidationUtils.rejectIfEmptyOrWhitespace(
                     binding, "authenticationDatabase", "target.required", "Authentication database is required");
         }
+        if (form.getEngine() == DatabaseEngine.ORACLE) {
+            ValidationUtils.rejectIfEmptyOrWhitespace(
+                    binding, "dataPumpDirectory", "target.required", "Data Pump directory is required");
+        }
     }
 
     private static void validateEditFields(
@@ -297,6 +308,10 @@ public class DatabaseTargetController {
         if (target.getEngine() == DatabaseEngine.MONGODB) {
             ValidationUtils.rejectIfEmptyOrWhitespace(
                     binding, "authenticationDatabase", "target.required", "Authentication database is required");
+        }
+        if (target.getEngine() == DatabaseEngine.ORACLE) {
+            ValidationUtils.rejectIfEmptyOrWhitespace(
+                    binding, "dataPumpDirectory", "target.required", "Data Pump directory is required");
         }
     }
 }

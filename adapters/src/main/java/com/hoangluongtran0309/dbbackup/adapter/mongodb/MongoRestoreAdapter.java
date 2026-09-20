@@ -39,14 +39,14 @@ class MongoRestoreAdapter implements LogicalRestorePort {
     }
 
     @Override
-    public void restore(DatabaseConnection connection, String sourceDatabase, Path artifact) {
+    public void restore(DatabaseConnection connection, String sourceNamespace, Path artifact) {
         if (!Files.isReadable(artifact)) {
             throw new RestoreFailedException(
                     "The backup artifact '%s' is missing or unreadable".formatted(artifact));
         }
-        run(command(connection, sourceDatabase, artifact, true), connection,
+        run(command(connection, sourceNamespace, artifact, true), connection,
                 "The MongoDB archive is not readable");
-        run(command(connection, sourceDatabase, artifact, false), connection, "mongorestore failed");
+        run(command(connection, sourceNamespace, artifact, false), connection, "mongorestore failed");
     }
 
     private void run(Command command, DatabaseConnection connection, String prefix) {
@@ -63,20 +63,20 @@ class MongoRestoreAdapter implements LogicalRestorePort {
         }
     }
 
-    Command command(DatabaseConnection connection, String sourceDatabase, Path artifact, boolean dryRun) {
-        return new Command(connection, sourceDatabase, artifact, dryRun);
+    Command command(DatabaseConnection connection, String sourceNamespace, Path artifact, boolean dryRun) {
+        return new Command(connection, sourceNamespace, artifact, dryRun);
     }
 
     final class Command {
         private final DatabaseConnection connection;
-        private final String sourceDatabase;
+        private final String sourceNamespace;
         private final Path artifact;
         private final boolean dryRun;
 
         private Command(
-                DatabaseConnection connection, String sourceDatabase, Path artifact, boolean dryRun) {
+                DatabaseConnection connection, String sourceNamespace, Path artifact, boolean dryRun) {
             this.connection = connection;
-            this.sourceDatabase = sourceDatabase;
+            this.sourceNamespace = sourceNamespace;
             this.artifact = artifact;
             this.dryRun = dryRun;
         }
@@ -85,8 +85,8 @@ class MongoRestoreAdapter implements LogicalRestorePort {
             List<String> command = new ArrayList<>(MongoCommand.connection(binary, connection, config));
             command.add("--archive=" + artifact);
             command.add("--gzip");
-            command.add("--nsInclude=" + sourceDatabase + ".*");
-            command.add("--nsFrom=" + sourceDatabase + ".*");
+            command.add("--nsInclude=" + sourceNamespace + ".*");
+            command.add("--nsFrom=" + sourceNamespace + ".*");
             command.add("--nsTo=" + connection.database() + ".*");
             if (dryRun) {
                 command.add("--dryRun");

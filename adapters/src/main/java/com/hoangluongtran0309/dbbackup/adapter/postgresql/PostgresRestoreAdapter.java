@@ -41,7 +41,7 @@ class PostgresRestoreAdapter implements LogicalRestorePort {
     }
 
     @Override
-    public void restore(DatabaseConnection connection, String sourceDatabase, Path artifact) {
+    public void restore(DatabaseConnection connection, String sourceNamespace, Path artifact) {
         if (!Files.isReadable(artifact)) {
             throw new RestoreFailedException(
                     "The backup artifact '%s' is missing or unreadable".formatted(artifact));

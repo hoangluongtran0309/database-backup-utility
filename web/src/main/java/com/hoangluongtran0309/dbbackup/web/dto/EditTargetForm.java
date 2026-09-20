@@ -31,11 +31,14 @@ public class EditTargetForm {
     @Max(value = 65535, message = "Port must be between 1 and 65535")
     private Integer port;
 
-    @Size(max = 63, message = "Username must be at most 63 characters")
+    @Size(max = 128, message = "Username must be at most 128 characters")
     private String username;
 
     @Size(max = 64, message = "Authentication database must be at most 64 characters")
     private String authenticationDatabase;
+
+    @Size(max = 128, message = "Data Pump directory must be at most 128 characters")
+    private String dataPumpDirectory;
 
     /** Blank keeps the stored password. */
     private String password;
@@ -48,10 +51,12 @@ public class EditTargetForm {
         form.setPort(target.getPort());
         form.setUsername(target.getUsername());
         form.setAuthenticationDatabase(target.getAuthenticationDatabase());
+        form.setDataPumpDirectory(target.getDataPumpDirectory());
         return form;
     }
 
     public EditTargetCommand toCommand() {
-        return new EditTargetCommand(name, host, port, username, password, authenticationDatabase);
+        return new EditTargetCommand(
+                name, host, port, username, password, authenticationDatabase, dataPumpDirectory);
     }
 }

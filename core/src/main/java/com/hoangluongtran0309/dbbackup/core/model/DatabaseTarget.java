@@ -26,6 +26,7 @@ public final class DatabaseTarget {
     private static final int MAX_HOST_LENGTH = 255;
     private static final int MAX_DATABASE_NAME_LENGTH = 64;
     private static final int MAX_SQLITE_PATH_LENGTH = 1024;
+    private static final int MAX_ORACLE_IDENTIFIER_LENGTH = 128;
 
     private final UUID id;
     private final String name;
@@ -35,6 +36,7 @@ public final class DatabaseTarget {
     private final String databaseName;
     private final String username;
     private final String authenticationDatabase;
+    private final String dataPumpDirectory;
 
     /**
      * The target's password, AES-256-GCM encrypted, Base64 encoded.
@@ -68,6 +70,7 @@ public final class DatabaseTarget {
             String databaseName,
             String username,
             String authenticationDatabase,
+            String dataPumpDirectory,
             String passwordCiphertext,
             Instant createdAt,
             ConnectionCheck lastConnectionCheck) {
@@ -86,8 +89,9 @@ public final class DatabaseTarget {
                 : text(databaseName, "databaseName", "Database name", databaseNameLimit(engine));
         this.username = engine.isFileBased()
                 ? absent(username, "username", "Username is not used by SQLite targets")
-                : text(username, "username", "Username", usernameLimit(engine));
+                : username(engine, username);
         this.authenticationDatabase = authenticationDatabase(engine, authenticationDatabase);
+        this.dataPumpDirectory = dataPumpDirectory(engine, dataPumpDirectory);
         this.passwordCiphertext = engine.isFileBased()
                 ? absent(passwordCiphertext, "passwordCiphertext", "Password is not used by SQLite targets")
                 : require(passwordCiphertext, "passwordCiphertext", "Password is required");
@@ -117,6 +121,7 @@ public final class DatabaseTarget {
             Integer port,
             String username,
             String authenticationDatabase,
+            String dataPumpDirectory,
             String newPasswordCiphertext) {
 
         // Built before comparing, so the comparison sees the values as the
@@ -127,6 +132,7 @@ public final class DatabaseTarget {
                 .port(port)
                 .username(username)
                 .authenticationDatabase(authenticationDatabase)
+                .dataPumpDirectory(dataPumpDirectory)
                 .passwordCiphertext(newPasswordCiphertext != null ? newPasswordCiphertext : passwordCiphertext)
                 .build();
 
@@ -134,14 +140,27 @@ public final class DatabaseTarget {
                 || !Objects.equals(edited.host, this.host)
                 || !Objects.equals(edited.port, this.port)
                 || !Objects.equals(edited.username, this.username)
-                || !Objects.equals(edited.authenticationDatabase, this.authenticationDatabase);
+                || !Objects.equals(edited.authenticationDatabase, this.authenticationDatabase)
+                || !Objects.equals(edited.dataPumpDirectory, this.dataPumpDirectory);
         return connectionChanged ? edited.toBuilder().lastConnectionCheck(null).build() : edited;
     }
 
     /** Existing SQL callers have no separate authentication database. */
     public DatabaseTarget edited(
             String name, String host, Integer port, String username, String newPasswordCiphertext) {
-        return edited(name, host, port, username, authenticationDatabase, newPasswordCiphertext);
+        return edited(name, host, port, username, authenticationDatabase, dataPumpDirectory,
+                newPasswordCiphertext);
+    }
+
+    public DatabaseTarget edited(
+            String name,
+            String host,
+            Integer port,
+            String username,
+            String authenticationDatabase,
+            String newPasswordCiphertext) {
+        return edited(name, host, port, username, authenticationDatabase, dataPumpDirectory,
+                newPasswordCiphertext);
     }
 
     /** True once this target has been probed at least once, whatever the outcome. */
@@ -162,12 +181,30 @@ public final class DatabaseTarget {
         return engine.isFileBased() ? Path.of(databaseName).getFileName().toString() : databaseName;
     }
 
+    /** Namespace stored in a logical artifact and needed for same-engine remapping. */
+    public String backupNamespace() {
+        return engine == DatabaseEngine.ORACLE ? username : databaseName;
+    }
+
     private static int databaseNameLimit(DatabaseEngine engine) {
-        return engine == DatabaseEngine.POSTGRESQL ? 63 : MAX_DATABASE_NAME_LENGTH;
+        if (engine == DatabaseEngine.POSTGRESQL) {
+            return 63;
+        }
+        return engine == DatabaseEngine.ORACLE ? 255 : MAX_DATABASE_NAME_LENGTH;
     }
 
     private static int usernameLimit(DatabaseEngine engine) {
-        return engine == DatabaseEngine.MYSQL ? 32 : 63;
+        if (engine == DatabaseEngine.MYSQL) {
+            return 32;
+        }
+        return engine == DatabaseEngine.ORACLE ? MAX_ORACLE_IDENTIFIER_LENGTH : 63;
+    }
+
+    private static String username(DatabaseEngine engine, String value) {
+        String username = text(value, "username", "Username", usernameLimit(engine));
+        return engine == DatabaseEngine.ORACLE
+                ? oracleIdentifier(username, "username", "Oracle schema")
+                : username;
     }
 
     private static String authenticationDatabase(DatabaseEngine engine, String value) {
@@ -179,6 +216,28 @@ public final class DatabaseTarget {
                     "authenticationDatabase", "Authentication database is only used by MongoDB targets");
         }
         return null;
+    }
+
+    private static String dataPumpDirectory(DatabaseEngine engine, String value) {
+        if (engine == DatabaseEngine.ORACLE) {
+            return oracleIdentifier(
+                    text(value, "dataPumpDirectory", "Data Pump directory", MAX_ORACLE_IDENTIFIER_LENGTH),
+                    "dataPumpDirectory",
+                    "Data Pump directory");
+        }
+        if (value != null && !value.isBlank()) {
+            throw new InvalidTargetException(
+                    "dataPumpDirectory", "Data Pump directory is only used by Oracle targets");
+        }
+        return null;
+    }
+
+    private static String oracleIdentifier(String value, String field, String label) {
+        if (!value.matches("[A-Za-z][A-Za-z0-9_$#]*")) {
+            throw new InvalidTargetException(
+                    field, label + " must be an unquoted Oracle identifier");
+        }
+        return value.toUpperCase(java.util.Locale.ROOT);
     }
 
     private static String sqlitePath(String value) {

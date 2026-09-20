@@ -56,6 +56,10 @@
     </p>
   </div>
 
+  <p class="alert alert-warning" role="alert" th:unless="${engineAvailable}">
+    The client pack for this engine is not enabled, so this backup cannot be restored here.
+  </p>
+
   <div class="panel">
     <dl class="detail-grid">
       <dt>Backup taken</dt>
@@ -74,7 +78,7 @@
     </dl>
   </div>
 
-  <form class="form-panel" method="post" th:action="@{/restores}">
+  <form class="form-panel" method="post" th:action="@{/restores}" th:if="${engineAvailable}">
     <input type="hidden" name="backup" th:value="${backup.id}">
     <input type="hidden" name="target" th:value="${target.id}">
 

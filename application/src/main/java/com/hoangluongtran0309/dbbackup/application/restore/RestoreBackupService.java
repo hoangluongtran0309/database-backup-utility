@@ -23,6 +23,7 @@ import com.hoangluongtran0309.dbbackup.core.port.BackupExecutionRepository;
 import com.hoangluongtran0309.dbbackup.core.port.DatabaseTargetRepository;
 import com.hoangluongtran0309.dbbackup.core.port.EncryptionPort;
 import com.hoangluongtran0309.dbbackup.core.port.RestoreExecutionRepository;
+import com.hoangluongtran0309.dbbackup.core.port.LogicalRestorePort;
 import com.hoangluongtran0309.dbbackup.core.port.StoragePort;
 
 import lombok.RequiredArgsConstructor;
@@ -83,12 +84,14 @@ public class RestoreBackupService {
                     "A %s backup can only be restored into a %s target"
                             .formatted(source.getEngine().displayName(), source.getEngine().displayName()));
         }
+        LogicalRestorePort restoreEngine = adapters.restoreFor(target.getEngine());
 
         RestoreExecution execution = restores.save(
                 RestoreExecution.started(UUID.randomUUID(), backupExecutionId, targetId, clock.instant()));
 
         try {
-            jobExecutor.execute(() -> run(execution.getId(), source.getDatabaseName(), target, backup));
+            jobExecutor.execute(() -> run(
+                    execution.getId(), source.backupNamespace(), target, backup, restoreEngine));
         } catch (RejectedExecutionException e) {
             finish(execution, "Too many jobs are already running or queued. Try again shortly.");
         }
@@ -96,17 +99,20 @@ public class RestoreBackupService {
     }
 
     /** Runs one accepted restore. Called on a background thread; never throws. */
-    void run(UUID restoreId, String sourceDatabase, DatabaseTarget target, BackupExecution backup) {
+    void run(
+            UUID restoreId,
+            String sourceNamespace,
+            DatabaseTarget target,
+            BackupExecution backup,
+            LogicalRestorePort restoreEngine) {
         RestoreExecution execution = restores.findById(restoreId).orElseThrow();
         Path artifact = Path.of(backup.getArtifactPath());
         try {
             requireIntact(backup, artifact);
 
-            DatabaseConnection connection = DatabaseConnection.to(target, target.getPasswordCiphertext() == null
-                    ? null
-                    : encryption.decrypt(target.getPasswordCiphertext()));
+            DatabaseConnection connection = connectionTo(target);
 
-            adapters.restoreFor(target.getEngine()).restore(connection, sourceDatabase, artifact);
+            restoreEngine.restore(connection, sourceNamespace, artifact, restoreId);
             restores.save(execution.succeeded(clock.instant()));
             log.info("Restore {} of {} into target {} succeeded", restoreId, artifact, target.getName());
 
@@ -147,8 +153,18 @@ public class RestoreBackupService {
     /** @see com.hoangluongtran0309.dbbackup.core.port.BackupExecutionRepository#findRunning() */
     public int failInterruptedRestores() {
         List<RestoreExecution> stranded = restores.findRunning();
-        stranded.forEach(execution -> finish(
-                execution, "Interrupted: the application stopped while this restore was running."));
+        stranded.forEach(execution -> {
+            String message = "Interrupted: the application stopped while this restore was running.";
+            try {
+                DatabaseTarget target = targets.findById(execution.getTargetId()).orElseThrow();
+                adapters.restoreFor(target.getEngine()).abortInterrupted(
+                        execution.getId(), () -> connectionTo(target));
+            } catch (RuntimeException e) {
+                message += " External engine cleanup was not confirmed: " + e.getMessage();
+                log.error("Could not clean up interrupted restore {}", execution.getId(), e);
+            }
+            finish(execution, message);
+        });
         if (!stranded.isEmpty()) {
             log.warn("Marked {} restore(s) left running by a previous process as failed", stranded.size());
         }
@@ -157,5 +173,11 @@ public class RestoreBackupService {
 
     private void finish(RestoreExecution execution, String message) {
         restores.save(execution.failed(message, clock.instant()));
+    }
+
+    private DatabaseConnection connectionTo(DatabaseTarget target) {
+        return DatabaseConnection.to(target, target.getPasswordCiphertext() == null
+                ? null
+                : encryption.decrypt(target.getPasswordCiphertext()));
     }
 }

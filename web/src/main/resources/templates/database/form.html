@@ -69,13 +69,22 @@
 
       <div class="form-group" th:if="${editing == null}">
         <label for="database">
-          <span data-network-database-label>Database</span>
-          <span data-sqlite-database-label hidden>Database file</span>
+          <span data-network-database-label
+                th:hidden="${form.engine != null and (form.engine.name() == 'SQLITE' or form.engine.name() == 'ORACLE')}">Database</span>
+          <span data-oracle-database-label
+                th:hidden="${form.engine == null or form.engine.name() != 'ORACLE'}">Service name</span>
+          <span data-sqlite-database-label
+                th:hidden="${form.engine == null or form.engine.name() != 'SQLITE'}">Database file</span>
         </label>
         <input id="database" type="text" th:field="*{database}" placeholder="shop" maxlength="1024"
                th:attr="aria-invalid=${#fields.hasErrors('database')} ? 'true' : null">
-        <p class="field-hint" data-sqlite-database-help hidden>
+        <p class="field-hint" data-sqlite-database-help
+           th:hidden="${form.engine == null or form.engine.name() != 'SQLITE'}">
           Relative to <code>SQLITE_ROOT</code>, for example <code>apps/shop.db</code>.
+        </p>
+        <p class="field-hint" data-oracle-database-help
+           th:hidden="${form.engine == null or form.engine.name() != 'ORACLE'}">
+          Oracle Net service, for example <code>FREEPDB1</code>.
         </p>
         <div th:replace="~{fragments/field-error :: fieldError('database')}"></div>
       </div>
@@ -83,7 +92,8 @@
       <!-- Shown, not sent: every backup of this target is a dump of this
            database, so it cannot change. See ADR-012. -->
       <div class="form-group" th:unless="${editing == null}">
-        <label for="database" th:text="${editing.engine.name() == 'SQLITE' ? 'Database file' : 'Database'}">Database</label>
+        <label for="database"
+               th:text="${editing.engine.name() == 'SQLITE' ? 'Database file' : (editing.engine.name() == 'ORACLE' ? 'Service name' : 'Database')}">Database</label>
         <input id="database" type="text" readonly th:value="${editing.databaseName}"
                aria-describedby="database-help">
         <p class="field-hint" id="database-help">Fixed once registered. A different database is a different target.</p>
@@ -92,7 +102,7 @@
       <div class="form-group" th:if="${editing == null or editing.engine.name() != 'SQLITE'}"
            data-network-target-field>
         <label for="username">Username</label>
-        <input id="username" type="text" th:field="*{username}" autocomplete="off"
+        <input id="username" type="text" th:field="*{username}" autocomplete="off" maxlength="128"
                th:attr="aria-invalid=${#fields.hasErrors('username')} ? 'true' : null">
         <div th:replace="~{fragments/field-error :: fieldError('username')}"></div>
       </div>
@@ -108,6 +118,21 @@
           Where this MongoDB user was created. Usually <code>admin</code>.
         </p>
         <div th:replace="~{fragments/field-error :: fieldError('authenticationDatabase')}"></div>
+      </div>
+
+      <div class="form-group"
+           th:if="${editing == null or editing.engine.name() == 'ORACLE'}"
+           th:hidden="${editing == null and (form.engine == null or form.engine.name() != 'ORACLE')}"
+           data-oracle-directory-group>
+        <label for="dataPumpDirectory">Data Pump directory</label>
+        <input id="dataPumpDirectory" type="text" th:field="*{dataPumpDirectory}"
+               maxlength="128" placeholder="DBBACKUP_PUMP_DIR"
+               aria-describedby="data-pump-directory-help"
+               th:attr="aria-invalid=${#fields.hasErrors('dataPumpDirectory')} ? 'true' : null">
+        <p class="field-hint" id="data-pump-directory-help">
+          Oracle directory object mapped to the storage mounted at <code>ORACLE_DATAPUMP_ROOT</code>.
+        </p>
+        <div th:replace="~{fragments/field-error :: fieldError('dataPumpDirectory')}"></div>
       </div>
 
       <div class="form-group form-group-full"
