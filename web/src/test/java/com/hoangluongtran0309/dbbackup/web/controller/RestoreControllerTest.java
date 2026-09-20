@@ -21,6 +21,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
@@ -58,6 +59,11 @@ class RestoreControllerTest {
     @MockitoBean private RestoreExecutionRepository restores;
     @MockitoBean private BackupExecutionRepository backups;
     @MockitoBean private ManageDatabaseTargetService targets;
+
+    @BeforeEach
+    void implementedEnginesAreAvailable() {
+        when(targets.supports(any())).thenReturn(true);
+    }
 
     @Test
     void theConfirmationPageNamesTheSchemaAboutToBeOverwritten() throws Exception {

@@ -7,6 +7,7 @@ import java.util.UUID;
 
 import org.springframework.stereotype.Service;
 
+import com.hoangluongtran0309.dbbackup.application.EngineAdapterRegistry;
 import com.hoangluongtran0309.dbbackup.application.backup.BackupArtifactService;
 import com.hoangluongtran0309.dbbackup.application.backup.BackupArtifactService.BulkDeletionPreview;
 import com.hoangluongtran0309.dbbackup.core.exception.TargetInUseException;
@@ -60,6 +61,7 @@ public class ManageDatabaseTargetService {
     private final BackupArtifactService artifacts;
     private final EncryptionPort encryption;
     private final Clock clock;
+    private final EngineAdapterRegistry engineAdapters;
 
     /**
      * @throws com.hoangluongtran0309.dbbackup.core.exception.InvalidTargetException
@@ -68,6 +70,10 @@ public class ManageDatabaseTargetService {
      *         if the name is taken
      */
     public DatabaseTarget register(RegisterTargetCommand command) {
+        if (!engineAdapters.supports(command.engine())) {
+            throw new com.hoangluongtran0309.dbbackup.core.exception.InvalidTargetException(
+                    "engine", "%s support is not enabled".formatted(command.engine().displayName()));
+        }
         DatabaseTarget target = DatabaseTarget.builder()
                 .id(UUID.randomUUID())
                 .name(command.name())
@@ -77,6 +83,7 @@ public class ManageDatabaseTargetService {
                 .databaseName(command.database())
                 .username(command.username())
                 .authenticationDatabase(command.authenticationDatabase())
+                .dataPumpDirectory(command.dataPumpDirectory())
                 .passwordCiphertext(command.engine().isFileBased() ? null : encryption.encrypt(command.password()))
                 .createdAt(clock.instant())
                 .build();
@@ -107,12 +114,19 @@ public class ManageDatabaseTargetService {
             throw new com.hoangluongtran0309.dbbackup.core.exception.InvalidTargetException(
                     "password", "Password is not used by SQLite targets");
         }
+        if (current.getEngine() == com.hoangluongtran0309.dbbackup.core.model.DatabaseEngine.ORACLE
+                && command.changesPassword()
+                && (command.password().indexOf('\n') >= 0 || command.password().indexOf('\r') >= 0)) {
+            throw new com.hoangluongtran0309.dbbackup.core.exception.InvalidTargetException(
+                    "password", "Oracle password must not contain line breaks");
+        }
         DatabaseTarget edited = current.edited(
                 command.name(),
                 command.host(),
                 command.port(),
                 command.username(),
                 command.authenticationDatabase(),
+                command.dataPumpDirectory(),
                 command.changesPassword() ? encryption.encrypt(command.password()) : null);
 
         return repository.save(edited);
@@ -120,6 +134,14 @@ public class ManageDatabaseTargetService {
 
     public List<DatabaseTarget> listAll() {
         return repository.findAll();
+    }
+
+    public List<com.hoangluongtran0309.dbbackup.core.model.DatabaseEngine> availableEngines() {
+        return engineAdapters.availableEngines();
+    }
+
+    public boolean supports(com.hoangluongtran0309.dbbackup.core.model.DatabaseEngine engine) {
+        return engineAdapters.supports(engine);
     }
 
     /**

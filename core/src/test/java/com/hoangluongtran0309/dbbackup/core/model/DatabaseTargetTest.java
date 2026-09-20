@@ -143,6 +143,7 @@ class DatabaseTargetTest {
                 .build();
 
         assertThat(mongo.getAuthenticationDatabase()).isEqualTo("admin");
+        assertThat(mongo.backupNamespace()).isEqualTo("shop");
         assertThatThrownBy(() -> valid()
                 .engine(DatabaseEngine.MONGODB)
                 .port(27017)
@@ -157,6 +158,50 @@ class DatabaseTargetTest {
         assertThatThrownBy(() -> valid().authenticationDatabase("admin").build())
                 .isInstanceOf(InvalidTargetException.class)
                 .extracting("field").isEqualTo("authenticationDatabase");
+    }
+
+    @Test
+    void oracleUsesTheLoginSchemaAsItsBackupNamespaceAndNormalizesIdentifiers() {
+        DatabaseTarget oracle = valid()
+                .engine(DatabaseEngine.ORACLE)
+                .port(1521)
+                .databaseName("FREEPDB1")
+                .username("app_owner")
+                .dataPumpDirectory("dbbackup_pump_dir")
+                .build();
+
+        assertThat(oracle.getUsername()).isEqualTo("APP_OWNER");
+        assertThat(oracle.getDataPumpDirectory()).isEqualTo("DBBACKUP_PUMP_DIR");
+        assertThat(oracle.backupNamespace()).isEqualTo("APP_OWNER");
+    }
+
+    @Test
+    void oracleRequiresAnUnquotedDataPumpDirectoryAndSchemaIdentifier() {
+        assertThatThrownBy(() -> valid()
+                .engine(DatabaseEngine.ORACLE)
+                .port(1521)
+                .databaseName("FREEPDB1")
+                .username("APP OWNER")
+                .dataPumpDirectory("DBBACKUP_PUMP_DIR")
+                .build())
+                .isInstanceOf(InvalidTargetException.class)
+                .extracting("field").isEqualTo("username");
+
+        assertThatThrownBy(() -> valid()
+                .engine(DatabaseEngine.ORACLE)
+                .port(1521)
+                .databaseName("FREEPDB1")
+                .username("APP_OWNER")
+                .build())
+                .isInstanceOf(InvalidTargetException.class)
+                .extracting("field").isEqualTo("dataPumpDirectory");
+    }
+
+    @Test
+    void nonOracleTargetsRejectADataPumpDirectory() {
+        assertThatThrownBy(() -> valid().dataPumpDirectory("DBBACKUP_PUMP_DIR").build())
+                .isInstanceOf(InvalidTargetException.class)
+                .extracting("field").isEqualTo("dataPumpDirectory");
     }
 
     @Test

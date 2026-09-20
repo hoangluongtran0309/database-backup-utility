@@ -26,6 +26,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.hoangluongtran0309.dbbackup.application.backup.BackupArtifactService;
+import com.hoangluongtran0309.dbbackup.application.EngineAdapterRegistry;
 import com.hoangluongtran0309.dbbackup.application.backup.BackupArtifactService.BulkDeletionPreview;
 import com.hoangluongtran0309.dbbackup.core.exception.InvalidTargetException;
 import com.hoangluongtran0309.dbbackup.core.exception.TargetInUseException;
@@ -63,6 +64,9 @@ class ManageDatabaseTargetServiceTest {
     @Mock
     private EncryptionPort encryption;
 
+    @Mock
+    private EngineAdapterRegistry engineAdapters;
+
     @Captor
     private ArgumentCaptor<DatabaseTarget> savedTarget;
 
@@ -70,8 +74,10 @@ class ManageDatabaseTargetServiceTest {
 
     @BeforeEach
     void setUp() {
+        org.mockito.Mockito.lenient().when(engineAdapters.supports(any())).thenReturn(true);
         service = new ManageDatabaseTargetService(
-                repository, backups, restores, artifacts, encryption, Clock.fixed(NOW, ZoneOffset.UTC));
+                repository, backups, restores, artifacts, encryption, Clock.fixed(NOW, ZoneOffset.UTC),
+                engineAdapters);
     }
 
     @Test
@@ -140,6 +146,35 @@ class ManageDatabaseTargetServiceTest {
         assertThat(target.getDatabaseName()).isEqualTo("apps/shop.db");
         assertThat(target.getPasswordCiphertext()).isNull();
         verify(encryption, never()).encrypt(any());
+    }
+
+    @Test
+    void registersOracleServiceSchemaAndDirectory() {
+        when(encryption.encrypt("s3cr3t")).thenReturn("sealed");
+        when(repository.save(any())).thenAnswer(call -> call.getArgument(0));
+
+        DatabaseTarget target = service.register(new RegisterTargetCommand(
+                "orders oracle", DatabaseEngine.ORACLE, "oracle.internal", 1521,
+                "FREEPDB1", "app_owner", "s3cr3t", null, "dbbackup_pump_dir"));
+
+        assertThat(target.getDatabaseName()).isEqualTo("FREEPDB1");
+        assertThat(target.getUsername()).isEqualTo("APP_OWNER");
+        assertThat(target.getDataPumpDirectory()).isEqualTo("DBBACKUP_PUMP_DIR");
+    }
+
+    @Test
+    void refusesRegistrationBeforeEncryptionWhenEnginePackIsUnavailable() {
+        when(engineAdapters.supports(DatabaseEngine.ORACLE)).thenReturn(false);
+
+        assertThatThrownBy(() -> service.register(new RegisterTargetCommand(
+                "orders oracle", DatabaseEngine.ORACLE, "oracle.internal", 1521,
+                "FREEPDB1", "APP_OWNER", "s3cr3t", null, "DBBACKUP_PUMP_DIR")))
+                .isInstanceOf(InvalidTargetException.class)
+                .hasMessageContaining("not enabled")
+                .extracting("field").isEqualTo("engine");
+
+        verify(encryption, never()).encrypt(any());
+        verify(repository, never()).save(any());
     }
 
     @Test

@@ -5,7 +5,8 @@ public enum DatabaseEngine {
     MYSQL("MySQL", 3306),
     POSTGRESQL("PostgreSQL", 5432),
     MONGODB("MongoDB", 27017),
-    SQLITE("SQLite", null);
+    SQLITE("SQLite", null),
+    ORACLE("Oracle", 1521);
 
     private final String displayName;
     private final Integer defaultPort;

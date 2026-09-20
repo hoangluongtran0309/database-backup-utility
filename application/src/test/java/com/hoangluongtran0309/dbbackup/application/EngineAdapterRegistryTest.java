@@ -31,6 +31,8 @@ class EngineAdapterRegistryTest {
         assertThat(registry.connectionTestFor(DatabaseEngine.POSTGRESQL)).isSameAs(connection);
         assertThat(registry.backupFor(DatabaseEngine.POSTGRESQL)).isSameAs(backup);
         assertThat(registry.restoreFor(DatabaseEngine.POSTGRESQL)).isSameAs(restore);
+        assertThat(registry.availableEngines()).containsExactly(DatabaseEngine.POSTGRESQL);
+        assertThat(registry.supports(DatabaseEngine.ORACLE)).isFalse();
     }
 
     @Test
@@ -55,5 +57,16 @@ class EngineAdapterRegistryTest {
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("More than one logical backup adapter")
                 .hasMessageContaining("MYSQL");
+    }
+
+    @Test
+    void rejectsAPartiallyConfiguredEngineAtStartup() {
+        LogicalBackupPort backup = mock(LogicalBackupPort.class);
+        when(backup.engine()).thenReturn(DatabaseEngine.ORACLE);
+
+        assertThatThrownBy(() -> new EngineAdapterRegistry(List.of(), List.of(backup), List.of()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("ORACLE")
+                .hasMessageContaining("together");
     }
 }

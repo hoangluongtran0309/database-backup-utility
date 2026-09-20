@@ -84,9 +84,9 @@ included — before the next one starts.
 - [x] **17. SQLite logical backup/restore.** Files already mounted below
       `SQLITE_ROOT`; a gzipped SQL dump, restored through a temporary file and
       accepted only after `PRAGMA integrity_check`. See ADR-019.
-- [ ] **18. Oracle logical backup/restore.** Schema-level Data Pump through an
+- [x] **18. Oracle logical backup/restore.** Schema-level Data Pump through an
       Oracle directory object and a shared directory; the client belongs in an
-      operator-provided image variant, not the base image.
+      operator-provided image variant, not the base image. See ADR-020.
 - [ ] **19. MariaDB logical backup/restore.** Its own `mariadb-dump` and
       `mariadb` adapter rather than assuming MySQL dump compatibility.
 - [ ] **20. SQL Server logical backup/restore.** BACPAC export/import through

@@ -1,10 +1,10 @@
 # database-backup-utility
 
-MySQL, PostgreSQL, MongoDB and SQLite logical backup and restore, driven from a
-small web console.
+MySQL, PostgreSQL, MongoDB, SQLite and optional Oracle logical backup and
+restore, driven from a small web console.
 
 The scope is deliberately narrow: **full logical dumps, same-engine restores,
-local disk**. MySQL, PostgreSQL, MongoDB and SQLite are implemented; later engines
+local disk**. MySQL, PostgreSQL, MongoDB, SQLite and Oracle are implemented; later engines
 in the roadmap are genuinely absent from the code. There is no physical
 backup, incremental chain, point-in-time recovery, scheduler or cloud storage.
 Each capability arrives as one complete vertical slice, code and documentation
@@ -12,8 +12,9 @@ together. See [ROADMAP.md](ROADMAP.md) for what exists and what is next.
 
 ## What works today
 
-Registering a MySQL, PostgreSQL, MongoDB or SQLite target, testing it, running
-a full logical backup of it, restoring one of those backups into a target of the
+Registering a MySQL, PostgreSQL, MongoDB or SQLite target — plus Oracle when its
+optional client pack is enabled — testing it, running a full logical backup of
+it, restoring one of those backups into a target of the
 same engine, downloading or deleting its artifact, and reading the history of
 all of it. The target's password is encrypted with AES-256-GCM before it is
 stored.
@@ -42,7 +43,8 @@ failed. MySQL artifacts are gzipped SQL named
 archives named `<database>_<timestamp>.dump` and can be inspected with
 `pg_restore --list`; MongoDB artifacts are compressed archives named
 `<database>_<timestamp>.archive.gz`; SQLite artifacts are gzipped SQL named
-`<file>_<timestamp>.sql.gz`.
+`<file>_<timestamp>.sql.gz`; Oracle artifacts are schema-mode Data Pump files
+named `<service>_<timestamp>.dmp`.
 
 Each backup records the SHA-256 of its artifact — the same value `sha256sum`
 prints for the download. The backup's page can verify the file against it, and
@@ -98,6 +100,8 @@ docker compose up --build
 Then open <http://localhost:8080> and sign in as `admin` with that password
 (`OPERATOR_USERNAME` changes the name). The image carries the MySQL,
 PostgreSQL, MongoDB and SQLite client tools, so the host needs only Docker.
+Oracle is deliberately absent from that base image; see
+[Optional Oracle pack](#optional-oracle-pack).
 
 Keep that key. Passwords encrypted under one key cannot be read back under
 another, and there is no recovery path.
@@ -109,6 +113,34 @@ container as `host.docker.internal` — use that as the target's host, not
 SQLite files are mounted from `${SQLITE_HOST_DIR:-./sqlite}` into the image.
 Register their path relative to that directory and ensure uid 10001 can read
 the source and write the destination for restores.
+
+### Optional Oracle pack
+
+Oracle 19c+ support uses server-side Data Pump and is disabled by default. Give
+the target schema `READ, WRITE` on a directory object whose filesystem path is
+shared with the application container, for example:
+
+```sql
+CREATE DIRECTORY DBBACKUP_PUMP_DIR AS '/srv/dbbackup/oracle-datapump';
+GRANT READ, WRITE ON DIRECTORY DBBACKUP_PUMP_DIR TO APP_OWNER;
+```
+
+Extract operator-supplied Oracle Instant Client Basic, SQL*Plus and Tools and
+copy the contents of their common `instantclient_*` directory into
+`oracle-client/`. Then build the base image and the example variant:
+
+```bash
+docker build -t dbbackup:base .
+docker build -f Dockerfile.oracle.example \
+  --build-arg BASE_IMAGE=dbbackup:base -t dbbackup:oracle .
+```
+
+Run that image with the shared bind/NFS directory mounted at
+`/var/lib/dbbackup/oracle-datapump`. Set `ORACLE_ENABLED=true` (already set by
+the example image) and register the service name, schema/login user and
+directory object. The path referenced by Oracle may differ from the container
+mount path, but both must resolve to the same storage. Full deployment details
+and restore limitations are in [ADR-020](docs/adr/020-oracle-data-pump-shared-staging-and-optional-client-pack.md).
 
 Backups live in a named volume, `backups`, so they survive the container. If the
 application will not start, `docker compose logs app` says why; note that with
@@ -158,6 +190,12 @@ would also try to run the parent pom, which has no main class.)
 | `SQLITE_PATH` | `/usr/bin/sqlite3` | The SQLite CLI used for checks, dumps and restores |
 | `SQLITE_ROOT` | `./sqlite` | Root below which every registered SQLite file must resolve; the image uses `/var/lib/dbbackup/sqlite` |
 | `SQLITE_HOST_DIR` | `./sqlite` | Compose-only host directory bind-mounted at `SQLITE_ROOT` |
+| `ORACLE_ENABLED` | `false` | Enable the optional Oracle adapter set and expose Oracle in registration |
+| `ORACLE_SQLPLUS_PATH` | `/opt/oracle/instantclient/sqlplus` | SQL*Plus used for login and shared-directory probes |
+| `ORACLE_EXPDP_PATH` | `/opt/oracle/instantclient/expdp` | Oracle Data Pump export client |
+| `ORACLE_IMPDP_PATH` | `/opt/oracle/instantclient/impdp` | Oracle Data Pump import client |
+| `ORACLE_DATAPUMP_ROOT` | `./oracle-datapump` | Application view of storage shared with each Oracle directory object |
+| `ORACLE_CONNECT_TIMEOUT` | `30s` | Timeout for probes and Data Pump attach/kill control calls |
 | `BACKUP_DIR` | `./backups` | Where dumps are written; created at startup. Relative, so it follows the working directory — `mvn -pl web spring-boot:run` puts it under `web/`. The image sets it to `/var/lib/dbbackup/backups`. |
 | `JOB_CONCURRENCY` | `2` | How many backups and restores may run at once, together |
 | `JOB_QUEUE_CAPACITY` | `20` | Beyond this, a job is refused and recorded as failed |
@@ -172,8 +210,10 @@ mvn verify   # adds the integration tests, which need Docker
 ```
 
 `*Test.java` is a plain JUnit test. `*IT.java` runs against real containers via
-Testcontainers. H2 is not used anywhere, and no test skips itself when something
-it needs is missing.
+Testcontainers. The Oracle IT drives `sqlplus`/`expdp`/`impdp` through wrappers
+inside its Oracle Free container, so no Oracle client is installed on the
+runner. H2 is not used anywhere, and no test skips itself when something it
+needs is missing.
 
 ## Working on it
 

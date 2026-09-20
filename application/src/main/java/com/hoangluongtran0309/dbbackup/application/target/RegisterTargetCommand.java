@@ -17,7 +17,20 @@ public record RegisterTargetCommand(
         String database,
         String username,
         String password,
-        String authenticationDatabase) {
+        String authenticationDatabase,
+        String dataPumpDirectory) {
+
+    public RegisterTargetCommand(
+            String name,
+            DatabaseEngine engine,
+            String host,
+            Integer port,
+            String database,
+            String username,
+            String password,
+            String authenticationDatabase) {
+        this(name, engine, host, port, database, username, password, authenticationDatabase, null);
+    }
 
     public RegisterTargetCommand(
             String name,
@@ -27,7 +40,7 @@ public record RegisterTargetCommand(
             String database,
             String username,
             String password) {
-        this(name, engine, host, port, database, username, password, null);
+        this(name, engine, host, port, database, username, password, null, null);
     }
 
     public RegisterTargetCommand {
@@ -42,6 +55,10 @@ public record RegisterTargetCommand(
         }
         if (engine.isFileBased() && password != null && !password.isBlank()) {
             throw new InvalidTargetException("password", "Password is not used by SQLite targets");
+        }
+        if (engine == DatabaseEngine.ORACLE && password != null
+                && (password.indexOf('\n') >= 0 || password.indexOf('\r') >= 0)) {
+            throw new InvalidTargetException("password", "Oracle password must not contain line breaks");
         }
     }
 }

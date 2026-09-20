@@ -16,7 +16,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
-/** Proves V7-V9 upgrade real pre-engine data rather than only building a fresh schema. */
+/** Proves V7-V10 upgrade real pre-engine data rather than only building a fresh schema. */
 @Testcontainers
 class DatabaseEngineMigrationIT {
 
@@ -106,6 +106,26 @@ class DatabaseEngineMigrationIT {
                             'bad.db', NULL, NULL, now())
                     """.formatted(UUID.randomUUID())))
                     .hasMessageContaining("ck_database_targets_connection_shape");
+
+            UUID oracleId = UUID.randomUUID();
+            statement.executeUpdate("""
+                    INSERT INTO database_targets
+                        (id, name, engine, host, port, database_name, username,
+                         authentication_database, data_pump_directory, password_enc, created_at)
+                    VALUES ('%s', 'oracle', 'ORACLE', 'oracle.internal', 1521,
+                            'FREEPDB1', '%s', NULL, 'DBBACKUP_PUMP_DIR', 'sealed', now())
+                    """.formatted(oracleId, "A".repeat(128)));
+            assertThat(single(statement,
+                    "SELECT data_pump_directory FROM database_targets WHERE id = '" + oracleId + "'"))
+                    .isEqualTo("DBBACKUP_PUMP_DIR");
+            assertThatThrownBy(() -> statement.executeUpdate("""
+                    INSERT INTO database_targets
+                        (id, name, engine, host, port, database_name, username,
+                         authentication_database, data_pump_directory, password_enc, created_at)
+                    VALUES ('%s', 'bad oracle', 'ORACLE', 'oracle.internal', 1521,
+                            'FREEPDB1', 'APP', NULL, NULL, 'sealed', now())
+                    """.formatted(UUID.randomUUID())))
+                    .hasMessageContaining("ck_database_targets_data_pump_directory");
         }
     }
 

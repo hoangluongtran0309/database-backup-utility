@@ -34,7 +34,12 @@
       <tbody>
         <tr th:each="target : ${targets}">
           <td data-label="Name"><strong th:text="${target.name}">prod</strong></td>
-          <td data-label="Engine"><span class="badge badge-neutral" th:text="${target.engine.displayName}">MySQL</span></td>
+          <td data-label="Engine">
+            <div class="cell-stack">
+              <span class="badge badge-neutral" th:text="${target.engine.displayName}">MySQL</span>
+              <span class="badge badge-warning" th:unless="${availableEngines.contains(target.engine)}">Client unavailable</span>
+            </div>
+          </td>
           <!-- The user rides under the address rather than in a column of its
                own: with Last backup added the row no longer fitted, and who a
                target connects as is secondary to where it points. -->
@@ -92,10 +97,12 @@
           <td class="actions">
             <div class="row-actions">
               <form method="post" th:action="@{/databases/{id}/test(id=${target.id})}">
-                <button class="button button-small" type="submit" data-busy-label="Testing…">Test</button>
+                <button class="button button-small" type="submit" data-busy-label="Testing…"
+                        th:disabled="${!availableEngines.contains(target.engine)}">Test</button>
               </form>
               <form method="post" th:action="@{/databases/{id}/backup(id=${target.id})}">
-                <button class="button button-small button-primary" type="submit" data-busy-label="Starting…">Back up now</button>
+                <button class="button button-small button-primary" type="submit" data-busy-label="Starting…"
+                        th:disabled="${!availableEngines.contains(target.engine)}">Back up now</button>
               </form>
               <a class="button button-small" th:href="@{/databases/{id}/edit(id=${target.id})}">Edit</a>
               <!-- A target with backups takes them with it, so it gets a page

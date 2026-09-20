@@ -159,6 +159,21 @@ class RestoreBackupServiceTest {
     }
 
     @Test
+    void unavailableEngineIsRejectedBeforeARestoreExecutionIsPersisted() {
+        givenSucceededBackup();
+        givenTarget();
+        when(adapters.restoreFor(DatabaseEngine.MYSQL))
+                .thenThrow(new IllegalStateException("No logical restore adapter is configured for MYSQL"));
+
+        assertThatThrownBy(() -> service.start(BACKUP_ID, TARGET_ID))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("MYSQL");
+
+        verifyNoInteractions(restores, encryption, storage);
+        assertThat(queue).isEmpty();
+    }
+
+    @Test
     void recordsAFailureWhenThePoolRefusesTheWork() {
         givenSucceededBackup();
         givenTarget();
@@ -197,7 +212,7 @@ class RestoreBackupServiceTest {
         runQueuedWork(service.start(BACKUP_ID, TARGET_ID));
 
         ArgumentCaptor<DatabaseConnection> connection = ArgumentCaptor.forClass(DatabaseConnection.class);
-        verify(restoreEngine).restore(connection.capture(), eq("shop"), eq(Path.of(ARTIFACT)));
+        verify(restoreEngine).restore(connection.capture(), eq("shop"), eq(Path.of(ARTIFACT)), any());
         assertThat(connection.getValue().password()).isEqualTo("s3cr3t");
         assertThat(connection.getValue().database()).isEqualTo("shop");
         assertThat(lastSaved().getStatus()).isEqualTo(ExecutionStatus.SUCCEEDED);
@@ -219,7 +234,7 @@ class RestoreBackupServiceTest {
         runQueuedWork(service.start(BACKUP_ID, TARGET_ID));
 
         ArgumentCaptor<DatabaseConnection> connection = ArgumentCaptor.forClass(DatabaseConnection.class);
-        verify(restoreEngine).restore(connection.capture(), eq("shop.db"), eq(Path.of(ARTIFACT)));
+        verify(restoreEngine).restore(connection.capture(), eq("shop.db"), eq(Path.of(ARTIFACT)), any());
         assertThat(connection.getValue().password()).isNull();
         verifyNoInteractions(encryption);
     }
@@ -232,7 +247,7 @@ class RestoreBackupServiceTest {
         givenArtifactIntact();
         when(encryption.decrypt(any())).thenReturn("s3cr3t");
         Mockito.doThrow(new RestoreFailedException("mysql exited with 1: Access denied"))
-                .when(restoreEngine).restore(any(), any(), any());
+                .when(restoreEngine).restore(any(), any(), any(), any());
 
         runQueuedWork(service.start(BACKUP_ID, TARGET_ID));
 
@@ -274,7 +289,7 @@ class RestoreBackupServiceTest {
         queue.forEach(Runnable::run);
 
         ArgumentCaptor<DatabaseConnection> connection = ArgumentCaptor.forClass(DatabaseConnection.class);
-        verify(restoreEngine).restore(connection.capture(), eq("shop"), eq(Path.of(ARTIFACT)));
+        verify(restoreEngine).restore(connection.capture(), eq("shop"), eq(Path.of(ARTIFACT)), any());
         assertThat(connection.getValue().host()).isEqualTo("scratch.internal");
         assertThat(connection.getValue().database()).isEqualTo("shop_restore_test");
         assertThat(connection.getValue().password()).isEqualTo("dr1ll");

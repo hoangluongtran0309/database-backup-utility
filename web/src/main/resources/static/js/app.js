@@ -200,16 +200,21 @@
         var port = document.getElementById('port');
         var authGroup = document.querySelector('[data-mongodb-auth-group]');
         var authDatabase = document.getElementById('authenticationDatabase');
+        var oracleGroup = document.querySelector('[data-oracle-directory-group]');
+        var oracleDirectory = document.getElementById('dataPumpDirectory');
         var networkGroups = document.querySelectorAll('[data-network-target-field]');
         var database = document.getElementById('database');
         var networkLabel = document.querySelector('[data-network-database-label]');
+        var oracleLabel = document.querySelector('[data-oracle-database-label]');
         var sqliteLabel = document.querySelector('[data-sqlite-database-label]');
         var sqliteHelp = document.querySelector('[data-sqlite-database-help]');
+        var oracleHelp = document.querySelector('[data-oracle-database-help]');
         if (!engine) return;
 
         function renderEngineFields(changePort) {
             var option = engine.options[engine.selectedIndex];
             var sqlite = engine.value === 'SQLITE';
+            var oracle = engine.value === 'ORACLE';
             networkGroups.forEach(function (group) {
                 group.hidden = sqlite;
                 group.querySelectorAll('input, select').forEach(function (field) {
@@ -226,11 +231,18 @@
                 authDatabase.required = mongo;
                 if (changePort && mongo && !authDatabase.value) authDatabase.value = 'admin';
             }
-            if (networkLabel) networkLabel.hidden = sqlite;
+            if (oracleGroup && oracleDirectory) {
+                oracleGroup.hidden = !oracle;
+                oracleDirectory.disabled = !oracle;
+                oracleDirectory.required = oracle;
+            }
+            if (networkLabel) networkLabel.hidden = sqlite || oracle;
+            if (oracleLabel) oracleLabel.hidden = !oracle;
             if (sqliteLabel) sqliteLabel.hidden = !sqlite;
             if (sqliteHelp) sqliteHelp.hidden = !sqlite;
+            if (oracleHelp) oracleHelp.hidden = !oracle;
             if (database && changePort) {
-                database.placeholder = sqlite ? 'apps/shop.db' : 'shop';
+                database.placeholder = sqlite ? 'apps/shop.db' : (oracle ? 'FREEPDB1' : 'shop');
             }
         }
 

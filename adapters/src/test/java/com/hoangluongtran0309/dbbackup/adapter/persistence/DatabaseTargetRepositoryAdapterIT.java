@@ -119,6 +119,23 @@ class DatabaseTargetRepositoryAdapterIT {
     }
 
     @Test
+    void savesAnOracleTargetWithItsServiceSchemaAndDirectoryObject() {
+        DatabaseTarget oracle = target("orders oracle", "FREEPDB1").toBuilder()
+                .engine(DatabaseEngine.ORACLE)
+                .port(1521)
+                .username("A".repeat(128))
+                .dataPumpDirectory("DBBACKUP_PUMP_DIR")
+                .build();
+
+        DatabaseTarget found = repository.findById(repository.save(oracle).getId()).orElseThrow();
+
+        assertThat(found.getEngine()).isEqualTo(DatabaseEngine.ORACLE);
+        assertThat(found.getDatabaseName()).isEqualTo("FREEPDB1");
+        assertThat(found.getUsername()).hasSize(128);
+        assertThat(found.getDataPumpDirectory()).isEqualTo("DBBACKUP_PUMP_DIR");
+    }
+
+    @Test
     void findByIdIsEmptyForAnUnknownId() {
         assertThat(repository.findById(UUID.randomUUID())).isEmpty();
     }

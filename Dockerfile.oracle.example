@@ -1,0 +1,40 @@
+# syntax=docker/dockerfile:1
+
+# Build the normal image first, then provide an extracted Oracle Instant Client
+# directory containing Basic, SQL*Plus and Tools. Oracle's files remain under
+# the operator's control and never enter the base image or this repository.
+#
+#   docker build -t dbbackup:base .
+#   mkdir oracle-client
+#   unzip -qo instantclient-basic*.zip -d oracle-client-unpacked
+#   unzip -qo instantclient-sqlplus*.zip -d oracle-client-unpacked
+#   unzip -qo instantclient-tools*.zip -d oracle-client-unpacked
+#   cp -a oracle-client-unpacked/instantclient_*/* oracle-client/
+#   docker build -f Dockerfile.oracle.example \
+#     --build-arg BASE_IMAGE=dbbackup:base -t dbbackup:oracle .
+
+ARG BASE_IMAGE=database-backup-utility:latest
+FROM ${BASE_IMAGE}
+
+USER root
+ARG ORACLE_CLIENT_DIR=oracle-client
+COPY --chown=root:root ${ORACLE_CLIENT_DIR}/ /opt/oracle/instantclient/
+
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends libaio1t64 \
+    && test -x /opt/oracle/instantclient/sqlplus \
+    && test -x /opt/oracle/instantclient/expdp \
+    && test -x /opt/oracle/instantclient/impdp \
+    && mkdir -p /var/lib/dbbackup/oracle-datapump \
+    && chown dbbackup:dbbackup /var/lib/dbbackup/oracle-datapump \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV ORACLE_ENABLED=true \
+    ORACLE_SQLPLUS_PATH=/opt/oracle/instantclient/sqlplus \
+    ORACLE_EXPDP_PATH=/opt/oracle/instantclient/expdp \
+    ORACLE_IMPDP_PATH=/opt/oracle/instantclient/impdp \
+    ORACLE_DATAPUMP_ROOT=/var/lib/dbbackup/oracle-datapump \
+    LD_LIBRARY_PATH=/opt/oracle/instantclient
+
+VOLUME ["/var/lib/dbbackup/oracle-datapump"]
+USER dbbackup

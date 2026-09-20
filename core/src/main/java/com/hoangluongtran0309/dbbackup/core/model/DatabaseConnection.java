@@ -13,7 +13,19 @@ public record DatabaseConnection(
         String database,
         String username,
         String password,
-        String authenticationDatabase) {
+        String authenticationDatabase,
+        String dataPumpDirectory) {
+
+    public DatabaseConnection(
+            DatabaseEngine engine,
+            String host,
+            Integer port,
+            String database,
+            String username,
+            String password,
+            String authenticationDatabase) {
+        this(engine, host, port, database, username, password, authenticationDatabase, null);
+    }
 
     /** Convenience for engines whose credentials belong to the target database itself. */
     public DatabaseConnection(
@@ -23,7 +35,7 @@ public record DatabaseConnection(
             String database,
             String username,
             String password) {
-        this(engine, host, port, database, username, password, null);
+        this(engine, host, port, database, username, password, null, null);
     }
 
     public static DatabaseConnection to(DatabaseTarget target, String plainPassword) {
@@ -34,7 +46,8 @@ public record DatabaseConnection(
                 target.getDatabaseName(),
                 target.getUsername(),
                 plainPassword,
-                target.getAuthenticationDatabase());
+                target.getAuthenticationDatabase(),
+                target.getDataPumpDirectory());
     }
 
     @Override
