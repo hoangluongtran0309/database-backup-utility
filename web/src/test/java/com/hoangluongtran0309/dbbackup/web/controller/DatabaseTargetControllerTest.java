@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
@@ -70,6 +71,16 @@ class DatabaseTargetControllerTest {
 
     @MockitoBean
     private BackupExecutionRepository executions;
+
+    @BeforeEach
+    void implementedEnginesAreAvailable() {
+        when(service.availableEngines()).thenReturn(List.of(
+                DatabaseEngine.MYSQL,
+                DatabaseEngine.POSTGRESQL,
+                DatabaseEngine.MONGODB,
+                DatabaseEngine.SQLITE));
+        when(service.supports(any())).thenReturn(true);
+    }
 
     @Test
     void listsTargets() throws Exception {
@@ -252,6 +263,58 @@ class DatabaseTargetControllerTest {
         assertThat(command.getValue().host()).isNull();
         assertThat(command.getValue().port()).isNull();
         assertThat(command.getValue().password()).isNull();
+    }
+
+    @Test
+    void registersAnOracleTargetWithServiceSchemaAndDataPumpDirectory() throws Exception {
+        when(service.register(any())).thenReturn(oracleTarget("orders oracle"));
+
+        mockMvc.perform(post("/databases").with(csrf())
+                        .param("engine", "ORACLE")
+                        .param("name", "orders oracle")
+                        .param("host", "oracle.internal")
+                        .param("port", "1521")
+                        .param("database", "FREEPDB1")
+                        .param("username", "APP_OWNER")
+                        .param("password", "s3cr3t")
+                        .param("dataPumpDirectory", "DBBACKUP_PUMP_DIR"))
+                .andExpect(status().is3xxRedirection());
+
+        ArgumentCaptor<RegisterTargetCommand> command = ArgumentCaptor.forClass(RegisterTargetCommand.class);
+        verify(service).register(command.capture());
+        assertThat(command.getValue().engine()).isEqualTo(DatabaseEngine.ORACLE);
+        assertThat(command.getValue().database()).isEqualTo("FREEPDB1");
+        assertThat(command.getValue().dataPumpDirectory()).isEqualTo("DBBACKUP_PUMP_DIR");
+    }
+
+    @Test
+    void oracleRegistrationRequiresADataPumpDirectory() throws Exception {
+        mockMvc.perform(post("/databases").with(csrf())
+                        .param("engine", "ORACLE")
+                        .param("name", "orders oracle")
+                        .param("host", "oracle.internal")
+                        .param("port", "1521")
+                        .param("database", "FREEPDB1")
+                        .param("username", "APP_OWNER")
+                        .param("password", "s3cr3t"))
+                .andExpect(status().isOk())
+                .andExpect(model().attributeHasFieldErrors("form", "dataPumpDirectory"));
+
+        verify(service, never()).register(any());
+    }
+
+    @Test
+    void existingOracleTargetIsVisibleButOperationsAreDisabledWithoutThePack() throws Exception {
+        DatabaseTarget oracle = oracleTarget("orders oracle");
+        when(service.listAll()).thenReturn(List.of(oracle));
+        when(service.supports(DatabaseEngine.ORACLE)).thenReturn(false);
+
+        mockMvc.perform(get("/databases"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("orders oracle")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Client unavailable")))
+                .andExpect(content().string(org.hamcrest.Matchers.matchesPattern(
+                        "(?s).*action=\"/databases/" + oracle.getId() + "/test\".*?<button[^>]*disabled.*")));
     }
 
     @Test
@@ -738,6 +801,20 @@ class DatabaseTargetControllerTest {
                 .id(UUID.randomUUID())
                 .name(name)
                 .databaseName("apps/shop.db")
+                .createdAt(Instant.parse("2026-09-09T10:15:30Z"))
+                .build();
+    }
+
+    private static DatabaseTarget oracleTarget(String name) {
+        return DatabaseTarget.builder().engine(DatabaseEngine.ORACLE)
+                .id(UUID.randomUUID())
+                .name(name)
+                .host("oracle.internal")
+                .port(1521)
+                .databaseName("FREEPDB1")
+                .username("APP_OWNER")
+                .dataPumpDirectory("DBBACKUP_PUMP_DIR")
+                .passwordCiphertext("Y2lwaGVydGV4dA==")
                 .createdAt(Instant.parse("2026-09-09T10:15:30Z"))
                 .build();
     }

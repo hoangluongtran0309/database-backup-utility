@@ -22,6 +22,7 @@ final class DatabaseTargetMapper {
         entity.setDatabaseName(target.getDatabaseName());
         entity.setUsername(target.getUsername());
         entity.setAuthenticationDatabase(target.getAuthenticationDatabase());
+        entity.setDataPumpDirectory(target.getDataPumpDirectory());
         entity.setPasswordEnc(target.getPasswordCiphertext());
         entity.setCreatedAt(target.getCreatedAt());
 
@@ -62,6 +63,7 @@ final class DatabaseTargetMapper {
                 .databaseName(entity.getDatabaseName())
                 .username(entity.getUsername())
                 .authenticationDatabase(entity.getAuthenticationDatabase())
+                .dataPumpDirectory(entity.getDataPumpDirectory())
                 .passwordCiphertext(entity.getPasswordEnc())
                 .createdAt(entity.getCreatedAt())
                 .lastConnectionCheck(toConnectionCheck(entity))

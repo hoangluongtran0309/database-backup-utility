@@ -1,12 +1,14 @@
 # Deployment
 
-One image, one compose file. See
+One base image and one compose file, plus an operator-built Oracle variant. See
 [ADR-009](adr/009-one-image-that-carries-the-mysql-client.md) for the original
 packaging decision and [ADR-017](adr/017-route-logical-backups-by-database-engine.md)
 for the PostgreSQL client added to it. MongoDB packaging is recorded in
 [ADR-018](adr/018-mongodb-archives-and-explicit-authentication-database.md).
 SQLite file mounting is recorded in
-[ADR-019](adr/019-sqlite-files-below-one-root.md).
+[ADR-019](adr/019-sqlite-files-below-one-root.md). The optional Oracle pack and
+shared Data Pump staging are recorded in
+[ADR-020](adr/020-oracle-data-pump-shared-staging-and-optional-client-pack.md).
 
 ## What the image contains
 
@@ -18,6 +20,10 @@ distinction is load-bearing: MariaDB's `mysqldump` rejects
 fail. The PostgreSQL package supplies `psql`, `pg_dump` and `pg_restore`; the
 MongoDB package supplies `mongodump` and `mongorestore`. Anyone changing the
 base image must check all eight binaries again.
+
+Oracle Instant Client is intentionally not one of them. The base image and
+default compose deployment keep `ORACLE_ENABLED=false` and contain no Oracle
+binaries.
 
 It runs as an unprivileged user, `dbbackup` (uid 10001), and its healthcheck
 asks `/actuator/health`, so it only reports healthy once the application is up
@@ -68,6 +74,35 @@ symlinks and refuses files whose real path escapes the root. The container runs
 as uid 10001, which needs read access for Test/backup and write access to the
 file and its parent for restore and SQLite journal files.
 
+**Mounting Oracle Data Pump staging.** Oracle writes and reads Data Pump files
+on the database server. Create a directory object there and grant only the
+schema that owns each target access:
+
+```sql
+CREATE DIRECTORY DBBACKUP_PUMP_DIR AS '/srv/dbbackup/oracle-datapump';
+GRANT READ, WRITE ON DIRECTORY DBBACKUP_PUMP_DIR TO APP_OWNER;
+```
+
+Mount that same bind/NFS/shared storage into the Oracle-pack application image
+at `ORACLE_DATAPUMP_ROOT` (the example image uses
+`/var/lib/dbbackup/oracle-datapump`). The two path strings need not match, but
+they must be views of the same files. The connection test proves both the
+Oracle grant and that shared visibility by creating and removing a probe.
+Oracle local storage that the application cannot mount, including ASM-only
+staging, is not supported.
+
+Build `Dockerfile.oracle.example` only after extracting operator-supplied
+Instant Client Basic, SQL*Plus and Tools archives and consolidating their
+`instantclient_*` contents under `oracle-client/`. Build the ordinary image as
+`dbbackup:base`, then pass it as `BASE_IMAGE`. The variant enables Oracle and
+sets all four Oracle paths; override them for a different layout. The base
+image remains unchanged.
+
+The Oracle login user is also the schema being backed up and must already
+exist. Restore may remap a dump from another source schema into that login,
+replaces tables present in the dump, and preserves unrelated objects. It is
+not transactional: a failing Data Pump import may leave partial changes.
+
 **Metadata PostgreSQL is not a target.** The `postgres` service in compose holds
 the application's target and execution records. It is not offered as a backup
 target automatically. Backing it up requires registering a PostgreSQL target
@@ -78,6 +113,8 @@ explicitly, with credentials that have the required access.
 `MONGORESTORE_PATH` and `SQLITE_PATH` to `/usr/bin/...`. `SQLITE_ROOT` is
 `/var/lib/dbbackup/sqlite`. A source or custom-image deployment may
 override them, but every configured file must be executable or startup fails.
+The Oracle variant additionally sets `ORACLE_SQLPLUS_PATH`,
+`ORACLE_EXPDP_PATH`, `ORACLE_IMPDP_PATH` and `ORACLE_DATAPUMP_ROOT`.
 
 MongoDB credentials may belong to a database other than the one being backed
 up. The registration form therefore asks for an authentication database and

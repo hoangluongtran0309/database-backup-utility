@@ -103,6 +103,8 @@ once:
   Database Tools have no equivalent, so each invocation gets a unique YAML
   config file created as `0600` and deleted as soon as the child exits. Nothing
   uses `System.setProperty`, which is JVM-global and would leak between jobs.
+  Oracle clients receive the password as the first line of stdin; their argv
+  contains only schema, host, port, service name and operation parameters.
 
 `MysqlClient` adds the MySQL-specific knowledge: it rewrites the literal host
 `localhost` to `127.0.0.1`, because the client otherwise connects over a Unix
@@ -131,11 +133,22 @@ an exact `ok` from `PRAGMA integrity_check`, then uses SQLite's `.restore` to
 replace the destination. See
 [ADR-019](../adr/019-sqlite-files-below-one-root.md).
 
+Oracle is an optional, all-or-nothing adapter pack. SQL*Plus probes the login,
+directory grant and shared mount with `UTL_FILE`. Data Pump exports the login
+schema to shared staging and copies a completed `.dmp` into artifact storage.
+Restore stages and byte-compares the artifact, uses `impdp SQLFILE` as a
+non-mutating preflight, then imports with replacement, portable transforms and
+schema remapping. Stable job names derived from execution UUIDs let timeout
+handling and startup repair attach and issue `KILL_JOB`; staging is retained
+when termination cannot be confirmed. See
+[ADR-020](../adr/020-oracle-data-pump-shared-staging-and-optional-client-pack.md).
+
 The use cases do not know those commands. `DatabaseConnection` carries the
 short-lived plaintext credential and `EngineAdapterRegistry` selects a
 `ConnectionTestPort`, `LogicalBackupPort` or `LogicalRestorePort` by
-`DatabaseEngine`. Duplicate adapters fail startup; a missing one is an explicit
-configuration error. The restore use case rejects different source and
+`DatabaseEngine`. Duplicate adapters fail startup; an engine is published only
+when its test, backup and restore adapters are all present, and a partial set
+fails startup. The restore use case rejects different source and
 destination engines before it persists a job.
 
 ## Running a backup
@@ -175,8 +188,10 @@ the client starts, the job thread checks the artifact against the checksum
 recorded when it was written
 ([ADR-013](../adr/013-a-checksum-for-every-artifact.md)).
 
-Any row still RUNNING when the application starts belongs to a process that is
-gone — jobs run here and nowhere else — so startup marks them failed.
+Any row still RUNNING when the application starts is repaired and marked
+failed. Local child processes are gone with the previous application process;
+an Oracle Data Pump server job can survive it, so its adapter first attaches by
+the stable execution-derived job name and sends `KILL_JOB`.
 
 ## Removing things
 
@@ -210,8 +225,11 @@ Flyway output, and H2 would misreport all three.
 
 No test may skip itself because something it needs is absent. A test that turns
 green by not running is worse than no test at all — so the integration tests
-assert that all MySQL, PostgreSQL, MongoDB and SQLite client binaries are present rather
-than assuming it, and CI installs them explicitly.
+assert that all MySQL, PostgreSQL, MongoDB and SQLite client binaries are
+present rather than assuming it, and CI installs them explicitly. The Oracle
+Free test instead creates executable host wrappers that invoke the real
+`sqlplus`, `expdp` and `impdp` inside its Oracle container, keeping Oracle
+client packages off the runner.
 
 ## Database migrations
 
@@ -234,3 +252,7 @@ engine constraint to include `MONGODB`.
 `V9` adds `SQLITE`, widens `database_name` for relative file paths, and makes
 network and credential columns nullable only for SQLite rows. A database
 constraint preserves the old required connection shape for every other engine.
+
+`V10` adds `ORACLE`, widens `username` to 128 characters, and adds
+`data_pump_directory`. The latter is required only for Oracle rows and must be
+null for every other engine.

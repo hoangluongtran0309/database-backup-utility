@@ -93,6 +93,7 @@ public class RestoreController {
         model.addAttribute("source", source);
         model.addAttribute("target", destination);
         model.addAttribute("targets", compatible);
+        model.addAttribute("engineAvailable", targets.supports(source.getEngine()));
         return "restore/confirm";
     }
 
@@ -129,7 +130,7 @@ public class RestoreController {
 
         try {
             return "redirect:/restores/" + restoreService.start(backupExecutionId, destinationId);
-        } catch (NoSuchElementException | RestoreFailedException e) {
+        } catch (NoSuchElementException | RestoreFailedException | IllegalStateException e) {
             flash.addFlashAttribute("error", e.getMessage());
             return "redirect:/executions/" + backupExecutionId;
         }

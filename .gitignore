@@ -26,6 +26,14 @@ backups/
 /sqlite/
 /web/sqlite/
 
+# Operator-supplied Oracle packages and the default shared staging directory.
+# Neither client binaries nor Data Pump files belong in source control.
+/oracle-client/
+/oracle-client-unpacked/
+/.oracle-client-fixture/
+/oracle-datapump/
+/web/oracle-datapump/
+
 # Never commit a real encryption key or datasource password.
 .env
 .env.local

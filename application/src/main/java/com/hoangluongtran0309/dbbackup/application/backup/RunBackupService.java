@@ -67,12 +67,13 @@ public class RunBackupService {
     public UUID start(UUID targetId) {
         DatabaseTarget target = targets.findById(targetId)
                 .orElseThrow(() -> new NoSuchElementException("No database target with id " + targetId));
+        LogicalBackupPort backupEngine = adapters.backupFor(target.getEngine());
 
         BackupExecution execution = executions.save(
                 BackupExecution.started(UUID.randomUUID(), targetId, clock.instant()));
 
         try {
-            jobExecutor.execute(() -> run(execution.getId(), target));
+            jobExecutor.execute(() -> run(execution.getId(), target, backupEngine));
         } catch (RejectedExecutionException e) {
             // The queue is full. Saying so beats a row that sits at RUNNING
             // forever because nothing ever picked it up.
@@ -82,20 +83,17 @@ public class RunBackupService {
     }
 
     /** Runs one accepted backup. Called on a background thread; never throws. */
-    void run(UUID executionId, DatabaseTarget target) {
+    void run(UUID executionId, DatabaseTarget target, LogicalBackupPort backupEngine) {
         BackupExecution execution = executions.findById(executionId).orElseThrow();
-        LogicalBackupPort backupEngine = adapters.backupFor(target.getEngine());
         Path destination = storage.locationFor(
                 artifactFileName(target, execution.getStartedAt(), backupEngine.artifactSuffix()));
 
         try {
             // Decrypted here, at the last moment and on the thread that uses
             // it, rather than being carried through the queue.
-            DatabaseConnection connection = DatabaseConnection.to(target, target.getPasswordCiphertext() == null
-                    ? null
-                    : encryption.decrypt(target.getPasswordCiphertext()));
+            DatabaseConnection connection = connectionTo(target);
 
-            long sizeBytes = backupEngine.dumpTo(connection, destination);
+            long sizeBytes = backupEngine.dumpTo(connection, destination, executionId);
             // Read back from disk once the engine has closed the file, so the
             // checksum describes what was stored rather than what was sent.
             String sha256 = storage.sha256Of(destination);
@@ -117,14 +115,41 @@ public class RunBackupService {
     /**
      * Marks every execution left RUNNING by a previous process as failed.
      *
-     * <p>Backups run in this process and nowhere else, so a RUNNING row at
-     * startup cannot still be running. Without this the console would show it
-     * as in progress forever.
+     * <p>Local client processes disappear with the application. Oracle Data
+     * Pump work is server-side and can survive it, so the adapter cleanup hook
+     * attaches to that stable execution job before the row is marked failed.
      */
     public int failInterruptedBackups() {
         List<BackupExecution> stranded = executions.findRunning();
-        stranded.forEach(execution -> finish(
-                execution, "Interrupted: the application stopped while this backup was running."));
+        stranded.forEach(execution -> {
+            String message = "Interrupted: the application stopped while this backup was running.";
+            DatabaseTarget target;
+            LogicalBackupPort adapter;
+            try {
+                target = targets.findById(execution.getTargetId()).orElseThrow();
+                adapter = adapters.backupFor(target.getEngine());
+            } catch (RuntimeException e) {
+                message += " External engine cleanup was not confirmed: " + e.getMessage();
+                log.error("Could not clean up interrupted backup {}", execution.getId(), e);
+                finish(execution, message);
+                return;
+            }
+            try {
+                adapter.abortInterrupted(execution.getId(), () -> connectionTo(target));
+            } catch (RuntimeException e) {
+                message += " External engine cleanup was not confirmed: " + e.getMessage();
+                log.error("Could not stop external work for interrupted backup {}", execution.getId(), e);
+            }
+            try {
+                Path partial = storage.locationFor(
+                        artifactFileName(target, execution.getStartedAt(), adapter.artifactSuffix()));
+                storage.delete(partial);
+            } catch (RuntimeException e) {
+                message += " Partial artifact cleanup failed: " + e.getMessage();
+                log.error("Could not remove partial artifact for interrupted backup {}", execution.getId(), e);
+            }
+            finish(execution, message);
+        });
         if (!stranded.isEmpty()) {
             log.warn("Marked {} backup(s) left running by a previous process as failed", stranded.size());
         }
@@ -133,6 +158,12 @@ public class RunBackupService {
 
     private void finish(BackupExecution execution, String message) {
         executions.save(execution.failed(message, clock.instant()));
+    }
+
+    private DatabaseConnection connectionTo(DatabaseTarget target) {
+        return DatabaseConnection.to(target, target.getPasswordCiphertext() == null
+                ? null
+                : encryption.decrypt(target.getPasswordCiphertext()));
     }
 
     /**

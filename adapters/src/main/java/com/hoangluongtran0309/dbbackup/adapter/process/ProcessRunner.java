@@ -2,6 +2,7 @@ package com.hoangluongtran0309.dbbackup.adapter.process;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
@@ -79,6 +80,17 @@ public class ProcessRunner {
         }
     }
 
+    /** One response written only after the child emits the matching prompt. */
+    public record PromptResponse(String prompt, String response) {
+        public PromptResponse {
+            Objects.requireNonNull(prompt, "prompt");
+            Objects.requireNonNull(response, "response");
+            if (prompt.isEmpty()) {
+                throw new IllegalArgumentException("prompt must not be empty");
+            }
+        }
+    }
+
     /** The command could not be started, or did not finish in time. */
     public static class ProcessFailedException extends RuntimeException {
         public ProcessFailedException(String message) {
@@ -133,6 +145,49 @@ public class ProcessRunner {
 
         return execute(command, environment, timeout, null,
                 Objects.requireNonNull(stdinSource, "stdinSource"));
+    }
+
+    /**
+     * Responds to interactive prompts one at a time. This is intentionally
+     * prompt-driven: security-conscious clients may discard bytes queued
+     * before their password prompt, and feeding later commands alongside the
+     * password can make the whole buffer look like one invalid credential.
+     */
+    public Result runResponding(
+            List<String> command,
+            Map<String, String> environment,
+            Duration timeout,
+            List<PromptResponse> responses) {
+        ProcessBuilder builder = new ProcessBuilder(new ArrayList<>(command));
+        builder.environment().putAll(environment);
+        Process process;
+        try {
+            process = builder.start();
+        } catch (IOException e) {
+            throw new ProcessFailedException(
+                    "Could not start '%s': %s".formatted(command.getFirst(), e.getMessage()), e);
+        }
+
+        PromptResponder responder = new PromptResponder(
+                process.getOutputStream(), List.copyOf(responses));
+        CompletableFuture<String> stdout = readRespondingAsync(process.getInputStream(), responder);
+        CompletableFuture<String> stderr = readRespondingAsync(process.getErrorStream(), responder);
+        try {
+            if (!process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
+                kill(process);
+                throw new ProcessFailedException(
+                        "'%s' did not finish within %ds and was killed"
+                                .formatted(command.getFirst(), timeout.toSeconds()));
+            }
+            return new Result(process.exitValue(), join(stdout, command), join(stderr, command));
+        } catch (InterruptedException e) {
+            kill(process);
+            Thread.currentThread().interrupt();
+            throw new ProcessFailedException(
+                    "Interrupted while waiting for '%s'".formatted(command.getFirst()), e);
+        } finally {
+            closeQuietly(process.getOutputStream());
+        }
     }
 
     /**
@@ -341,5 +396,62 @@ public class ProcessRunner {
                 throw new UncheckedIOException(e);
             }
         }, PIPE_THREADS);
+    }
+
+    private static CompletableFuture<String> readRespondingAsync(
+            InputStream stream, PromptResponder responder) {
+        return CompletableFuture.supplyAsync(() -> {
+            try (stream; InputStreamReader reader = new InputStreamReader(stream, StandardCharsets.UTF_8)) {
+                StringBuilder output = new StringBuilder();
+                char[] buffer = new char[4096];
+                int read;
+                while ((read = reader.read(buffer)) >= 0) {
+                    String chunk = new String(buffer, 0, read);
+                    output.append(chunk);
+                    responder.accept(chunk);
+                }
+                return output.toString();
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+        }, PIPE_THREADS);
+    }
+
+    private static final class PromptResponder {
+        private final OutputStream stdin;
+        private final List<PromptResponse> responses;
+        private final StringBuilder pending = new StringBuilder();
+        private int next;
+
+        private PromptResponder(OutputStream stdin, List<PromptResponse> responses) {
+            this.stdin = stdin;
+            this.responses = responses;
+        }
+
+        private synchronized void accept(String chunk) {
+            if (next >= responses.size()) {
+                return;
+            }
+            pending.append(chunk);
+            PromptResponse response = responses.get(next);
+            if (pending.indexOf(response.prompt()) < 0) {
+                if (pending.length() > 8192) {
+                    pending.delete(0, pending.length() - 8192);
+                }
+                return;
+            }
+            try {
+                send(response.response());
+                next++;
+                pending.setLength(0);
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+        }
+
+        private synchronized void send(String response) throws IOException {
+            stdin.write((response + "\n").getBytes(StandardCharsets.UTF_8));
+            stdin.flush();
+        }
     }
 }

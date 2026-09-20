@@ -95,6 +95,18 @@ dbbackup:
     root: ${SQLITE_ROOT:./sqlite}
     connect-timeout: 10s
 
+  oracle:
+    # Oracle Instant Client is deliberately an optional pack. The base image
+    # has no Oracle binaries and therefore keeps this off.
+    enabled: ${ORACLE_ENABLED:false}
+    sqlplus-path: ${ORACLE_SQLPLUS_PATH:/opt/oracle/instantclient/sqlplus}
+    export-path: ${ORACLE_EXPDP_PATH:/opt/oracle/instantclient/expdp}
+    import-path: ${ORACLE_IMPDP_PATH:/opt/oracle/instantclient/impdp}
+    # The application-side mount of the same storage named by each target's
+    # Oracle directory object.
+    data-pump-root: ${ORACLE_DATAPUMP_ROOT:./oracle-datapump}
+    connect-timeout: ${ORACLE_CONNECT_TIMEOUT:30s}
+
   jobs:
     # How many backups and restores may run at once, together. Each is a child
     # process competing for the same disk, so more is not faster.
