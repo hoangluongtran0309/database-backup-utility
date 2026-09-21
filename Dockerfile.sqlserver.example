@@ -1,0 +1,51 @@
+# syntax=docker/dockerfile:1
+
+# Build the normal image first, then layer the fixed SqlPackage release, its
+# .NET 10 runtime, and Microsoft's sqlcmd package on top. This variant is for
+# Linux x86-64, the platform published for SqlPackage by Microsoft.
+#
+#   docker build -t dbbackup:base .
+#   docker build -f Dockerfile.sqlserver.example \
+#     --build-arg BASE_IMAGE=dbbackup:base -t dbbackup:sqlserver .
+
+ARG BASE_IMAGE=database-backup-utility:latest
+
+FROM mcr.microsoft.com/dotnet/sdk:10.0-noble AS sqlpackage
+ARG SQLPACKAGE_VERSION=170.5.96
+RUN dotnet tool install Microsoft.SqlPackage \
+      --tool-path /opt/sqlpackage \
+      --version "${SQLPACKAGE_VERSION}"
+
+FROM mcr.microsoft.com/dotnet/runtime:10.0-noble AS dotnet-runtime
+
+FROM ${BASE_IMAGE}
+
+USER root
+
+COPY --from=dotnet-runtime /usr/share/dotnet/ /usr/share/dotnet/
+COPY --from=dotnet-runtime /usr/lib/x86_64-linux-gnu/libicu*.so* /usr/lib/x86_64-linux-gnu/
+COPY --from=sqlpackage /opt/sqlpackage/ /opt/sqlpackage/
+
+RUN test "$(dpkg --print-architecture)" = amd64 \
+    && curl -fsSLo /tmp/packages-microsoft-prod.deb \
+       https://packages.microsoft.com/config/ubuntu/24.04/packages-microsoft-prod.deb \
+    && dpkg -i /tmp/packages-microsoft-prod.deb \
+    && rm /tmp/packages-microsoft-prod.deb \
+    && apt-get update \
+    && ACCEPT_EULA=Y DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+       mssql-tools18 \
+    && test -x /opt/sqlpackage/sqlpackage \
+    && test -x /opt/mssql-tools18/bin/sqlcmd \
+    && /opt/sqlpackage/sqlpackage /Version \
+    && /opt/mssql-tools18/bin/sqlcmd -? >/dev/null \
+    && mkdir -p /var/lib/dbbackup/sqlserver-temp \
+    && chown dbbackup:dbbackup /var/lib/dbbackup/sqlserver-temp \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV SQLSERVER_ENABLED=true \
+    SQLPACKAGE_PATH=/opt/sqlpackage/sqlpackage \
+    SQLCMD_PATH=/opt/mssql-tools18/bin/sqlcmd \
+    SQLSERVER_TEMP_DIR=/var/lib/dbbackup/sqlserver-temp
+
+VOLUME ["/var/lib/dbbackup/sqlserver-temp"]
+USER dbbackup

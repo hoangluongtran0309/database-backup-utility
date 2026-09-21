@@ -344,6 +344,20 @@ class RestoreControllerTest {
                 .andExpect(content().string(not(containsString("Tables that are <em>not</em>"))));
     }
 
+    @Test
+    void sqlServerRestoreRequiresAMissingOrEmptyDestinationWithoutClaimingToDropIt() throws Exception {
+        when(backups.findById(BACKUP_ID)).thenReturn(Optional.of(backup()));
+        when(targets.listAll()).thenReturn(List.of(sqlServerTarget()));
+
+        mockMvc.perform(get("/restores/new").param("backup", BACKUP_ID.toString()))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("does not yet exist or contains no user-defined objects")))
+                .andExpect(content().string(containsString("is not dropped or cleared")))
+                .andExpect(content().string(containsString("Restore into empty database")))
+                .andExpect(content().string(not(containsString("Every table in the backup will be dropped"))))
+                .andExpect(content().string(not(containsString("are left untouched"))));
+    }
+
     /** Followed until it finishes, like a running backup (ADR-010). */
     @Test
     void detailOfARunningRestoreIsFollowed() throws Exception {
@@ -405,6 +419,14 @@ class RestoreControllerTest {
     private static DatabaseTarget target() {
         return DatabaseTarget.builder().engine(com.hoangluongtran0309.dbbackup.core.model.DatabaseEngine.MYSQL)
                 .id(TARGET_ID).name("production").host("127.0.0.1").port(3306)
+                .databaseName("shop").username("backup")
+                .passwordCiphertext("Y2lwaGVydGV4dA==").createdAt(STARTED)
+                .build();
+    }
+
+    private static DatabaseTarget sqlServerTarget() {
+        return DatabaseTarget.builder().engine(DatabaseEngine.SQLSERVER)
+                .id(TARGET_ID).name("sql production").host("sql.internal").port(1433)
                 .databaseName("shop").username("backup")
                 .passwordCiphertext("Y2lwaGVydGV4dA==").createdAt(STARTED)
                 .build();

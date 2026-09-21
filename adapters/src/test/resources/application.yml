@@ -26,6 +26,14 @@ dbbackup:
     root: ${java.io.tmpdir}/dbbackup-sqlite-it
     connect-timeout: 10s
 
+  sqlserver:
+    enabled: false
+    sqlpackage-path: ${SQLPACKAGE_PATH:/opt/sqlpackage/sqlpackage}
+    sqlcmd-path: ${SQLCMD_PATH:/opt/mssql-tools18/bin/sqlcmd}
+    connect-timeout: 10s
+    trust-server-certificate: true
+    temp-directory: ${java.io.tmpdir}/dbbackup-sqlserver-it
+
   backup:
     timeout: 5m
 

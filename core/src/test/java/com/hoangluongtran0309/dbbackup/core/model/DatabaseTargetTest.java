@@ -153,6 +153,34 @@ class DatabaseTargetTest {
     }
 
     @Test
+    void sqlServerUsesPort1433And128CharacterIdentifiers() {
+        DatabaseTarget sqlServer = valid()
+                .engine(DatabaseEngine.SQLSERVER)
+                .port(1433)
+                .databaseName("d".repeat(128))
+                .username("u".repeat(128))
+                .build();
+
+        assertThat(DatabaseEngine.SQLSERVER.defaultPort()).isEqualTo(1433);
+        assertThat(sqlServer.getDatabaseName()).hasSize(128);
+        assertThat(sqlServer.getUsername()).hasSize(128);
+        assertThat(sqlServer.backupNamespace()).hasSize(128);
+
+        assertThatThrownBy(() -> valid()
+                .engine(DatabaseEngine.SQLSERVER)
+                .databaseName("d".repeat(129))
+                .build())
+                .isInstanceOf(InvalidTargetException.class)
+                .extracting("field").isEqualTo("databaseName");
+        assertThatThrownBy(() -> valid()
+                .engine(DatabaseEngine.SQLSERVER)
+                .username("u".repeat(129))
+                .build())
+                .isInstanceOf(InvalidTargetException.class)
+                .extracting("field").isEqualTo("username");
+    }
+
+    @Test
     void mongodbRequiresItsAuthenticationDatabaseAndAllowsA63CharacterUsername() {
         DatabaseTarget mongo = valid()
                 .engine(DatabaseEngine.MONGODB)

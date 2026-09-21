@@ -1,6 +1,6 @@
 # Deployment
 
-One base image and one compose file, plus an operator-built Oracle variant. See
+One base image and one compose file, plus operator-built Oracle and SQL Server variants. See
 [ADR-009](adr/009-one-image-that-carries-the-mysql-client.md) for the original
 packaging decision and [ADR-017](adr/017-route-logical-backups-by-database-engine.md)
 for the PostgreSQL client added to it. MongoDB packaging is recorded in
@@ -10,7 +10,9 @@ SQLite file mounting is recorded in
 shared Data Pump staging are recorded in
 [ADR-020](adr/020-oracle-data-pump-shared-staging-and-optional-client-pack.md).
 MariaDB's co-installed client pair is recorded in
-[ADR-021](adr/021-mariadb-uses-its-own-client-tools.md).
+[ADR-021](adr/021-mariadb-uses-its-own-client-tools.md). SQL Server's BACPAC
+pack is recorded in
+[ADR-022](adr/022-sql-server-bacpac-and-optional-client-pack.md).
 
 ## What the image contains
 
@@ -27,9 +29,9 @@ executables below `/opt/mysql/bin`, then installs MariaDB and uses its canonical
 all four paths. The PostgreSQL package supplies `psql`, `pg_dump` and
 `pg_restore`; the MongoDB package supplies `mongodump` and `mongorestore`.
 
-Oracle Instant Client is intentionally not one of them. The base image and
-default compose deployment keep `ORACLE_ENABLED=false` and contain no Oracle
-binaries.
+Oracle Instant Client, SqlPackage and `sqlcmd` are intentionally not among
+them. The base image and default compose deployment keep `ORACLE_ENABLED=false`
+and `SQLSERVER_ENABLED=false` and contain none of those optional binaries.
 
 It runs as an unprivileged user, `dbbackup` (uid 10001), and its healthcheck
 asks `/actuator/health`, so it only reports healthy once the application is up
@@ -68,8 +70,8 @@ grows until somebody deletes backups through the console — several at a time
 from the backup list, or all of a target's with the target
 ([ADR-015](adr/015-deleting-many-backups-and-a-target-with-them.md)).
 
-**Reaching the databases to be backed up.** A MySQL, MariaDB, PostgreSQL or
-MongoDB server on the Docker host is `host.docker.internal` from inside the
+**Reaching the databases to be backed up.** A MySQL, MariaDB, PostgreSQL,
+MongoDB or SQL Server instance on the Docker host is `host.docker.internal` from inside the
 container; compose maps that name explicitly because on Linux it does not
 otherwise exist. A server elsewhere just needs to be routable from the
 container.
@@ -129,6 +131,32 @@ exist. Restore may remap a dump from another source schema into that login,
 replaces tables present in the dump, and preserves unrelated objects. It is
 not transactional: a failing Data Pump import may leave partial changes.
 
+**SQL Server BACPAC and temporary space.** Build
+`Dockerfile.sqlserver.example` from an already-built base image. The Linux
+x86-64 variant pins Microsoft.SqlPackage 170.5.96, adds its .NET 10 runtime and
+`mssql-tools18`, enables the adapter pack, and leaves the base image unchanged:
+
+```bash
+docker build -t dbbackup:base .
+docker build -f Dockerfile.sqlserver.example \
+  --build-arg BASE_IMAGE=dbbackup:base -t dbbackup:sqlserver .
+```
+
+SQL Server targets use SQL authentication. Backup exports one database to a
+`.bacpac`; restore imports it into a database that is absent or contains no
+user-defined objects. SqlPackage rejects a non-empty database, and the
+application never drops or clears one. The login therefore needs read/export
+permissions for backup and either permission to create the destination or the
+required DDL/write permissions on a pre-created empty database for restore.
+BACPAC does not carry server logins, login passwords or other server-scoped
+objects, and database-user passwords are not preserved.
+
+SqlPackage materializes intermediate table data. `SQLSERVER_TEMP_DIR` must be
+writable by uid 10001 and should have additional free space comparable to the
+database for both export and import. Per-job directories are removed on every
+normal, failing and timed-out exit. BACPAC is operationally best suited below
+roughly 200 GB; larger databases should use SQL Server native physical backup.
+
 **Metadata PostgreSQL is not a target.** The `postgres` service in compose holds
 the application's target and execution records. It is not offered as a backup
 target automatically. Backing it up requires registering a PostgreSQL target
@@ -142,6 +170,9 @@ explicitly, with credentials that have the required access.
 them, but every configured file must be executable or startup fails.
 The Oracle variant additionally sets `ORACLE_SQLPLUS_PATH`,
 `ORACLE_EXPDP_PATH`, `ORACLE_IMPDP_PATH` and `ORACLE_DATAPUMP_ROOT`.
+The SQL Server variant sets `SQLPACKAGE_PATH`, `SQLCMD_PATH` and
+`SQLSERVER_TEMP_DIR`; enabling that pack with either executable missing makes
+startup fail, as does any partial three-adapter configuration.
 
 MongoDB credentials may belong to a database other than the one being backed
 up. The registration form therefore asks for an authentication database and
@@ -160,6 +191,12 @@ MariaDB likewise uses one configured client pair rather than a version matrix.
 The base image carries Ubuntu Noble's MariaDB 10.11 client and the integration
 test proves that pair against MariaDB 10.11. A custom deployment must provide a
 `mariadb` and `mariadb-dump` pair compatible with both source and destination.
+
+SQL Server connections always request encryption. CA and hostname validation
+remain enabled unless an operator explicitly sets
+`SQLSERVER_TRUST_SERVER_CERTIFICATE=true`, which is intended only for a known
+self-signed development/test server. Per-target certificate settings and
+Windows, Microsoft Entra or managed-identity authentication are not supported.
 
 ## What it does and does not protect
 

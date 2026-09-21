@@ -149,6 +149,21 @@ class DatabaseTargetRepositoryAdapterIT {
     }
 
     @Test
+    void savesASqlServerTargetWithIts128CharacterIdentifiers() {
+        DatabaseTarget sqlServer = target(DatabaseEngine.SQLSERVER, "orders sql server", "d".repeat(128)).toBuilder()
+                .username("u".repeat(128))
+                .build();
+
+        DatabaseTarget found = repository.findById(repository.save(sqlServer).getId()).orElseThrow();
+
+        assertThat(found.getEngine()).isEqualTo(DatabaseEngine.SQLSERVER);
+        assertThat(found.getDatabaseName()).hasSize(128);
+        assertThat(found.getUsername()).hasSize(128);
+        assertThat(found.getAuthenticationDatabase()).isNull();
+        assertThat(found.getDataPumpDirectory()).isNull();
+    }
+
+    @Test
     void findByIdIsEmptyForAnUnknownId() {
         assertThat(repository.findById(UUID.randomUUID())).isEmpty();
     }
@@ -346,11 +361,15 @@ class DatabaseTargetRepositoryAdapterIT {
     }
 
     private static DatabaseTarget target(String name, String database) {
-        return DatabaseTarget.builder().engine(com.hoangluongtran0309.dbbackup.core.model.DatabaseEngine.MYSQL)
+        return target(DatabaseEngine.MYSQL, name, database);
+    }
+
+    private static DatabaseTarget target(DatabaseEngine engine, String name, String database) {
+        return DatabaseTarget.builder().engine(engine)
                 .id(UUID.randomUUID())
                 .name(name)
                 .host("127.0.0.1")
-                .port(3306)
+                .port(engine.defaultPort())
                 .databaseName(database)
                 .username("backup")
                 .passwordCiphertext("Y2lwaGVydGV4dA==")

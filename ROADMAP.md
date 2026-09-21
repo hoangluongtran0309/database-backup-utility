@@ -90,8 +90,8 @@ included — before the next one starts.
 - [x] **19. MariaDB logical backup/restore.** Its own `mariadb-dump` and
       `mariadb` adapter rather than assuming MySQL dump compatibility. See
       ADR-021.
-- [ ] **20. SQL Server logical backup/restore.** BACPAC export/import through
-      SqlPackage, supplied by an image variant or the operator.
+- [x] **20. SQL Server logical backup/restore.** BACPAC export/import through
+      SqlPackage, supplied by an image variant or the operator. See ADR-022.
 
 ## Deferred after engine coverage
 

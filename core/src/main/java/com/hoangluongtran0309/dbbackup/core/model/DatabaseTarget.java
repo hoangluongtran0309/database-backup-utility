@@ -28,6 +28,7 @@ public final class DatabaseTarget {
     private static final int MAX_SQLITE_PATH_LENGTH = 1024;
     private static final int MAX_ORACLE_IDENTIFIER_LENGTH = 128;
     private static final int MAX_MARIADB_USERNAME_LENGTH = 128;
+    private static final int MAX_SQLSERVER_IDENTIFIER_LENGTH = 128;
 
     private final UUID id;
     private final String name;
@@ -191,7 +192,12 @@ public final class DatabaseTarget {
         if (engine == DatabaseEngine.POSTGRESQL) {
             return 63;
         }
-        return engine == DatabaseEngine.ORACLE ? 255 : MAX_DATABASE_NAME_LENGTH;
+        if (engine == DatabaseEngine.ORACLE) {
+            return 255;
+        }
+        return engine == DatabaseEngine.SQLSERVER
+                ? MAX_SQLSERVER_IDENTIFIER_LENGTH
+                : MAX_DATABASE_NAME_LENGTH;
     }
 
     private static int usernameLimit(DatabaseEngine engine) {
@@ -203,6 +209,9 @@ public final class DatabaseTarget {
         }
         if (engine == DatabaseEngine.MARIADB) {
             return MAX_MARIADB_USERNAME_LENGTH;
+        }
+        if (engine == DatabaseEngine.SQLSERVER) {
+            return MAX_SQLSERVER_IDENTIFIER_LENGTH;
         }
         return 63;
     }
