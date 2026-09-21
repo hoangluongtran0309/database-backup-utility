@@ -134,6 +134,25 @@ class DatabaseTargetTest {
     }
 
     @Test
+    void mariadbUsesItsDefaultPortAndAllowsA128CharacterUsername() {
+        DatabaseTarget mariadb = valid()
+                .engine(DatabaseEngine.MARIADB)
+                .username("u".repeat(128))
+                .build();
+
+        assertThat(DatabaseEngine.MARIADB.defaultPort()).isEqualTo(3306);
+        assertThat(mariadb.getUsername()).hasSize(128);
+        assertThat(mariadb.backupNamespace()).isEqualTo("shop");
+
+        assertThatThrownBy(() -> valid()
+                .engine(DatabaseEngine.MARIADB)
+                .username("u".repeat(129))
+                .build())
+                .isInstanceOf(InvalidTargetException.class)
+                .extracting("field").isEqualTo("username");
+    }
+
+    @Test
     void mongodbRequiresItsAuthenticationDatabaseAndAllowsA63CharacterUsername() {
         DatabaseTarget mongo = valid()
                 .engine(DatabaseEngine.MONGODB)

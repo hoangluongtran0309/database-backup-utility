@@ -72,6 +72,13 @@ dbbackup:
     # in seconds instead of holding the request open.
     connect-timeout: 10s
 
+  mariadb:
+    # MariaDB has its own client pair. Do not point these at mysql/mysqldump:
+    # the dump formats and accepted options have diverged.
+    client-path: ${MARIADB_CLIENT_PATH:/usr/bin/mariadb}
+    dump-path: ${MARIADB_DUMP_PATH:/usr/bin/mariadb-dump}
+    connect-timeout: 10s
+
   postgresql:
     # PostgreSQL is also the metadata store, but these binaries are only for
     # PostgreSQL targets explicitly registered in the console.

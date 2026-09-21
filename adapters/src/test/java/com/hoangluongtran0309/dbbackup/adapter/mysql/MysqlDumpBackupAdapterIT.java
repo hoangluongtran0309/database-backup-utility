@@ -31,7 +31,7 @@ import com.hoangluongtran0309.dbbackup.core.port.LogicalBackupPort;
 @Testcontainers
 class MysqlDumpBackupAdapterIT {
 
-    private static final Path MYSQLDUMP = Path.of("/usr/bin/mysqldump");
+    private static final Path MYSQLDUMP = configuredPath("MYSQLDUMP_PATH", "/usr/bin/mysqldump");
 
     @Container
     static final MySQLContainer MYSQL = new MySQLContainer("mysql:8.4")
@@ -186,5 +186,10 @@ class MysqlDumpBackupAdapterIT {
         var result = MYSQL.execInContainer(
                 "mysql", "-uroot", "-p" + MYSQL.getPassword(), "shop", "-e", sql);
         assertThat(result.getExitCode()).as(result.getStderr()).isZero();
+    }
+
+    private static Path configuredPath(String environment, String fallback) {
+        String configured = System.getenv(environment);
+        return Path.of(configured == null || configured.isBlank() ? fallback : configured);
     }
 }

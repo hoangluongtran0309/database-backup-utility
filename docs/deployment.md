@@ -9,17 +9,23 @@ SQLite file mounting is recorded in
 [ADR-019](adr/019-sqlite-files-below-one-root.md). The optional Oracle pack and
 shared Data Pump staging are recorded in
 [ADR-020](adr/020-oracle-data-pump-shared-staging-and-optional-client-pack.md).
+MariaDB's co-installed client pair is recorded in
+[ADR-021](adr/021-mariadb-uses-its-own-client-tools.md).
 
 ## What the image contains
 
-A JRE, the application jar, Ubuntu's `mysql-client`, `postgresql-client`,
-MongoDB's `mongodb-database-tools`, and `sqlite3`. The MySQL package is Oracle's MySQL,
-not MariaDB. That
-distinction is load-bearing: MariaDB's `mysqldump` rejects
-`--set-gtid-purged`, which this tool always passes, so every MySQL backup would
-fail. The PostgreSQL package supplies `psql`, `pg_dump` and `pg_restore`; the
-MongoDB package supplies `mongodump` and `mongorestore`. Anyone changing the
-base image must check all eight binaries again.
+A JRE, the application jar, Oracle's MySQL client, MariaDB's `mariadb-client`,
+`postgresql-client`, MongoDB's `mongodb-database-tools`, and `sqlite3`. The
+MySQL/MariaDB distinction is load-bearing: MariaDB's dump client rejects the
+MySQL-only `--set-gtid-purged`, and the two artifact producers must not be
+silently substituted for each other.
+
+Ubuntu's MySQL and MariaDB client packages conflict over the legacy
+`mysql`/`mysqldump` names. The image installs MySQL first and preserves its real
+executables below `/opt/mysql/bin`, then installs MariaDB and uses its canonical
+`mariadb`/`mariadb-dump` names from `/usr/bin`. The build runs `--version` on
+all four paths. The PostgreSQL package supplies `psql`, `pg_dump` and
+`pg_restore`; the MongoDB package supplies `mongodump` and `mongorestore`.
 
 Oracle Instant Client is intentionally not one of them. The base image and
 default compose deployment keep `ORACLE_ENABLED=false` and contain no Oracle
@@ -62,10 +68,30 @@ grows until somebody deletes backups through the console — several at a time
 from the backup list, or all of a target's with the target
 ([ADR-015](adr/015-deleting-many-backups-and-a-target-with-them.md)).
 
-**Reaching the databases to be backed up.** A MySQL, PostgreSQL or MongoDB server on the
-Docker host is `host.docker.internal` from inside the container; compose maps
-that name explicitly because on Linux it does not otherwise exist. A server
-elsewhere just needs to be routable from the container.
+**Reaching the databases to be backed up.** A MySQL, MariaDB, PostgreSQL or
+MongoDB server on the Docker host is `host.docker.internal` from inside the
+container; compose maps that name explicitly because on Linux it does not
+otherwise exist. A server elsewhere just needs to be routable from the
+container.
+
+**MariaDB privileges and restore semantics.** A read-only MariaDB backup login
+needs `SELECT`, `SHOW VIEW`, `TRIGGER` and `EVENT` on the source database. On
+MariaDB 10.11, dumping routines also requires `SELECT` on `mysql.proc`:
+
+```sql
+GRANT SELECT, SHOW VIEW, TRIGGER, EVENT ON shop.* TO 'dbbackup'@'%';
+GRANT SELECT ON mysql.proc TO 'dbbackup'@'%';
+```
+
+The login used for restore needs the corresponding create, alter, drop and
+write privileges on the destination; granting `ALL PRIVILEGES` on only that
+database is the simplest setup. A MariaDB artifact is gzip-compressed SQL with
+schema, rows, views, routines, triggers and events, but no `CREATE DATABASE` or
+`USE`, so it can be applied to a different registered MariaDB database. Objects
+represented in the artifact are replaced; destination objects absent from it
+remain. Transactional tables have a consistent backup snapshot, while restore
+itself is not transactional and an SQL error can leave partial changes. Only
+MariaDB-to-MariaDB restore is accepted.
 
 **Mounting SQLite databases.** Compose bind-mounts
 `${SQLITE_HOST_DIR:-./sqlite}` at `/var/lib/dbbackup/sqlite`. Register paths
@@ -108,11 +134,12 @@ the application's target and execution records. It is not offered as a backup
 target automatically. Backing it up requires registering a PostgreSQL target
 explicitly, with credentials that have the required access.
 
-**Client paths.** The image sets `MYSQL_CLIENT_PATH`, `MYSQLDUMP_PATH`,
-`PSQL_PATH`, `PG_DUMP_PATH`, `PG_RESTORE_PATH`, `MONGODUMP_PATH` and
-`MONGORESTORE_PATH` and `SQLITE_PATH` to `/usr/bin/...`. `SQLITE_ROOT` is
-`/var/lib/dbbackup/sqlite`. A source or custom-image deployment may
-override them, but every configured file must be executable or startup fails.
+**Client paths.** The image sets `MYSQL_CLIENT_PATH` and `MYSQLDUMP_PATH` below
+`/opt/mysql/bin`; `MARIADB_CLIENT_PATH`, `MARIADB_DUMP_PATH`, `PSQL_PATH`,
+`PG_DUMP_PATH`, `PG_RESTORE_PATH`, `MONGODUMP_PATH`, `MONGORESTORE_PATH` and
+`SQLITE_PATH` point below `/usr/bin`. `SQLITE_ROOT` is
+`/var/lib/dbbackup/sqlite`. A source or custom-image deployment may override
+them, but every configured file must be executable or startup fails.
 The Oracle variant additionally sets `ORACLE_SQLPLUS_PATH`,
 `ORACLE_EXPDP_PATH`, `ORACLE_IMPDP_PATH` and `ORACLE_DATAPUMP_ROOT`.
 
@@ -128,6 +155,11 @@ several client majors. Use `pg_dump --version` and provide `PSQL_PATH`,
 `PG_DUMP_PATH` and `PG_RESTORE_PATH` from a client release compatible with both
 the source and destination; the integration test proves a matching client and
 server major end to end.
+
+MariaDB likewise uses one configured client pair rather than a version matrix.
+The base image carries Ubuntu Noble's MariaDB 10.11 client and the integration
+test proves that pair against MariaDB 10.11. A custom deployment must provide a
+`mariadb` and `mariadb-dump` pair compatible with both source and destination.
 
 ## What it does and does not protect
 

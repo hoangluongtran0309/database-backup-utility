@@ -16,7 +16,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
-/** Proves V7-V10 upgrade real pre-engine data rather than only building a fresh schema. */
+/** Proves V7-V11 upgrade real pre-engine data rather than only building a fresh schema. */
 @Testcontainers
 class DatabaseEngineMigrationIT {
 
@@ -126,6 +126,18 @@ class DatabaseEngineMigrationIT {
                             'FREEPDB1', 'APP', NULL, NULL, 'sealed', now())
                     """.formatted(UUID.randomUUID())))
                     .hasMessageContaining("ck_database_targets_data_pump_directory");
+
+            UUID mariadbId = UUID.randomUUID();
+            statement.executeUpdate("""
+                    INSERT INTO database_targets
+                        (id, name, engine, host, port, database_name, username,
+                         authentication_database, data_pump_directory, password_enc, created_at)
+                    VALUES ('%s', 'mariadb', 'MARIADB', 'mariadb.internal', 3306,
+                            'orders', '%s', NULL, NULL, 'sealed', now())
+                    """.formatted(mariadbId, "u".repeat(128)));
+            assertThat(single(statement,
+                    "SELECT engine FROM database_targets WHERE id = '" + mariadbId + "'"))
+                    .isEqualTo("MARIADB");
         }
     }
 

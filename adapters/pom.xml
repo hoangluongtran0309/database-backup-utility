@@ -7,7 +7,7 @@
   <parent>
     <groupId>com.hoangluongtran0309</groupId>
     <artifactId>database-backup-utility</artifactId>
-    <version>0.7.0</version>
+    <version>0.8.0</version>
   </parent>
 
   <artifactId>adapters</artifactId>
@@ -70,6 +70,17 @@
     <dependency>
       <groupId>org.testcontainers</groupId>
       <artifactId>testcontainers-mysql</artifactId>
+      <version>${testcontainers.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.mariadb.jdbc</groupId>
+      <artifactId>mariadb-java-client</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>testcontainers-mariadb</artifactId>
       <version>${testcontainers.version}</version>
       <scope>test</scope>
     </dependency>

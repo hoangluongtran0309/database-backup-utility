@@ -22,6 +22,11 @@ jobs:
     name: mvn verify
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    env:
+      MYSQL_CLIENT_PATH: /opt/mysql/bin/mysql
+      MYSQLDUMP_PATH: /opt/mysql/bin/mysqldump
+      MARIADB_CLIENT_PATH: /usr/bin/mariadb
+      MARIADB_DUMP_PATH: /usr/bin/mariadb-dump
 
     steps:
       - uses: actions/checkout@v4
@@ -51,8 +56,17 @@ jobs:
             | sudo tee /etc/apt/sources.list.d/mongodb-org-8.0.list >/dev/null
           sudo apt-get update
           sudo apt-get install -y mongodb-database-tools mysql-client postgresql-client sqlite3
-          test -x /usr/bin/mysql
-          test -x /usr/bin/mysqldump
+          sudo install -D -m 0755 /usr/bin/mysql /opt/mysql/bin/mysql
+          sudo install -D -m 0755 /usr/bin/mysqldump /opt/mysql/bin/mysqldump
+          sudo apt-get install -y mariadb-client
+          test -x /opt/mysql/bin/mysql
+          test -x /opt/mysql/bin/mysqldump
+          test -x /usr/bin/mariadb
+          test -x /usr/bin/mariadb-dump
+          /opt/mysql/bin/mysql --version
+          /opt/mysql/bin/mysqldump --version
+          /usr/bin/mariadb --version
+          /usr/bin/mariadb-dump --version
           test -x /usr/bin/psql
           test -x /usr/bin/pg_dump
           test -x /usr/bin/pg_restore

@@ -33,8 +33,8 @@ import com.hoangluongtran0309.dbbackup.core.port.LogicalRestorePort;
 @Testcontainers
 class BackupRestoreRoundTripIT {
 
-    private static final Path MYSQL = Path.of("/usr/bin/mysql");
-    private static final Path MYSQLDUMP = Path.of("/usr/bin/mysqldump");
+    private static final Path MYSQL = configuredPath("MYSQL_CLIENT_PATH", "/usr/bin/mysql");
+    private static final Path MYSQLDUMP = configuredPath("MYSQLDUMP_PATH", "/usr/bin/mysqldump");
 
     @org.testcontainers.junit.jupiter.Container
     static final MySQLContainer SERVER = new MySQLContainer("mysql:8.4")
@@ -309,5 +309,10 @@ class BackupRestoreRoundTripIT {
         } catch (Exception e) {
             throw new IllegalStateException(e);
         }
+    }
+
+    private static Path configuredPath(String environment, String fallback) {
+        String configured = System.getenv(environment);
+        return Path.of(configured == null || configured.isBlank() ? fallback : configured);
     }
 }
