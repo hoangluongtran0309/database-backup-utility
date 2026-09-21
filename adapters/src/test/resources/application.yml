@@ -5,6 +5,11 @@ dbbackup:
     dump-path: ${MYSQLDUMP_PATH:/usr/bin/mysqldump}
     connect-timeout: 10s
 
+  mariadb:
+    client-path: ${MARIADB_CLIENT_PATH:/usr/bin/mariadb}
+    dump-path: ${MARIADB_DUMP_PATH:/usr/bin/mariadb-dump}
+    connect-timeout: 10s
+
   postgresql:
     psql-path: ${PSQL_PATH:/usr/bin/psql}
     dump-path: ${PG_DUMP_PATH:/usr/bin/pg_dump}

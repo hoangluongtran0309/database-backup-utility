@@ -87,8 +87,9 @@ included — before the next one starts.
 - [x] **18. Oracle logical backup/restore.** Schema-level Data Pump through an
       Oracle directory object and a shared directory; the client belongs in an
       operator-provided image variant, not the base image. See ADR-020.
-- [ ] **19. MariaDB logical backup/restore.** Its own `mariadb-dump` and
-      `mariadb` adapter rather than assuming MySQL dump compatibility.
+- [x] **19. MariaDB logical backup/restore.** Its own `mariadb-dump` and
+      `mariadb` adapter rather than assuming MySQL dump compatibility. See
+      ADR-021.
 - [ ] **20. SQL Server logical backup/restore.** BACPAC export/import through
       SqlPackage, supplied by an image variant or the operator.
 

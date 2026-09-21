@@ -27,6 +27,7 @@ public final class DatabaseTarget {
     private static final int MAX_DATABASE_NAME_LENGTH = 64;
     private static final int MAX_SQLITE_PATH_LENGTH = 1024;
     private static final int MAX_ORACLE_IDENTIFIER_LENGTH = 128;
+    private static final int MAX_MARIADB_USERNAME_LENGTH = 128;
 
     private final UUID id;
     private final String name;
@@ -197,7 +198,13 @@ public final class DatabaseTarget {
         if (engine == DatabaseEngine.MYSQL) {
             return 32;
         }
-        return engine == DatabaseEngine.ORACLE ? MAX_ORACLE_IDENTIFIER_LENGTH : 63;
+        if (engine == DatabaseEngine.ORACLE) {
+            return MAX_ORACLE_IDENTIFIER_LENGTH;
+        }
+        if (engine == DatabaseEngine.MARIADB) {
+            return MAX_MARIADB_USERNAME_LENGTH;
+        }
+        return 63;
     }
 
     private static String username(DatabaseEngine engine, String value) {

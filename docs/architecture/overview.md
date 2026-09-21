@@ -98,8 +98,9 @@ once:
   `GZIPOutputStream`'s trailer is written on close, and that belongs to whoever
   opened it. If the sink cannot be written to, the child is killed at once
   rather than left blocked on a pipe until the timeout.
-- **Credentials never travel on the command line.** MySQL and PostgreSQL use
-  per-child environment variables (`MYSQL_PWD` and `PGPASSWORD`). MongoDB
+- **Credentials never travel on the command line.** MySQL, MariaDB and
+  PostgreSQL use per-child environment variables (`MYSQL_PWD` and
+  `PGPASSWORD`). MongoDB
   Database Tools have no equivalent, so each invocation gets a unique YAML
   config file created as `0600` and deleted as soon as the child exits. Nothing
   uses `System.setProperty`, which is JVM-global and would leak between jobs.
@@ -112,6 +113,14 @@ socket and silently ignores `--port`. `MysqlDumpBackupAdapter` reuses that rule
 but not the connect timeout — `mysqldump` does not accept `--connect-timeout`
 and exits 7 with *unknown variable* if given it, so the `ProcessRunner` timeout
 is its only backstop.
+
+MariaDB has a separate `MariaDbClient`, dump adapter and restore adapter; no
+MariaDB target is routed through MySQL compatibility. Every invocation forces
+TCP so `localhost` cannot select a Unix socket and ignore the registered port.
+`mariadb-dump` streams one positional database through gzip with routines,
+triggers and events, without MySQL's `--set-gtid-purged`. Restore reads the
+archive to EOF before streaming it into `mariadb`. See
+[ADR-021](../adr/021-mariadb-uses-its-own-client-tools.md).
 
 The PostgreSQL adapters pass the host, port, user and database explicitly and
 set `PGCONNECT_TIMEOUT`. `PostgresDumpBackupAdapter` writes a custom-format
@@ -164,8 +173,9 @@ are separate on purpose — see
    reads it through a different connection.
 2. **Running.** The pooled thread decrypts the password, selects the engine's
    backup adapter, asks it for the artifact suffix, asks `StoragePort` where the
-   artifact goes, and writes the outcome onto the same row. MySQL streams
-   gzipped SQL to `<database>_<timestamp>.sql.gz`; PostgreSQL writes a custom
+   artifact goes, and writes the outcome onto the same row. MySQL and MariaDB
+   each stream their own gzipped SQL to `<database>_<timestamp>.sql.gz`;
+   PostgreSQL writes a custom
    archive to `<database>_<timestamp>.dump`; MongoDB writes a compressed archive
    to `<database>_<timestamp>.archive.gz`; SQLite streams gzipped SQL to
    `<file>_<timestamp>.sql.gz` without decrypting a credential.
@@ -225,8 +235,8 @@ Flyway output, and H2 would misreport all three.
 
 No test may skip itself because something it needs is absent. A test that turns
 green by not running is worse than no test at all — so the integration tests
-assert that all MySQL, PostgreSQL, MongoDB and SQLite client binaries are
-present rather than assuming it, and CI installs them explicitly. The Oracle
+assert that all MySQL, MariaDB, PostgreSQL, MongoDB and SQLite client binaries
+are present rather than assuming it, and CI installs them explicitly. The Oracle
 Free test instead creates executable host wrappers that invoke the real
 `sqlplus`, `expdp` and `impdp` inside its Oracle container, keeping Oracle
 client packages off the runner.
@@ -256,3 +266,7 @@ constraint preserves the old required connection shape for every other engine.
 `V10` adds `ORACLE`, widens `username` to 128 characters, and adds
 `data_pump_directory`. The latter is required only for Oracle rows and must be
 null for every other engine.
+
+`V11` adds `MARIADB` to the engine constraint. MariaDB uses the existing
+network connection shape and the 128-character username column, so no new
+column or data rewrite is needed.

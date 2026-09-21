@@ -23,8 +23,11 @@ FROM eclipse-temurin:21-jre-noble
 
 # The application drives these binaries directly and refuses to start without
 # them; installing them here is what makes the image self-contained. Ubuntu's
-# mysql-client is Oracle's MySQL 8.4, not a MariaDB substitute, which matters:
-# MariaDB's mysqldump rejects --set-gtid-purged.
+# Oracle MySQL and MariaDB client packages conflict because MariaDB also ships
+# mysql/mysqldump compatibility names. Preserve the real MySQL executables
+# before installing MariaDB, then address both client families by explicit
+# paths. The version checks below prove that all four preserved executables
+# still load after the conflicting MySQL package is removed.
 # curl is only here for the HEALTHCHECK below.
 RUN apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
@@ -41,6 +44,15 @@ RUN apt-get update \
         mysql-client \
         postgresql-client \
         sqlite3 \
+    && mkdir -p /opt/mysql/bin \
+    && cp /usr/bin/mysql /opt/mysql/bin/mysql \
+    && cp /usr/bin/mysqldump /opt/mysql/bin/mysqldump \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        mariadb-client \
+    && /opt/mysql/bin/mysql --version \
+    && /opt/mysql/bin/mysqldump --version \
+    && /usr/bin/mariadb --version \
+    && /usr/bin/mariadb-dump --version \
     && rm -rf /var/lib/apt/lists/*
 
 RUN useradd --system --create-home --uid 10001 dbbackup \
@@ -52,8 +64,10 @@ COPY --from=build /src/web/target/web-*.jar /app/app.jar
 # Absolute, and outside the working directory: the default ./backups follows
 # whatever directory the process happens to start in.
 ENV BACKUP_DIR=/var/lib/dbbackup/backups \
-    MYSQL_CLIENT_PATH=/usr/bin/mysql \
-    MYSQLDUMP_PATH=/usr/bin/mysqldump \
+    MYSQL_CLIENT_PATH=/opt/mysql/bin/mysql \
+    MYSQLDUMP_PATH=/opt/mysql/bin/mysqldump \
+    MARIADB_CLIENT_PATH=/usr/bin/mariadb \
+    MARIADB_DUMP_PATH=/usr/bin/mariadb-dump \
     PSQL_PATH=/usr/bin/psql \
     PG_DUMP_PATH=/usr/bin/pg_dump \
     PG_RESTORE_PATH=/usr/bin/pg_restore \
