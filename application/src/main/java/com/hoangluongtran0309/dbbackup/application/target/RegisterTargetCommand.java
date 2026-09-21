@@ -60,5 +60,15 @@ public record RegisterTargetCommand(
                 && (password.indexOf('\n') >= 0 || password.indexOf('\r') >= 0)) {
             throw new InvalidTargetException("password", "Oracle password must not contain line breaks");
         }
+        if (engine == DatabaseEngine.SQLSERVER && password != null) {
+            if (password.length() > 128) {
+                throw new InvalidTargetException(
+                        "password", "SQL Server password must be at most 128 characters");
+            }
+            if (password.indexOf('\n') >= 0 || password.indexOf('\r') >= 0 || password.indexOf('\0') >= 0) {
+                throw new InvalidTargetException(
+                        "password", "SQL Server password must not contain line breaks or NUL characters");
+            }
+        }
     }
 }

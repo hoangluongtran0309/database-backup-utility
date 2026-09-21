@@ -98,14 +98,16 @@ once:
   `GZIPOutputStream`'s trailer is written on close, and that belongs to whoever
   opened it. If the sink cannot be written to, the child is killed at once
   rather than left blocked on a pipe until the timeout.
-- **Credentials never travel on the command line.** MySQL, MariaDB and
-  PostgreSQL use per-child environment variables (`MYSQL_PWD` and
-  `PGPASSWORD`). MongoDB
+- **Credentials never travel on the command line.** MySQL, MariaDB,
+  PostgreSQL and SQL Server's probe use per-child environment variables
+  (`MYSQL_PWD`, `PGPASSWORD` and `SQLCMDPASSWORD`). MongoDB
   Database Tools have no equivalent, so each invocation gets a unique YAML
   config file created as `0600` and deleted as soon as the child exits. Nothing
   uses `System.setProperty`, which is JVM-global and would leak between jobs.
   Oracle clients receive the password as the first line of stdin; their argv
   contains only schema, host, port, service name and operation parameters.
+  SqlPackage receives its password from a UTF-8 response file created as
+  `0600`; that file is removed on every exit and its secret never enters argv.
 
 `MysqlClient` adds the MySQL-specific knowledge: it rewrites the literal host
 `localhost` to `127.0.0.1`, because the client otherwise connects over a Unix
@@ -152,6 +154,14 @@ handling and startup repair attach and issue `KILL_JOB`; staging is retained
 when termination cannot be confirmed. See
 [ADR-020](../adr/020-oracle-data-pump-shared-staging-and-optional-client-pack.md).
 
+SQL Server is another optional, all-or-nothing pack. `sqlcmd` runs `SELECT 1`
+over an encrypted connection. SqlPackage exports a validated `.bacpac` and
+imports only into a missing or object-free database; the adapter never drops a
+database. Each operation gets a private staging directory below
+`SQLSERVER_TEMP_DIR`, removed together with partial artifacts on failure or
+timeout. See
+[ADR-022](../adr/022-sql-server-bacpac-and-optional-client-pack.md).
+
 The use cases do not know those commands. `DatabaseConnection` carries the
 short-lived plaintext credential and `EngineAdapterRegistry` selects a
 `ConnectionTestPort`, `LogicalBackupPort` or `LogicalRestorePort` by
@@ -178,7 +188,8 @@ are separate on purpose — see
    PostgreSQL writes a custom
    archive to `<database>_<timestamp>.dump`; MongoDB writes a compressed archive
    to `<database>_<timestamp>.archive.gz`; SQLite streams gzipped SQL to
-   `<file>_<timestamp>.sql.gz` without decrypting a credential.
+   `<file>_<timestamp>.sql.gz` without decrypting a credential; SQL Server
+   writes a BACPAC to `<database>_<timestamp>.bacpac`.
 
 Meanwhile the detail page follows the row: it re-fetches itself every two
 seconds and swaps in the part that changed, until the row reaches a finished
@@ -235,7 +246,7 @@ Flyway output, and H2 would misreport all three.
 
 No test may skip itself because something it needs is absent. A test that turns
 green by not running is worse than no test at all — so the integration tests
-assert that all MySQL, MariaDB, PostgreSQL, MongoDB and SQLite client binaries
+assert that all MySQL, MariaDB, PostgreSQL, MongoDB, SQLite and SQL Server client binaries
 are present rather than assuming it, and CI installs them explicitly. The Oracle
 Free test instead creates executable host wrappers that invoke the real
 `sqlplus`, `expdp` and `impdp` inside its Oracle container, keeping Oracle
@@ -270,3 +281,7 @@ null for every other engine.
 `V11` adds `MARIADB` to the engine constraint. MariaDB uses the existing
 network connection shape and the 128-character username column, so no new
 column or data rewrite is needed.
+
+`V12` adds `SQLSERVER` to the engine constraint. It reuses the network
+connection shape and existing 128-character columns and does not rewrite any
+stored target.

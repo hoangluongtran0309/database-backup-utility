@@ -189,6 +189,23 @@ class ManageDatabaseTargetServiceTest {
     }
 
     @Test
+    void sqlServerRejectsPasswordsThatCannotBeSafelyWrittenToAResponseFile() {
+        assertThatThrownBy(() -> new RegisterTargetCommand(
+                "sql server", DatabaseEngine.SQLSERVER, "sql.internal", 1433,
+                "shop", "backup", "line one\nline two"))
+                .isInstanceOf(InvalidTargetException.class)
+                .hasMessageContaining("line breaks")
+                .extracting("field").isEqualTo("password");
+
+        assertThatThrownBy(() -> new RegisterTargetCommand(
+                "sql server", DatabaseEngine.SQLSERVER, "sql.internal", 1433,
+                "shop", "backup", "p".repeat(129)))
+                .isInstanceOf(InvalidTargetException.class)
+                .hasMessageContaining("128")
+                .extracting("field").isEqualTo("password");
+    }
+
+    @Test
     void doesNotReachTheRepositoryWhenTheModelRejectsTheValues() {
         when(encryption.encrypt(any())).thenReturn("sealed");
 

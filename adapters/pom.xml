@@ -96,6 +96,18 @@
       <version>${testcontainers.version}</version>
       <scope>test</scope>
     </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>testcontainers-mssqlserver</artifactId>
+      <version>${testcontainers.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <!-- Test-only setup/assertions; production reaches SQL Server only through its optional clients. -->
+    <dependency>
+      <groupId>com.microsoft.sqlserver</groupId>
+      <artifactId>mssql-jdbc</artifactId>
+      <scope>test</scope>
+    </dependency>
     <!-- Test-only schema setup/assertions; production reaches Oracle only via its client pack. -->
     <dependency>
       <groupId>com.oracle.database.jdbc</groupId>

@@ -114,6 +114,20 @@ dbbackup:
     data-pump-root: ${ORACLE_DATAPUMP_ROOT:./oracle-datapump}
     connect-timeout: ${ORACLE_CONNECT_TIMEOUT:30s}
 
+  sqlserver:
+    # SQL Server support is an optional pack. The example image supplies both
+    # SqlPackage (BACPAC export/import) and sqlcmd (the lightweight probe).
+    enabled: ${SQLSERVER_ENABLED:false}
+    sqlpackage-path: ${SQLPACKAGE_PATH:/opt/sqlpackage/sqlpackage}
+    sqlcmd-path: ${SQLCMD_PATH:/opt/mssql-tools18/bin/sqlcmd}
+    connect-timeout: ${SQLSERVER_CONNECT_TIMEOUT:10s}
+    # Encryption is always requested. Keep certificate validation on unless an
+    # internal/self-signed deployment explicitly accepts the weaker setting.
+    trust-server-certificate: ${SQLSERVER_TRUST_SERVER_CERTIFICATE:false}
+    # SqlPackage buffers uncompressed table data. The image variant puts this
+    # on the backup volume rather than its smaller writable container layer.
+    temp-directory: ${SQLSERVER_TEMP_DIR:./sqlserver-temp}
+
   jobs:
     # How many backups and restores may run at once, together. Each is a child
     # process competing for the same disk, so more is not faster.
