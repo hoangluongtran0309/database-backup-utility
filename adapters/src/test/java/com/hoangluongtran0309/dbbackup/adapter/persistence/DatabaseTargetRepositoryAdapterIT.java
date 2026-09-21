@@ -136,6 +136,19 @@ class DatabaseTargetRepositoryAdapterIT {
     }
 
     @Test
+    void savesAMariadbTargetWithItsLongerUsername() {
+        DatabaseTarget mariadb = target("orders mariadb", "orders").toBuilder()
+                .engine(DatabaseEngine.MARIADB)
+                .username("u".repeat(128))
+                .build();
+
+        DatabaseTarget found = repository.findById(repository.save(mariadb).getId()).orElseThrow();
+
+        assertThat(found.getEngine()).isEqualTo(DatabaseEngine.MARIADB);
+        assertThat(found.getUsername()).hasSize(128);
+    }
+
+    @Test
     void findByIdIsEmptyForAnUnknownId() {
         assertThat(repository.findById(UUID.randomUUID())).isEmpty();
     }

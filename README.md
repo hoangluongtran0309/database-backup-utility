@@ -1,20 +1,20 @@
 # database-backup-utility
 
-MySQL, PostgreSQL, MongoDB, SQLite and optional Oracle logical backup and
-restore, driven from a small web console.
+MySQL, MariaDB, PostgreSQL, MongoDB, SQLite and optional Oracle logical backup
+and restore, driven from a small web console.
 
 The scope is deliberately narrow: **full logical dumps, same-engine restores,
-local disk**. MySQL, PostgreSQL, MongoDB, SQLite and Oracle are implemented; later engines
-in the roadmap are genuinely absent from the code. There is no physical
+local disk**. MySQL, MariaDB, PostgreSQL, MongoDB, SQLite and Oracle are
+implemented; later engines in the roadmap are genuinely absent from the code. There is no physical
 backup, incremental chain, point-in-time recovery, scheduler or cloud storage.
 Each capability arrives as one complete vertical slice, code and documentation
 together. See [ROADMAP.md](ROADMAP.md) for what exists and what is next.
 
 ## What works today
 
-Registering a MySQL, PostgreSQL, MongoDB or SQLite target — plus Oracle when its
-optional client pack is enabled — testing it, running a full logical backup of
-it, restoring one of those backups into a target of the
+Registering a MySQL, MariaDB, PostgreSQL, MongoDB or SQLite target — plus
+Oracle when its optional client pack is enabled — testing it, running a full
+logical backup of it, restoring one of those backups into a target of the
 same engine, downloading or deleting its artifact, and reading the history of
 all of it. The target's password is encrypted with AES-256-GCM before it is
 stored.
@@ -38,8 +38,9 @@ restore lists show fifty at a time, newest first, with links to newer and older
 pages. See
 [ADR-010](docs/adr/010-the-detail-page-follows-a-running-job.md). The target
 list shows each target's newest good backup, and flags a newer attempt that
-failed. MySQL artifacts are gzipped SQL named
-`<database>_<timestamp>.sql.gz`; PostgreSQL artifacts are custom-format
+failed. MySQL and MariaDB artifacts are gzipped SQL named
+`<database>_<timestamp>.sql.gz`; each is produced and consumed by that
+engine's own client tools. PostgreSQL artifacts are custom-format
 archives named `<database>_<timestamp>.dump` and can be inspected with
 `pg_restore --list`; MongoDB artifacts are compressed archives named
 `<database>_<timestamp>.archive.gz`; SQLite artifacts are gzipped SQL named
@@ -98,7 +99,7 @@ docker compose up --build
 ```
 
 Then open <http://localhost:8080> and sign in as `admin` with that password
-(`OPERATOR_USERNAME` changes the name). The image carries the MySQL,
+(`OPERATOR_USERNAME` changes the name). The image carries the MySQL, MariaDB,
 PostgreSQL, MongoDB and SQLite client tools, so the host needs only Docker.
 Oracle is deliberately absent from that base image; see
 [Optional Oracle pack](#optional-oracle-pack).
@@ -106,9 +107,9 @@ Oracle is deliberately absent from that base image; see
 Keep that key. Passwords encrypted under one key cannot be read back under
 another, and there is no recovery path.
 
-A MySQL, PostgreSQL or MongoDB server running on the Docker host is reachable from the
-container as `host.docker.internal` — use that as the target's host, not
-`localhost`.
+A MySQL, MariaDB, PostgreSQL or MongoDB server running on the Docker host is
+reachable from the container as `host.docker.internal` — use that as the
+target's host, not `localhost`.
 
 SQLite files are mounted from `${SQLITE_HOST_DIR:-./sqlite}` into the image.
 Register their path relative to that directory and ensure uid 10001 can read
@@ -150,10 +151,10 @@ application will not start, `docker compose logs app` says why; note that with
 ### From source
 
 Requires JDK 21, Maven, Docker, the MySQL client binaries (`mysql` and
-`mysqldump`), the PostgreSQL client binaries (`psql`, `pg_dump` and
-`pg_restore`), MongoDB Database Tools (`mongodump` and `mongorestore`), and
-`sqlite3` on the host. The application drives those directly and refuses
-to start if it cannot find them; see
+`mysqldump`), the MariaDB client binaries (`mariadb` and `mariadb-dump`), the
+PostgreSQL client binaries (`psql`, `pg_dump` and `pg_restore`), MongoDB
+Database Tools (`mongodump` and `mongorestore`), and `sqlite3` on the host. The
+application drives those directly and refuses to start if it cannot find them; see
 [ADR-003](docs/adr/003-shelling-out-to-the-mysql-client.md) and
 [ADR-017](docs/adr/017-route-logical-backups-by-database-engine.md).
 
@@ -182,6 +183,8 @@ would also try to run the parent pom, which has no main class.)
 | `DB_PASSWORD` | `dbbackup` | Metadata store password |
 | `MYSQL_CLIENT_PATH` | `/usr/bin/mysql` | The `mysql` client binary; checked for executability at startup |
 | `MYSQLDUMP_PATH` | `/usr/bin/mysqldump` | The `mysqldump` binary; likewise checked at startup |
+| `MARIADB_CLIENT_PATH` | `/usr/bin/mariadb` | MariaDB's command-line client for probes and restores |
+| `MARIADB_DUMP_PATH` | `/usr/bin/mariadb-dump` | MariaDB's logical dump client |
 | `PSQL_PATH` | `/usr/bin/psql` | The `psql` client used to test PostgreSQL targets |
 | `PG_DUMP_PATH` | `/usr/bin/pg_dump` | The PostgreSQL custom-format dump client |
 | `PG_RESTORE_PATH` | `/usr/bin/pg_restore` | The PostgreSQL custom-archive restore client |

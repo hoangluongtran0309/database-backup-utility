@@ -78,7 +78,8 @@ class DatabaseTargetControllerTest {
                 DatabaseEngine.MYSQL,
                 DatabaseEngine.POSTGRESQL,
                 DatabaseEngine.MONGODB,
-                DatabaseEngine.SQLITE));
+                DatabaseEngine.SQLITE,
+                DatabaseEngine.MARIADB));
         when(service.supports(any())).thenReturn(true);
     }
 
@@ -91,6 +92,17 @@ class DatabaseTargetControllerTest {
                 .andExpect(view().name("database/list"))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("production")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("127.0.0.1:3306/shop")));
+    }
+
+    @Test
+    void displaysAMariadbTargetWithItsPublicEngineName() throws Exception {
+        when(service.listAll()).thenReturn(List.of(mariadbTarget("orders mariadb")));
+
+        mockMvc.perform(get("/databases"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("orders mariadb")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(">MariaDB</span>")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("mariadb.internal:3306/orders")));
     }
 
     /**
@@ -180,7 +192,9 @@ class DatabaseTargetControllerTest {
                         "(?s).*value=\"POSTGRESQL\".*?data-default-port=\"5432\".*")))
                 .andExpect(content().string(org.hamcrest.Matchers.matchesPattern(
                         "(?s).*value=\"MONGODB\".*?data-default-port=\"27017\".*")))
-                .andExpect(content().string(org.hamcrest.Matchers.containsString("value=\"SQLITE\"")));
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("value=\"SQLITE\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.matchesPattern(
+                        "(?s).*value=\"MARIADB\".*?data-default-port=\"3306\".*")));
     }
 
     @Test
@@ -220,6 +234,26 @@ class DatabaseTargetControllerTest {
         org.assertj.core.api.Assertions.assertThat(command.getValue().engine())
                 .isEqualTo(DatabaseEngine.POSTGRESQL);
         org.assertj.core.api.Assertions.assertThat(command.getValue().port()).isEqualTo(5432);
+    }
+
+    @Test
+    void registersAMariadbTargetWithTheSelectedEngine() throws Exception {
+        when(service.register(any())).thenReturn(target("orders mariadb"));
+
+        mockMvc.perform(post("/databases").with(csrf())
+                        .param("engine", "MARIADB")
+                        .param("name", "orders mariadb")
+                        .param("host", "mariadb.internal")
+                        .param("port", "3306")
+                        .param("database", "orders")
+                        .param("username", "backup")
+                        .param("password", "s3cr3t"))
+                .andExpect(status().is3xxRedirection());
+
+        ArgumentCaptor<RegisterTargetCommand> command = ArgumentCaptor.forClass(RegisterTargetCommand.class);
+        verify(service).register(command.capture());
+        assertThat(command.getValue().engine()).isEqualTo(DatabaseEngine.MARIADB);
+        assertThat(command.getValue().port()).isEqualTo(3306);
     }
 
     @Test
@@ -791,6 +825,19 @@ class DatabaseTargetControllerTest {
                 .databaseName("shop")
                 .username("backup")
                 .authenticationDatabase("admin")
+                .passwordCiphertext("Y2lwaGVydGV4dA==")
+                .createdAt(Instant.parse("2026-09-09T10:15:30Z"))
+                .build();
+    }
+
+    private static DatabaseTarget mariadbTarget(String name) {
+        return DatabaseTarget.builder().engine(DatabaseEngine.MARIADB)
+                .id(UUID.randomUUID())
+                .name(name)
+                .host("mariadb.internal")
+                .port(3306)
+                .databaseName("orders")
+                .username("backup")
                 .passwordCiphertext("Y2lwaGVydGV4dA==")
                 .createdAt(Instant.parse("2026-09-09T10:15:30Z"))
                 .build();
