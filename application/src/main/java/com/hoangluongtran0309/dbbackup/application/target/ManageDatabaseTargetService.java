@@ -120,6 +120,19 @@ public class ManageDatabaseTargetService {
             throw new com.hoangluongtran0309.dbbackup.core.exception.InvalidTargetException(
                     "password", "Oracle password must not contain line breaks");
         }
+        if (current.getEngine() == com.hoangluongtran0309.dbbackup.core.model.DatabaseEngine.SQLSERVER
+                && command.changesPassword()) {
+            if (command.password().length() > 128) {
+                throw new com.hoangluongtran0309.dbbackup.core.exception.InvalidTargetException(
+                        "password", "SQL Server password must be at most 128 characters");
+            }
+            if (command.password().indexOf('\n') >= 0
+                    || command.password().indexOf('\r') >= 0
+                    || command.password().indexOf('\0') >= 0) {
+                throw new com.hoangluongtran0309.dbbackup.core.exception.InvalidTargetException(
+                        "password", "SQL Server password must not contain line breaks or NUL characters");
+            }
+        }
         DatabaseTarget edited = current.edited(
                 command.name(),
                 command.host(),

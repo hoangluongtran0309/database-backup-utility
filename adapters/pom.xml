@@ -7,7 +7,7 @@
   <parent>
     <groupId>com.hoangluongtran0309</groupId>
     <artifactId>database-backup-utility</artifactId>
-    <version>0.8.0</version>
+    <version>0.9.0</version>
   </parent>
 
   <artifactId>adapters</artifactId>
@@ -94,6 +94,18 @@
       <groupId>org.testcontainers</groupId>
       <artifactId>testcontainers-oracle-free</artifactId>
       <version>${testcontainers.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>testcontainers-mssqlserver</artifactId>
+      <version>${testcontainers.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <!-- Test-only setup/assertions; production reaches SQL Server only through its optional clients. -->
+    <dependency>
+      <groupId>com.microsoft.sqlserver</groupId>
+      <artifactId>mssql-jdbc</artifactId>
       <scope>test</scope>
     </dependency>
     <!-- Test-only schema setup/assertions; production reaches Oracle only via its client pack. -->

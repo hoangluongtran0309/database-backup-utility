@@ -79,7 +79,8 @@ class DatabaseTargetControllerTest {
                 DatabaseEngine.POSTGRESQL,
                 DatabaseEngine.MONGODB,
                 DatabaseEngine.SQLITE,
-                DatabaseEngine.MARIADB));
+                DatabaseEngine.MARIADB,
+                DatabaseEngine.SQLSERVER));
         when(service.supports(any())).thenReturn(true);
     }
 
@@ -194,7 +195,32 @@ class DatabaseTargetControllerTest {
                         "(?s).*value=\"MONGODB\".*?data-default-port=\"27017\".*")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("value=\"SQLITE\"")))
                 .andExpect(content().string(org.hamcrest.Matchers.matchesPattern(
-                        "(?s).*value=\"MARIADB\".*?data-default-port=\"3306\".*")));
+                        "(?s).*value=\"MARIADB\".*?data-default-port=\"3306\".*")))
+                .andExpect(content().string(org.hamcrest.Matchers.matchesPattern(
+                        "(?s).*value=\"SQLSERVER\".*?data-default-port=\"1433\".*")));
+    }
+
+    @Test
+    void registersASqlServerTargetWithTheSelectedEngine() throws Exception {
+        when(service.register(any())).thenReturn(target("orders sql server"));
+
+        mockMvc.perform(post("/databases").with(csrf())
+                        .param("engine", "SQLSERVER")
+                        .param("name", "orders sql server")
+                        .param("host", "sql.internal")
+                        .param("port", "1433")
+                        .param("database", "orders")
+                        .param("username", "backup")
+                        .param("password", "Str0ng! password"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/databases"));
+
+        ArgumentCaptor<com.hoangluongtran0309.dbbackup.application.target.RegisterTargetCommand> command =
+                ArgumentCaptor.forClass(
+                        com.hoangluongtran0309.dbbackup.application.target.RegisterTargetCommand.class);
+        verify(service).register(command.capture());
+        assertThat(command.getValue().engine()).isEqualTo(DatabaseEngine.SQLSERVER);
+        assertThat(command.getValue().port()).isEqualTo(1433);
     }
 
     @Test

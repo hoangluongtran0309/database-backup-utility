@@ -35,16 +35,21 @@
   </form>
 
   <div class="alert alert-danger" role="alert">
-    <p><strong>This overwrites live data.</strong></p>
-    <p th:if="${target.engine.name() != 'SQLITE'}">
+    <p th:if="${target.engine.name() != 'SQLSERVER'}"><strong>This overwrites live data.</strong></p>
+    <p th:if="${target.engine.name() == 'SQLSERVER'}"><strong>The destination must be missing or empty.</strong></p>
+    <p th:if="${target.engine.name() != 'SQLITE' and target.engine.name() != 'SQLSERVER'}">
       Every table in the backup will be dropped and recreated in
       <code th:text="${target.address}">127.0.0.1:3306/shop</code>.
     </p>
     <!-- Said plainly because it is the thing people assume wrongly: this
          applies a dump, it does not reset the database. -->
-    <p th:if="${target.engine.name() != 'SQLITE'}">
+    <p th:if="${target.engine.name() != 'SQLITE' and target.engine.name() != 'SQLSERVER'}">
       Tables that are <em>not</em> in the backup are left untouched. This applies
       the backup over the database; it does not reset it.
+    </p>
+    <p th:if="${target.engine.name() == 'SQLSERVER'}">
+      A SQL Server BACPAC can only be imported into a database that does not yet exist or contains no user-defined objects. A non-empty destination is
+      refused and is not dropped or cleared by this application.
     </p>
     <p th:if="${target.engine.name() == 'SQLITE'}">
       The complete SQLite database at <code th:text="${target.address}">shop.db</code>
@@ -92,7 +97,8 @@
     </div>
 
     <div class="form-actions">
-      <button class="button button-danger-solid" type="submit" data-busy-label="Starting restore…">Restore, overwriting the database</button>
+      <button class="button button-danger-solid" type="submit" data-busy-label="Starting restore…"
+              th:text="${target.engine.name() == 'SQLSERVER' ? 'Restore into empty database' : 'Restore, overwriting the database'}">Restore, overwriting the database</button>
       <a class="button button-ghost" th:href="@{/executions/{id}(id=${backup.id})}">Cancel</a>
     </div>
   </form>

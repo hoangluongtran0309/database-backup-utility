@@ -16,7 +16,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
-/** Proves V7-V11 upgrade real pre-engine data rather than only building a fresh schema. */
+/** Proves V7-V12 upgrade real pre-engine data rather than only building a fresh schema. */
 @Testcontainers
 class DatabaseEngineMigrationIT {
 
@@ -138,6 +138,34 @@ class DatabaseEngineMigrationIT {
             assertThat(single(statement,
                     "SELECT engine FROM database_targets WHERE id = '" + mariadbId + "'"))
                     .isEqualTo("MARIADB");
+
+            UUID sqlServerId = UUID.randomUUID();
+            statement.executeUpdate("""
+                    INSERT INTO database_targets
+                        (id, name, engine, host, port, database_name, username,
+                         authentication_database, data_pump_directory, password_enc, created_at)
+                    VALUES ('%s', 'sql server', 'SQLSERVER', 'sql.internal', 1433,
+                            'orders', '%s', NULL, NULL, 'sealed', now())
+                    """.formatted(sqlServerId, "u".repeat(128)));
+            assertThat(single(statement,
+                    "SELECT engine FROM database_targets WHERE id = '" + sqlServerId + "'"))
+                    .isEqualTo("SQLSERVER");
+            assertThatThrownBy(() -> statement.executeUpdate("""
+                    INSERT INTO database_targets
+                        (id, name, engine, host, port, database_name, username,
+                         authentication_database, data_pump_directory, password_enc, created_at)
+                    VALUES ('%s', 'bad sql server', 'SQLSERVER', NULL, 1433,
+                            'orders', 'backup', NULL, NULL, 'sealed', now())
+                    """.formatted(UUID.randomUUID())))
+                    .hasMessageContaining("ck_database_targets_connection_shape");
+            assertThatThrownBy(() -> statement.executeUpdate("""
+                    INSERT INTO database_targets
+                        (id, name, engine, host, port, database_name, username,
+                         authentication_database, data_pump_directory, password_enc, created_at)
+                    VALUES ('%s', 'unknown engine', 'NOT_A_DATABASE', 'db.internal', 1,
+                            'orders', 'backup', NULL, NULL, 'sealed', now())
+                    """.formatted(UUID.randomUUID())))
+                    .hasMessageContaining("ck_database_targets_engine");
         }
     }
 

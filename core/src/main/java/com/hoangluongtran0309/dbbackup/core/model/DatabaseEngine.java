@@ -7,7 +7,8 @@ public enum DatabaseEngine {
     MONGODB("MongoDB", 27017),
     SQLITE("SQLite", null),
     ORACLE("Oracle", 1521),
-    MARIADB("MariaDB", 3306);
+    MARIADB("MariaDB", 3306),
+    SQLSERVER("SQL Server", 1433);
 
     private final String displayName;
     private final Integer defaultPort;

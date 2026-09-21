@@ -1,11 +1,11 @@
 # database-backup-utility
 
-MySQL, MariaDB, PostgreSQL, MongoDB, SQLite and optional Oracle logical backup
-and restore, driven from a small web console.
+MySQL, MariaDB, PostgreSQL, MongoDB, SQLite, optional Oracle and optional SQL
+Server logical backup and restore, driven from a small web console.
 
 The scope is deliberately narrow: **full logical dumps, same-engine restores,
-local disk**. MySQL, MariaDB, PostgreSQL, MongoDB, SQLite and Oracle are
-implemented; later engines in the roadmap are genuinely absent from the code. There is no physical
+local disk**. MySQL, MariaDB, PostgreSQL, MongoDB, SQLite, Oracle and SQL Server
+are implemented. There is no physical
 backup, incremental chain, point-in-time recovery, scheduler or cloud storage.
 Each capability arrives as one complete vertical slice, code and documentation
 together. See [ROADMAP.md](ROADMAP.md) for what exists and what is next.
@@ -13,7 +13,7 @@ together. See [ROADMAP.md](ROADMAP.md) for what exists and what is next.
 ## What works today
 
 Registering a MySQL, MariaDB, PostgreSQL, MongoDB or SQLite target — plus
-Oracle when its optional client pack is enabled — testing it, running a full
+Oracle or SQL Server when its optional client pack is enabled — testing it, running a full
 logical backup of it, restoring one of those backups into a target of the
 same engine, downloading or deleting its artifact, and reading the history of
 all of it. The target's password is encrypted with AES-256-GCM before it is
@@ -45,7 +45,8 @@ archives named `<database>_<timestamp>.dump` and can be inspected with
 `pg_restore --list`; MongoDB artifacts are compressed archives named
 `<database>_<timestamp>.archive.gz`; SQLite artifacts are gzipped SQL named
 `<file>_<timestamp>.sql.gz`; Oracle artifacts are schema-mode Data Pump files
-named `<service>_<timestamp>.dmp`.
+named `<service>_<timestamp>.dmp`; SQL Server artifacts are BACPAC files named
+`<database>_<timestamp>.bacpac`.
 
 Each backup records the SHA-256 of its artifact — the same value `sha256sum`
 prints for the download. The backup's page can verify the file against it, and
@@ -57,8 +58,12 @@ Restoring overwrites live data, so it asks: the confirmation page names the
 database and you type the target's name to proceed. Network-engine restores
 apply the dump rather than recreating the database, so objects the backup does
 not contain are left alone. SQLite instead replaces the complete destination
-after rebuilding and validating a temporary database.
-See [ADR-007](docs/adr/007-restore-applies-a-dump-and-asks-first.md).
+after rebuilding and validating a temporary database. SQL Server is the
+exception: SqlPackage import accepts only a database that is missing or has no
+user-defined objects. This application refuses a non-empty destination and
+never drops or clears it. See
+[ADR-007](docs/adr/007-restore-applies-a-dump-and-asks-first.md) and
+[ADR-022](docs/adr/022-sql-server-bacpac-and-optional-client-pack.md).
 
 A backup can be restored into any registered target of the same engine, not
 only the one it was taken from — so a restore drill can go into a scratch
@@ -101,13 +106,14 @@ docker compose up --build
 Then open <http://localhost:8080> and sign in as `admin` with that password
 (`OPERATOR_USERNAME` changes the name). The image carries the MySQL, MariaDB,
 PostgreSQL, MongoDB and SQLite client tools, so the host needs only Docker.
-Oracle is deliberately absent from that base image; see
-[Optional Oracle pack](#optional-oracle-pack).
+Oracle and SQL Server are deliberately absent from that base image; see
+[Optional Oracle pack](#optional-oracle-pack) and
+[Optional SQL Server pack](#optional-sql-server-pack).
 
 Keep that key. Passwords encrypted under one key cannot be read back under
 another, and there is no recovery path.
 
-A MySQL, MariaDB, PostgreSQL or MongoDB server running on the Docker host is
+A MySQL, MariaDB, PostgreSQL, MongoDB or SQL Server instance running on the Docker host is
 reachable from the container as `host.docker.internal` — use that as the
 target's host, not `localhost`.
 
@@ -143,6 +149,27 @@ directory object. The path referenced by Oracle may differ from the container
 mount path, but both must resolve to the same storage. Full deployment details
 and restore limitations are in [ADR-020](docs/adr/020-oracle-data-pump-shared-staging-and-optional-client-pack.md).
 
+### Optional SQL Server pack
+
+SQL Server support uses `sqlcmd` for probes and SqlPackage 170.5.96 for BACPAC
+export/import. It is disabled by default. Build the base image and the supplied
+Linux x86-64 variant:
+
+```bash
+docker build -t dbbackup:base .
+docker build -f Dockerfile.sqlserver.example \
+  --build-arg BASE_IMAGE=dbbackup:base -t dbbackup:sqlserver .
+```
+
+The variant supplies .NET 10, SqlPackage and `mssql-tools18`, and enables the
+complete SQL Server adapter set. Connections are encrypted and validate the
+server certificate and hostname by default. For a deliberately self-signed
+development server only, set `SQLSERVER_TRUST_SERVER_CERTIFICATE=true`.
+SqlPackage [stages table data during export/import](https://learn.microsoft.com/en-us/sql/tools/sqlpackage/troubleshooting-issues-and-performance-with-sqlpackage?view=sql-server-ver17),
+so provision additional free space under `SQLSERVER_TEMP_DIR` comparable to the database being processed.
+BACPAC is intended here for databases below roughly 200 GB; use SQL Server's
+native physical backup tooling for larger databases.
+
 Backups live in a named volume, `backups`, so they survive the container. If the
 application will not start, `docker compose logs app` says why; note that with
 `restart: unless-stopped` a bad configuration shows as a restart loop while
@@ -153,7 +180,9 @@ application will not start, `docker compose logs app` says why; note that with
 Requires JDK 21, Maven, Docker, the MySQL client binaries (`mysql` and
 `mysqldump`), the MariaDB client binaries (`mariadb` and `mariadb-dump`), the
 PostgreSQL client binaries (`psql`, `pg_dump` and `pg_restore`), MongoDB
-Database Tools (`mongodump` and `mongorestore`), and `sqlite3` on the host. The
+Database Tools (`mongodump` and `mongorestore`), and `sqlite3` on the host. If
+SQL Server is enabled, SqlPackage 170.5.96 and `sqlcmd` from `mssql-tools18`
+are also required. The
 application drives those directly and refuses to start if it cannot find them; see
 [ADR-003](docs/adr/003-shelling-out-to-the-mysql-client.md) and
 [ADR-017](docs/adr/017-route-logical-backups-by-database-engine.md).
@@ -199,6 +228,12 @@ would also try to run the parent pom, which has no main class.)
 | `ORACLE_IMPDP_PATH` | `/opt/oracle/instantclient/impdp` | Oracle Data Pump import client |
 | `ORACLE_DATAPUMP_ROOT` | `./oracle-datapump` | Application view of storage shared with each Oracle directory object |
 | `ORACLE_CONNECT_TIMEOUT` | `30s` | Timeout for probes and Data Pump attach/kill control calls |
+| `SQLSERVER_ENABLED` | `false` | Enable the optional SQL Server adapter set and expose SQL Server in registration |
+| `SQLPACKAGE_PATH` | `/opt/sqlpackage/sqlpackage` | SqlPackage used for BACPAC export and import |
+| `SQLCMD_PATH` | `/opt/mssql-tools18/bin/sqlcmd` | `sqlcmd` used for encrypted connection probes |
+| `SQLSERVER_CONNECT_TIMEOUT` | `10s` | SQL Server login/connect timeout |
+| `SQLSERVER_TRUST_SERVER_CERTIFICATE` | `false` | Keep encryption but skip CA/hostname verification; opt in only for a deliberately untrusted certificate |
+| `SQLSERVER_TEMP_DIR` | `./sqlserver-temp` | Per-job SqlPackage staging root; needs free space comparable to the database and is cleaned after each job |
 | `BACKUP_DIR` | `./backups` | Where dumps are written; created at startup. Relative, so it follows the working directory — `mvn -pl web spring-boot:run` puts it under `web/`. The image sets it to `/var/lib/dbbackup/backups`. |
 | `JOB_CONCURRENCY` | `2` | How many backups and restores may run at once, together |
 | `JOB_QUEUE_CAPACITY` | `20` | Beyond this, a job is refused and recorded as failed |
@@ -213,7 +248,8 @@ mvn verify   # adds the integration tests, which need Docker
 ```
 
 `*Test.java` is a plain JUnit test. `*IT.java` runs against real containers via
-Testcontainers. The Oracle IT drives `sqlplus`/`expdp`/`impdp` through wrappers
+Testcontainers. The SQL Server IT drives the installed `sqlcmd` and SqlPackage
+against SQL Server 2022. The Oracle IT drives `sqlplus`/`expdp`/`impdp` through wrappers
 inside its Oracle Free container, so no Oracle client is installed on the
 runner. H2 is not used anywhere, and no test skips itself when something it
 needs is missing.

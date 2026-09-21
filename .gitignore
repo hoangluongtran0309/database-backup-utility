@@ -34,6 +34,11 @@ backups/
 /oracle-datapump/
 /web/oracle-datapump/
 
+# SqlPackage table-data staging. Each job directory is short-lived; the root
+# remains on disk and may be configured outside the checkout in production.
+/sqlserver-temp/
+/web/sqlserver-temp/
+
 # Never commit a real encryption key or datasource password.
 .env
 .env.local

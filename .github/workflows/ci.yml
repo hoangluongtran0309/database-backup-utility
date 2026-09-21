@@ -21,12 +21,14 @@ jobs:
   verify:
     name: mvn verify
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     env:
       MYSQL_CLIENT_PATH: /opt/mysql/bin/mysql
       MYSQLDUMP_PATH: /opt/mysql/bin/mysqldump
       MARIADB_CLIENT_PATH: /usr/bin/mariadb
       MARIADB_DUMP_PATH: /usr/bin/mariadb-dump
+      SQLPACKAGE_PATH: /home/runner/.dotnet/tools/sqlpackage
+      SQLCMD_PATH: /opt/mssql-tools18/bin/sqlcmd
 
     steps:
       - uses: actions/checkout@v4
@@ -37,6 +39,17 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: maven
+
+      - name: Set up .NET 10 and SqlPackage 170.5.96
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Install SqlPackage
+        run: |
+          dotnet tool install --global Microsoft.SqlPackage --version 170.5.96
+          test -x "$SQLPACKAGE_PATH"
+          "$SQLPACKAGE_PATH" /Version
 
       # Integration tests run against real containers. Nothing in this build is
       # allowed to skip itself when a dependency is missing: a test that turns
@@ -50,12 +63,16 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y curl gnupg
+          curl -fsSLo /tmp/packages-microsoft-prod.deb \
+            https://packages.microsoft.com/config/ubuntu/24.04/packages-microsoft-prod.deb
+          sudo dpkg -i /tmp/packages-microsoft-prod.deb
           curl -fsSL https://pgp.mongodb.com/server-8.0.asc \
             | sudo gpg --dearmor --yes -o /usr/share/keyrings/mongodb-server-8.0.gpg
           echo "deb [arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-8.0.gpg] https://repo.mongodb.org/apt/ubuntu noble/mongodb-org/8.0 multiverse" \
             | sudo tee /etc/apt/sources.list.d/mongodb-org-8.0.list >/dev/null
           sudo apt-get update
-          sudo apt-get install -y mongodb-database-tools mysql-client postgresql-client sqlite3
+          sudo env ACCEPT_EULA=Y apt-get install -y \
+            mongodb-database-tools mysql-client postgresql-client sqlite3 mssql-tools18
           sudo install -D -m 0755 /usr/bin/mysql /opt/mysql/bin/mysql
           sudo install -D -m 0755 /usr/bin/mysqldump /opt/mysql/bin/mysqldump
           sudo apt-get install -y mariadb-client
@@ -73,11 +90,13 @@ jobs:
           test -x /usr/bin/mongodump
           test -x /usr/bin/mongorestore
           test -x /usr/bin/sqlite3
+          test -x "$SQLCMD_PATH"
+          "$SQLCMD_PATH" -? >/dev/null
 
       - name: Verify
         run: mvn --batch-mode --no-transfer-progress verify
 
-      - name: Build base and Oracle example images
+      - name: Build base and optional engine images
         run: |
           docker build -t dbbackup-ci:base .
           mkdir -p .oracle-client-fixture
@@ -89,3 +108,6 @@ jobs:
             --build-arg BASE_IMAGE=dbbackup-ci:base \
             --build-arg ORACLE_CLIENT_DIR=.oracle-client-fixture \
             -t dbbackup-ci:oracle .
+          docker build -f Dockerfile.sqlserver.example \
+            --build-arg BASE_IMAGE=dbbackup-ci:base \
+            -t dbbackup-ci:sqlserver .
