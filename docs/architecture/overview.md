@@ -21,7 +21,7 @@ core        no dependencies at all — plain Java and Lombok
 | `core` | Domain model, ports, domain exceptions | nothing |
 | `adapters` | Outbound adapters — persistence, encryption, Flyway migrations | `core` |
 | `application` | Use case orchestration | `core` |
-| `web` | HTTP controllers, forms, templates, sign-in and CSRF (`web.security`), `main()` | `application`, `adapters` |
+| `web` | HTTP controllers, Quartz runtime adapter, forms, templates, sign-in and CSRF (`web.security`), `main()` | `application`, `adapters` |
 
 Two consequences are worth stating plainly, because they are the reason for the
 split rather than side effects of it:
@@ -199,6 +199,20 @@ The pool is bounded on both axes. A full queue is refused and recorded as a
 failed execution rather than growing without limit, because every running
 backup is a child process competing for the same disk.
 
+## Scheduling a backup
+
+`backup_schedules` stores the durable recurring intent: one target, a Quartz
+cron expression, an IANA time zone and an enabled flag. Quartz's runtime jobs
+are derived state rather than a second database model. It stays paused during
+startup while `BackupSchedulerStartup` asks the application service to
+reconcile every row into an in-memory trigger, then begins firing.
+
+The Quartz job contains only the schedule UUID. It loads the current definition
+and calls `RunBackupService.start`, so it shares the exact manual-backup path
+and its bounded queue. A missed fire during downtime is skipped; the next
+future fire remains. See
+[ADR-023](../adr/023-quartz-triggers-are-derived-from-backup-schedules.md).
+
 A restore follows the same two-step shape and shares the same pool, so the bound
 is on total heavy work rather than on each kind separately. What a restore
 actually does — and what it deliberately does not — is in
@@ -285,3 +299,7 @@ column or data rewrite is needed.
 `V12` adds `SQLSERVER` to the engine constraint. It reuses the network
 connection shape and existing 128-character columns and does not rewrite any
 stored target.
+
+`V13` adds durable backup schedules. Their target foreign key is restrictive:
+a schedule must be deliberately deleted before its target can be removed.
+Case-folded, trimmed names are unique just as target names are.

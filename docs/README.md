@@ -9,5 +9,10 @@
 - [adr/](adr/) — architecture decision records, numbered from 001 in the order
   the decisions were made.
 
+The current last decision is
+[ADR-023](adr/023-quartz-triggers-are-derived-from-backup-schedules.md), which
+defines recurring backups and why Quartz triggers are rebuilt from the metadata
+schedule table.
+
 These pages describe the code that exists. When a slice changes the code, it
 changes these files in the same commit.
