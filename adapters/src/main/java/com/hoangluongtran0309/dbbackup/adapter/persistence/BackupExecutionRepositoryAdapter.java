@@ -53,6 +53,13 @@ class BackupExecutionRepositoryAdapter implements BackupExecutionRepository {
     }
 
     @Override
+    public List<BackupExecution> findRetentionCandidates(UUID targetId, int keepSuccessful) {
+        return jpaRepository.findRetentionCandidates(targetId, keepSuccessful).stream()
+                .map(BackupExecutionMapper::toDomain)
+                .toList();
+    }
+
+    @Override
     public void deleteById(UUID id) {
         jpaRepository.deleteById(id);
         // Flushed so a foreign key still holding this row surfaces here rather

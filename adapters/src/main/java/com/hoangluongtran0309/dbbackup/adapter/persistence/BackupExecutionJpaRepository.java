@@ -7,6 +7,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import com.hoangluongtran0309.dbbackup.core.model.ExecutionStatus;
 
@@ -36,4 +37,19 @@ interface BackupExecutionJpaRepository extends JpaRepository<BackupExecutionEnti
              ORDER BY target_id, started_at DESC, id DESC
             """, nativeQuery = true)
     List<BackupExecutionEntity> findLatestSucceededPerTarget();
+
+    @Query(value = """
+            SELECT b.* FROM backup_executions b
+             WHERE b.target_id = :targetId
+               AND b.status = 'SUCCEEDED'
+               AND NOT EXISTS (
+                   SELECT 1 FROM restore_executions r
+                    WHERE r.backup_execution_id = b.id
+               )
+             ORDER BY b.started_at DESC, b.id DESC
+             OFFSET :keepSuccessful
+            """, nativeQuery = true)
+    List<BackupExecutionEntity> findRetentionCandidates(
+            @Param("targetId") UUID targetId,
+            @Param("keepSuccessful") int keepSuccessful);
 }

@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout/base :: page('Retention', 'retention', ~{:: #content})}">
+<body>
+<div id="content">
+  <div class="page-header">
+    <div>
+      <div class="eyebrow">Automation</div>
+      <h1>Backup retention</h1>
+      <p>Keep a target's newest successful backups and prune older artifacts after the next successful backup.</p>
+    </div>
+  </div>
+
+  <p class="empty-state panel" th:if="${retention.isEmpty()}">
+    Register a database target before configuring retention.
+  </p>
+
+  <div class="table-wrap responsive-cards" th:unless="${retention.isEmpty()}">
+    <table>
+      <thead>
+        <tr>
+          <th scope="col">Target</th>
+          <th scope="col">Policy</th>
+          <th scope="col">Last run</th>
+          <th scope="col">Outcome</th>
+          <th scope="col"><span class="visually-hidden">Actions</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr th:each="view : ${retention}"
+            th:with="target=${view.target()}, policy=${view.policy().orElse(null)}">
+          <td data-label="Target">
+            <div class="cell-stack">
+              <strong th:text="${target.name}">production</strong>
+              <span class="field-hint" th:text="${target.engine.displayName}">MySQL</span>
+            </div>
+          </td>
+          <td data-label="Policy">
+            <span class="badge badge-neutral" th:if="${policy == null}">Disabled</span>
+            <span th:if="${policy != null}" th:text="|Keep ${policy.keepSuccessful} successful|">Keep 7 successful</span>
+          </td>
+          <td data-label="Last run">
+            <span class="badge badge-neutral" th:if="${policy == null or policy.lastRunAt == null}">Never</span>
+            <span class="mono nowrap" th:if="${policy != null and policy.lastRunAt != null}"
+                  th:text="${#temporals.format(policy.lastRunAt.atOffset(T(java.time.ZoneOffset).UTC), 'yyyy-MM-dd HH:mm:ss')} + ' UTC'">2026-09-22 03:00:00 UTC</span>
+          </td>
+          <td data-label="Outcome">
+            <span class="badge badge-neutral" th:if="${policy == null or policy.lastRunAt == null}">—</span>
+            <span class="badge badge-success"
+                  th:if="${policy != null and policy.lastRunAt != null and !policy.lastRunFailed()}"
+                  th:text="|Deleted ${policy.lastDeletedCount}|">Deleted 2</span>
+            <div class="cell-stack" th:if="${policy != null and policy.lastRunFailed()}">
+              <span class="badge badge-danger">Failed</span>
+              <span class="check-message" th:text="${policy.lastError}">Permission denied</span>
+              <span class="field-hint" th:text="|${policy.lastDeletedCount} deleted before the failure|">1 deleted before the failure</span>
+            </div>
+          </td>
+          <td class="actions">
+            <div class="row-actions">
+              <a class="button button-small" th:href="@{/retention/{id}/edit(id=${target.id})}"
+                 th:text="${policy == null ? 'Enable' : 'Edit'}">Edit</a>
+              <form method="post" th:if="${policy != null}"
+                    th:action="@{/retention/{id}/disable(id=${target.id})}"
+                    data-confirm="Disable automatic retention? Existing backups are kept."
+                    data-confirm-title="Disable retention" data-confirm-accept="Disable">
+                <button class="button button-small button-danger" type="submit" data-busy-label="Disabling…">Disable</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+</body>
+</html>

@@ -10,9 +10,9 @@
   the decisions were made.
 
 The current last decision is
-[ADR-023](adr/023-quartz-triggers-are-derived-from-backup-schedules.md), which
-defines recurring backups and why Quartz triggers are rebuilt from the metadata
-schedule table.
+[ADR-024](adr/024-retention-keeps-new-unrestored-backups-per-target.md), which
+defines per-target automatic retention and why backups with restore history do
+not count toward its rotating limit.
 
 These pages describe the code that exists. When a slice changes the code, it
 changes these files in the same commit.

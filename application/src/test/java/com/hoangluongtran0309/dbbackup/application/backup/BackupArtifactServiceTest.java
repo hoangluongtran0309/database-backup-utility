@@ -305,6 +305,42 @@ class BackupArtifactServiceTest {
         assertThat(preview.refusal()).startsWith("One of these backups is still running");
     }
 
+    // --- automatic retention ----------------------------------------------
+
+    @Test
+    void retentionDeletesTheArtifactBeforeTheRowWithoutTouchingRestoreHistory() {
+        givenSucceeded();
+        when(restores.countForBackup(BACKUP_ID)).thenReturn(0L);
+
+        assertThat(service.deleteForRetention(BACKUP_ID))
+                .isEqualTo(BackupArtifactService.RetentionDeletion.DELETED);
+
+        InOrder order = inOrder(storage, backups);
+        order.verify(storage).delete(ARTIFACT);
+        order.verify(backups).deleteById(BACKUP_ID);
+        verify(restores, never()).deleteForBackup(any());
+    }
+
+    @Test
+    void retentionNeverDeletesABackupWithRestoreHistory() {
+        givenSucceeded();
+        when(restores.countForBackup(BACKUP_ID)).thenReturn(1L);
+
+        assertThat(service.deleteForRetention(BACKUP_ID))
+                .isEqualTo(BackupArtifactService.RetentionDeletion.PROTECTED);
+
+        verify(storage, never()).delete(any());
+        verify(backups, never()).deleteById(any());
+    }
+
+    @Test
+    void retentionTreatsAnAlreadyDeletedCandidateAsHarmless() {
+        when(backups.findById(BACKUP_ID)).thenReturn(Optional.empty());
+
+        assertThat(service.deleteForRetention(BACKUP_ID))
+                .isEqualTo(BackupArtifactService.RetentionDeletion.ALREADY_GONE);
+    }
+
     // --- verify -------------------------------------------------------------
 
     @Test
