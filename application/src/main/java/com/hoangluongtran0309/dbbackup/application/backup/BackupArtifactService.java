@@ -14,22 +14,22 @@ import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import com.hoangluongtran0309.dbbackup.core.model.BackupExecution;
 import com.hoangluongtran0309.dbbackup.core.model.ExecutionStatus;
 import com.hoangluongtran0309.dbbackup.core.model.RestoreExecution;
 import com.hoangluongtran0309.dbbackup.core.port.BackupExecutionRepository;
 import com.hoangluongtran0309.dbbackup.core.port.RestoreExecutionRepository;
-import com.hoangluongtran0309.dbbackup.core.port.StoragePort;
+import com.hoangluongtran0309.dbbackup.application.storage.ArtifactStorageService;
+import com.hoangluongtran0309.dbbackup.core.model.ArtifactReference;
 
-import lombok.RequiredArgsConstructor;
 
 /**
  * Getting a backup artifact out of the tool, checking it is still what was
  * written, and getting rid of it.
  */
 @Service
-@RequiredArgsConstructor
 public class BackupArtifactService {
 
     private static final Logger log = LoggerFactory.getLogger(BackupArtifactService.class);
@@ -103,22 +103,33 @@ public class BackupArtifactService {
 
     private final BackupExecutionRepository backups;
     private final RestoreExecutionRepository restores;
-    private final StoragePort storage;
+    private final ArtifactStorageService storage;
+
+    @Autowired
+    public BackupArtifactService(BackupExecutionRepository backups, RestoreExecutionRepository restores,
+            ArtifactStorageService storage) {
+        this.backups = backups; this.restores = restores; this.storage = storage;
+    }
+
+    public BackupArtifactService(BackupExecutionRepository backups, RestoreExecutionRepository restores,
+            com.hoangluongtran0309.dbbackup.core.port.StoragePort storage) {
+        this(backups, restores, ArtifactStorageService.localOnly(storage));
+    }
 
     /**
      * @throws NoSuchElementException if the backup, or its artifact, is not there
      */
     public ArtifactDownload download(UUID executionId) {
         BackupExecution execution = require(executionId);
-        Path artifact = artifactOf(execution);
+        ArtifactReference artifact = artifactOf(execution);
 
         if (!storage.exists(artifact)) {
             // The row outlives the file if someone removed it from underneath
             // us. Saying so beats a stack trace or an empty download.
             throw new NoSuchElementException(
-                    "The artifact for this backup is no longer on disk: " + artifact);
+                    "The artifact for this backup is no longer available: " + artifact.locator());
         }
-        return new ArtifactDownload(artifact.getFileName().toString(), storage.openForReading(artifact));
+        return new ArtifactDownload(Path.of(artifact.locator()).getFileName().toString(), storage.openForReading(artifact));
     }
 
     /**
@@ -134,12 +145,12 @@ public class BackupArtifactService {
      */
     public Verification verify(UUID executionId) {
         BackupExecution execution = require(executionId);
-        Path artifact = artifactOf(execution);
+        ArtifactReference artifact = artifactOf(execution);
 
         if (!storage.exists(artifact)) {
             return new Verification(Integrity.MISSING, execution.getSha256(), null);
         }
-        String actual = storage.sha256Of(artifact);
+        String actual = storage.sha256(artifact);
         if (!execution.hasChecksum()) {
             return new Verification(Integrity.NOT_RECORDED, null, actual);
         }
@@ -151,7 +162,7 @@ public class BackupArtifactService {
 
     /** Whether a backup's artifact is still on disk; false if it never had one. */
     public boolean isOnDisk(BackupExecution execution) {
-        return execution.getArtifactPath() != null && storage.exists(Path.of(execution.getArtifactPath()));
+        return execution.getArtifactLocator() != null && storage.exists(artifactOf(execution));
     }
 
     public DeletionPreview previewDeletion(UUID executionId) {
@@ -243,22 +254,22 @@ public class BackupArtifactService {
                 || restores.countForBackup(executionId) > 0) {
             return RetentionDeletion.PROTECTED;
         }
-        if (execution.getArtifactPath() != null) {
-            storage.delete(Path.of(execution.getArtifactPath()));
+        if (execution.getArtifactLocator() != null) {
+            storage.delete(artifactOf(execution));
         }
         backups.deleteById(executionId);
-        log.info("Retention deleted backup {} and its artifact {}", executionId, execution.getArtifactPath());
+        log.info("Retention deleted backup {} and its artifact {}", executionId, execution.getArtifactLocator());
         return RetentionDeletion.DELETED;
     }
 
     private boolean remove(BackupExecution execution) {
-        boolean hadArtifact = execution.getArtifactPath() != null;
+        boolean hadArtifact = execution.getArtifactLocator() != null;
         restores.deleteForBackup(execution.getId());
         if (hadArtifact) {
-            storage.delete(Path.of(execution.getArtifactPath()));
+            storage.delete(artifactOf(execution));
         }
         backups.deleteById(execution.getId());
-        log.info("Deleted backup {} and its artifact {}", execution.getId(), execution.getArtifactPath());
+        log.info("Deleted backup {} and its artifact {}", execution.getId(), execution.getArtifactLocator());
         return hadArtifact;
     }
 
@@ -293,11 +304,11 @@ public class BackupArtifactService {
                 .orElseThrow(() -> new NoSuchElementException("No backup execution with id " + executionId));
     }
 
-    private static Path artifactOf(BackupExecution execution) {
-        if (execution.getArtifactPath() == null) {
+    private static ArtifactReference artifactOf(BackupExecution execution) {
+        if (execution.getArtifactLocator() == null) {
             throw new NoSuchElementException(
                     "That backup produced no artifact — it is %s".formatted(execution.getStatus()));
         }
-        return Path.of(execution.getArtifactPath());
+        return new ArtifactReference(execution.getStorageProfileId(), execution.getArtifactLocator());
     }
 }

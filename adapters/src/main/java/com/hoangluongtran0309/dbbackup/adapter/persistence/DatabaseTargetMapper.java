@@ -23,6 +23,7 @@ final class DatabaseTargetMapper {
         entity.setUsername(target.getUsername());
         entity.setAuthenticationDatabase(target.getAuthenticationDatabase());
         entity.setDataPumpDirectory(target.getDataPumpDirectory());
+        entity.setStorageProfileId(target.getStorageProfileId());
         entity.setPasswordEnc(target.getPasswordCiphertext());
         entity.setCreatedAt(target.getCreatedAt());
 
@@ -64,6 +65,7 @@ final class DatabaseTargetMapper {
                 .username(entity.getUsername())
                 .authenticationDatabase(entity.getAuthenticationDatabase())
                 .dataPumpDirectory(entity.getDataPumpDirectory())
+                .storageProfileId(entity.getStorageProfileId())
                 .passwordCiphertext(entity.getPasswordEnc())
                 .createdAt(entity.getCreatedAt())
                 .lastConnectionCheck(toConnectionCheck(entity))

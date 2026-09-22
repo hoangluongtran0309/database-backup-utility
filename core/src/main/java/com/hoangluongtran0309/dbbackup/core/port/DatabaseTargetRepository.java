@@ -29,6 +29,8 @@ public interface DatabaseTargetRepository {
 
     Optional<DatabaseTarget> findById(UUID id);
 
+    long countForStorageProfile(UUID storageProfileId);
+
     /** Silent when the id is unknown — deleting an absent target is not an error. */
     void deleteById(UUID id);
 

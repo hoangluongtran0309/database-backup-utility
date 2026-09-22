@@ -7,7 +7,7 @@
   <parent>
     <groupId>com.hoangluongtran0309</groupId>
     <artifactId>database-backup-utility</artifactId>
-    <version>0.11.0</version>
+    <version>0.12.0</version>
   </parent>
 
   <artifactId>adapters</artifactId>
@@ -43,6 +43,15 @@
       <groupId>org.postgresql</groupId>
       <artifactId>postgresql</artifactId>
       <scope>runtime</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>software.amazon.awssdk</groupId>
+      <artifactId>s3</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>software.amazon.awssdk</groupId>
+      <artifactId>s3-transfer-manager</artifactId>
     </dependency>
 
     <!--
@@ -124,10 +133,30 @@
         <artifactId>maven-failsafe-plugin</artifactId>
         <executions>
           <execution>
+            <id>default</id>
             <goals>
               <goal>integration-test</goal>
               <goal>verify</goal>
             </goals>
+            <configuration>
+              <excludes>
+                <exclude>**/S3StorageAdapterIT.java</exclude>
+              </excludes>
+            </configuration>
+          </execution>
+          <execution>
+            <id>s3-integration-tests</id>
+            <goals>
+              <goal>integration-test</goal>
+              <goal>verify</goal>
+            </goals>
+            <configuration>
+              <includes>
+                <include>**/S3StorageAdapterIT.java</include>
+              </includes>
+              <forkCount>1</forkCount>
+              <reuseForks>false</reuseForks>
+            </configuration>
           </execution>
         </executions>
       </plugin>

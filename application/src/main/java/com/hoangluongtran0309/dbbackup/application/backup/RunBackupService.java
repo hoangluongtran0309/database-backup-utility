@@ -1,6 +1,5 @@
 package com.hoangluongtran0309.dbbackup.application.backup;
 
-import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -14,9 +13,12 @@ import java.util.concurrent.RejectedExecutionException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import com.hoangluongtran0309.dbbackup.application.EngineAdapterRegistry;
 import com.hoangluongtran0309.dbbackup.application.retention.ApplyBackupRetentionService;
+import com.hoangluongtran0309.dbbackup.application.storage.ArtifactStorageService;
+import com.hoangluongtran0309.dbbackup.application.storage.ArtifactStorageService.PreparedWrite;
 import com.hoangluongtran0309.dbbackup.core.exception.BackupFailedException;
 import com.hoangluongtran0309.dbbackup.core.model.BackupExecution;
 import com.hoangluongtran0309.dbbackup.core.model.DatabaseConnection;
@@ -25,9 +27,8 @@ import com.hoangluongtran0309.dbbackup.core.port.BackupExecutionRepository;
 import com.hoangluongtran0309.dbbackup.core.port.DatabaseTargetRepository;
 import com.hoangluongtran0309.dbbackup.core.port.EncryptionPort;
 import com.hoangluongtran0309.dbbackup.core.port.LogicalBackupPort;
-import com.hoangluongtran0309.dbbackup.core.port.StoragePort;
+import com.hoangluongtran0309.dbbackup.core.model.ArtifactReference;
 
-import lombok.RequiredArgsConstructor;
 
 /**
  * Starts backups and runs them.
@@ -38,7 +39,6 @@ import lombok.RequiredArgsConstructor;
  * lost in-memory task. {@link #run} is what the background thread executes.
  */
 @Service
-@RequiredArgsConstructor
 public class RunBackupService {
 
     private static final Logger log = LoggerFactory.getLogger(RunBackupService.class);
@@ -49,11 +49,26 @@ public class RunBackupService {
     private final DatabaseTargetRepository targets;
     private final BackupExecutionRepository executions;
     private final EngineAdapterRegistry adapters;
-    private final StoragePort storage;
+    private final ArtifactStorageService storage;
     private final EncryptionPort encryption;
     private final Executor jobExecutor;
     private final Clock clock;
     private final ApplyBackupRetentionService retention;
+
+    @Autowired
+    public RunBackupService(DatabaseTargetRepository targets, BackupExecutionRepository executions,
+            EngineAdapterRegistry adapters, ArtifactStorageService storage, EncryptionPort encryption,
+            Executor jobExecutor, Clock clock, ApplyBackupRetentionService retention) {
+        this.targets = targets; this.executions = executions; this.adapters = adapters; this.storage = storage;
+        this.encryption = encryption; this.jobExecutor = jobExecutor; this.clock = clock; this.retention = retention;
+    }
+
+    public RunBackupService(DatabaseTargetRepository targets, BackupExecutionRepository executions,
+            EngineAdapterRegistry adapters, com.hoangluongtran0309.dbbackup.core.port.StoragePort storage,
+            EncryptionPort encryption, Executor jobExecutor, Clock clock, ApplyBackupRetentionService retention) {
+        this(targets, executions, adapters, ArtifactStorageService.localOnly(storage), encryption,
+                jobExecutor, clock, retention);
+    }
 
     /**
      * Accepts a backup and hands it to the background.
@@ -72,7 +87,7 @@ public class RunBackupService {
         LogicalBackupPort backupEngine = adapters.backupFor(target.getEngine());
 
         BackupExecution execution = executions.save(
-                BackupExecution.started(UUID.randomUUID(), targetId, clock.instant()));
+                BackupExecution.started(UUID.randomUUID(), targetId, target.getStorageProfileId(), clock.instant()));
 
         try {
             jobExecutor.execute(() -> run(execution.getId(), target, backupEngine));
@@ -87,30 +102,35 @@ public class RunBackupService {
     /** Runs one accepted backup. Called on a background thread; never throws. */
     void run(UUID executionId, DatabaseTarget target, LogicalBackupPort backupEngine) {
         BackupExecution execution = executions.findById(executionId).orElseThrow();
-        Path destination = storage.locationFor(
-                artifactFileName(target, execution.getStartedAt(), backupEngine.artifactSuffix()));
-
-        try {
+        String filename = artifactFileName(target, execution.getStartedAt(), backupEngine.artifactSuffix());
+        ArtifactReference published = null;
+        try (PreparedWrite destination = storage.prepareWrite(
+                execution.getStorageProfileId(), target.getId(), executionId, filename)) {
             // Decrypted here, at the last moment and on the thread that uses
             // it, rather than being carried through the queue.
             DatabaseConnection connection = connectionTo(target);
 
-            long sizeBytes = backupEngine.dumpTo(connection, destination, executionId);
+            long reportedSize = backupEngine.dumpTo(connection, destination.path(), executionId);
             // Read back from disk once the engine has closed the file, so the
             // checksum describes what was stored rather than what was sent.
-            String sha256 = storage.sha256Of(destination);
-            executions.save(execution.succeeded(destination.toString(), sizeBytes, sha256, clock.instant()));
+            long sizeBytes = storage.size(destination.path(), destination.remote(), reportedSize);
+            String sha256 = storage.sha256(destination.path(), destination.remote());
+            published = storage.publish(destination);
+            executions.save(execution.succeeded(published.locator(), sizeBytes, sha256, clock.instant()));
             log.info("Backup {} of target {} succeeded: {} ({} bytes, sha256 {})",
-                    executionId, target.getName(), destination, sizeBytes, sha256);
+                    executionId, target.getName(), published.locator(), sizeBytes, sha256);
 
         } catch (BackupFailedException e) {
+            if (execution.getStorageProfileId() != null) {
+                cleanupFailedArtifact(execution, published, filename);
+            }
             finish(execution, e.getMessage());
             return;
         } catch (RuntimeException e) {
             // Anything unexpected still has to land on the row, or the console
             // shows RUNNING for a job that has already died.
             log.error("Backup {} of target {} failed unexpectedly", executionId, target.getName(), e);
-            storage.delete(destination);
+            cleanupFailedArtifact(execution, published, filename);
             finish(execution, e.toString());
             return;
         }
@@ -153,9 +173,11 @@ public class RunBackupService {
                 log.error("Could not stop external work for interrupted backup {}", execution.getId(), e);
             }
             try {
-                Path partial = storage.locationFor(
-                        artifactFileName(target, execution.getStartedAt(), adapter.artifactSuffix()));
-                storage.delete(partial);
+                String filename = artifactFileName(target, execution.getStartedAt(), adapter.artifactSuffix());
+                try (PreparedWrite partial = storage.prepareWrite(
+                        execution.getStorageProfileId(), target.getId(), execution.getId(), filename)) {
+                    storage.delete(partial.reference());
+                }
             } catch (RuntimeException e) {
                 message += " Partial artifact cleanup failed: " + e.getMessage();
                 log.error("Could not remove partial artifact for interrupted backup {}", execution.getId(), e);
@@ -170,6 +192,21 @@ public class RunBackupService {
 
     private void finish(BackupExecution execution, String message) {
         executions.save(execution.failed(message, clock.instant()));
+    }
+
+    private void cleanupFailedArtifact(BackupExecution execution, ArtifactReference published, String filename) {
+        try {
+            if (published != null) {
+                storage.delete(published);
+            } else {
+                try (PreparedWrite planned = storage.prepareWrite(
+                        execution.getStorageProfileId(), execution.getTargetId(), execution.getId(), filename)) {
+                    storage.delete(planned.reference());
+                }
+            }
+        } catch (RuntimeException cleanupFailure) {
+            log.warn("Could not clean up artifact for failed backup {}", execution.getId(), cleanupFailure);
+        }
     }
 
     private DatabaseConnection connectionTo(DatabaseTarget target) {

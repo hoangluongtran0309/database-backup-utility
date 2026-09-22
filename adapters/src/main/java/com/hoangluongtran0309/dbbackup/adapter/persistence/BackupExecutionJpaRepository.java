@@ -17,6 +17,8 @@ interface BackupExecutionJpaRepository extends JpaRepository<BackupExecutionEnti
 
     List<BackupExecutionEntity> findByTargetId(UUID targetId);
 
+    long countByStorageProfileId(UUID storageProfileId);
+
     /** A Slice, not a Page: it reads one row past the page instead of counting the table. */
     Slice<BackupExecutionEntity> findAllBy(Pageable pageable);
 

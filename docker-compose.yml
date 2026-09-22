@@ -49,6 +49,8 @@ services:
       OPERATOR_USERNAME: ${OPERATOR_USERNAME:-admin}
       OPERATOR_PASSWORD_HASH: ${OPERATOR_PASSWORD_HASH}
       SQLITE_ROOT: /var/lib/dbbackup/sqlite
+      BACKUP_DIR: /var/lib/dbbackup/backups
+      STORAGE_STAGING_DIR: /var/lib/dbbackup/backups/.staging
     ports:
       - "8080:8080"
     volumes:

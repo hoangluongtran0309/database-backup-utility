@@ -40,8 +40,11 @@ class BackupExecutionEntity {
     @Column(name = "finished_at")
     private Instant finishedAt;
 
-    @Column(name = "artifact_path", columnDefinition = "text")
-    private String artifactPath;
+    @Column(name = "artifact_locator", columnDefinition = "text")
+    private String artifactLocator;
+
+    @Column(name = "storage_profile_id")
+    private UUID storageProfileId;
 
     @Column(name = "size_bytes")
     private Long sizeBytes;

@@ -44,6 +44,8 @@ public interface BackupExecutionRepository {
      */
     List<BackupExecution> findAllForTarget(UUID targetId);
 
+    long countForStorageProfile(UUID storageProfileId);
+
     /**
      * Successful backups that automatic retention may remove, newest first.
      * Backups with any restore history are excluded before the newest

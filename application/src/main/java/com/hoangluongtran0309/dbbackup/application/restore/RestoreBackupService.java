@@ -11,11 +11,15 @@ import java.util.concurrent.RejectedExecutionException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import com.hoangluongtran0309.dbbackup.application.EngineAdapterRegistry;
 import com.hoangluongtran0309.dbbackup.application.backup.BackupActivityGuard;
+import com.hoangluongtran0309.dbbackup.application.storage.ArtifactStorageService;
+import com.hoangluongtran0309.dbbackup.application.storage.ArtifactStorageService.PreparedRead;
 import com.hoangluongtran0309.dbbackup.core.exception.RestoreFailedException;
 import com.hoangluongtran0309.dbbackup.core.model.BackupExecution;
+import com.hoangluongtran0309.dbbackup.core.model.ArtifactReference;
 import com.hoangluongtran0309.dbbackup.core.model.DatabaseConnection;
 import com.hoangluongtran0309.dbbackup.core.model.DatabaseTarget;
 import com.hoangluongtran0309.dbbackup.core.model.ExecutionStatus;
@@ -25,9 +29,7 @@ import com.hoangluongtran0309.dbbackup.core.port.DatabaseTargetRepository;
 import com.hoangluongtran0309.dbbackup.core.port.EncryptionPort;
 import com.hoangluongtran0309.dbbackup.core.port.RestoreExecutionRepository;
 import com.hoangluongtran0309.dbbackup.core.port.LogicalRestorePort;
-import com.hoangluongtran0309.dbbackup.core.port.StoragePort;
 
-import lombok.RequiredArgsConstructor;
 
 /**
  * Loads a backup artifact into a target: the one it came from, or any other
@@ -38,7 +40,6 @@ import lombok.RequiredArgsConstructor;
  * restore has a URL to poll and a crash leaves evidence.
  */
 @Service
-@RequiredArgsConstructor
 public class RestoreBackupService {
 
     private static final Logger log = LoggerFactory.getLogger(RestoreBackupService.class);
@@ -47,11 +48,28 @@ public class RestoreBackupService {
     private final RestoreExecutionRepository restores;
     private final DatabaseTargetRepository targets;
     private final EngineAdapterRegistry adapters;
-    private final StoragePort storage;
+    private final ArtifactStorageService storage;
     private final EncryptionPort encryption;
     private final Executor jobExecutor;
     private final Clock clock;
     private final BackupActivityGuard activityGuard;
+
+    @Autowired
+    public RestoreBackupService(BackupExecutionRepository backups, RestoreExecutionRepository restores,
+            DatabaseTargetRepository targets, EngineAdapterRegistry adapters, ArtifactStorageService storage,
+            EncryptionPort encryption, Executor jobExecutor, Clock clock, BackupActivityGuard activityGuard) {
+        this.backups = backups; this.restores = restores; this.targets = targets; this.adapters = adapters;
+        this.storage = storage; this.encryption = encryption; this.jobExecutor = jobExecutor;
+        this.clock = clock; this.activityGuard = activityGuard;
+    }
+
+    public RestoreBackupService(BackupExecutionRepository backups, RestoreExecutionRepository restores,
+            DatabaseTargetRepository targets, EngineAdapterRegistry adapters,
+            com.hoangluongtran0309.dbbackup.core.port.StoragePort storage, EncryptionPort encryption,
+            Executor jobExecutor, Clock clock, BackupActivityGuard activityGuard) {
+        this(backups, restores, targets, adapters, ArtifactStorageService.localOnly(storage), encryption,
+                jobExecutor, clock, activityGuard);
+    }
 
     /**
      * Accepts a restore of {@code backupExecutionId} into {@code targetId}.
@@ -112,15 +130,20 @@ public class RestoreBackupService {
             BackupExecution backup,
             LogicalRestorePort restoreEngine) {
         RestoreExecution execution = restores.findById(restoreId).orElseThrow();
-        Path artifact = Path.of(backup.getArtifactPath());
-        try {
-            requireIntact(backup, artifact);
+        String filename = Path.of(backup.getArtifactLocator()).getFileName().toString();
+        ArtifactReference reference = new ArtifactReference(backup.getStorageProfileId(), backup.getArtifactLocator());
+        if (!storage.exists(reference)) {
+            finish(execution, "The backup artifact is no longer available. Nothing was restored.");
+            return;
+        }
+        try (PreparedRead artifact = storage.materialize(reference, restoreId, filename)) {
+            requireIntact(backup, artifact.path(), artifact.staged());
 
             DatabaseConnection connection = connectionTo(target);
 
-            restoreEngine.restore(connection, sourceNamespace, artifact, restoreId);
+            restoreEngine.restore(connection, sourceNamespace, artifact.path(), restoreId);
             restores.save(execution.succeeded(clock.instant()));
-            log.info("Restore {} of {} into target {} succeeded", restoreId, artifact, target.getName());
+            log.info("Restore {} of {} into target {} succeeded", restoreId, reference.locator(), target.getName());
 
         } catch (RestoreFailedException e) {
             finish(execution, e.getMessage());
@@ -138,15 +161,11 @@ public class RestoreBackupService {
      * <p>A backup made before checksums were recorded is restored unchecked, as
      * it always was.
      */
-    private void requireIntact(BackupExecution backup, Path artifact) {
-        if (!storage.exists(artifact)) {
-            throw new RestoreFailedException(
-                    "The backup artifact '%s' is no longer on disk. Nothing was restored.".formatted(artifact));
-        }
+    private void requireIntact(BackupExecution backup, Path artifact, boolean staged) {
         if (!backup.hasChecksum()) {
             return;
         }
-        String actual = storage.sha256Of(artifact);
+        String actual = storage.sha256(artifact, staged);
         if (!backup.getSha256().equals(actual)) {
             throw new RestoreFailedException((
                     "The backup artifact '%s' does not match the checksum recorded when it was made "
@@ -168,6 +187,12 @@ public class RestoreBackupService {
             } catch (RuntimeException e) {
                 message += " External engine cleanup was not confirmed: " + e.getMessage();
                 log.error("Could not clean up interrupted restore {}", execution.getId(), e);
+            }
+            try {
+                storage.cleanup(execution.getId());
+            } catch (RuntimeException e) {
+                message += " Staging cleanup failed: " + e.getMessage();
+                log.error("Could not clean staging for interrupted restore {}", execution.getId(), e);
             }
             finish(execution, message);
         });

@@ -10,6 +10,8 @@ import org.springframework.data.repository.query.Param;
 
 interface DatabaseTargetJpaRepository extends JpaRepository<DatabaseTargetEntity, UUID> {
 
+    long countByStorageProfileId(UUID storageProfileId);
+
     /**
      * Whether a target other than {@code id} already has this name, compared
      * the way the unique index in V1 compares it: {@code lower(btrim(name))}.

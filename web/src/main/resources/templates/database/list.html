@@ -26,6 +26,7 @@
           <th scope="col">Name</th>
           <th scope="col">Engine</th>
           <th scope="col">Location</th>
+          <th scope="col">Destination</th>
           <th scope="col">Last check</th>
           <th scope="col">Last backup</th>
           <th scope="col"><span class="visually-hidden">Actions</span></th>
@@ -39,6 +40,11 @@
               <span class="badge badge-neutral" th:text="${target.engine.displayName}">MySQL</span>
               <span class="badge badge-warning" th:unless="${availableEngines.contains(target.engine)}">Client unavailable</span>
             </div>
+          </td>
+          <td data-label="Destination">
+            <span th:if="${target.storageProfileId == null}">Local filesystem</span>
+            <a th:unless="${target.storageProfileId == null}" th:href="@{/storage/{id}/edit(id=${target.storageProfileId})}"
+               th:text="${storageProfileNames.get(target.storageProfileId)}">S3 profile</a>
           </td>
           <!-- The user rides under the address rather than in a column of its
                own: with Last backup added the row no longer fitted, and who a

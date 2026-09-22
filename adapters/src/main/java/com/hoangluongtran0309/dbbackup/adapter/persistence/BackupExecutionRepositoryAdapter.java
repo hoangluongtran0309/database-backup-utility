@@ -53,6 +53,11 @@ class BackupExecutionRepositoryAdapter implements BackupExecutionRepository {
     }
 
     @Override
+    public long countForStorageProfile(UUID storageProfileId) {
+        return jpaRepository.countByStorageProfileId(storageProfileId);
+    }
+
+    @Override
     public List<BackupExecution> findRetentionCandidates(UUID targetId, int keepSuccessful) {
         return jpaRepository.findRetentionCandidates(targetId, keepSuccessful).stream()
                 .map(BackupExecutionMapper::toDomain)
