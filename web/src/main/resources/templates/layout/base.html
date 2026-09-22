@@ -15,8 +15,8 @@
   same theme, styles and script.
 -->
 <html lang="en" xmlns:th="http://www.thymeleaf.org" th:fragment="page(title, section, content)"
-      th:with="sectionLabel=${section == 'targets' ? 'Targets' : (section == 'backups' ? 'Backups' : (section == 'restores' ? 'Restores' : null))},
-               sectionUrl=${section == 'backups' ? '/executions' : (section == 'restores' ? '/restores' : '/databases')},
+      th:with="sectionLabel=${section == 'targets' ? 'Targets' : (section == 'schedules' ? 'Schedules' : (section == 'backups' ? 'Backups' : (section == 'restores' ? 'Restores' : null)))},
+               sectionUrl=${section == 'schedules' ? '/schedules' : (section == 'backups' ? '/executions' : (section == 'restores' ? '/restores' : '/databases'))},
                showFlash=${section != 'error'}">
 <head th:fragment="head(title)">
   <meta charset="utf-8">
@@ -52,6 +52,9 @@
         <a class="nav-item" th:href="@{/databases}"
            th:classappend="${section == 'targets'} ? 'active'"
            th:attr="aria-current=${section == 'targets' ? 'page' : null}"><span aria-hidden="true">◎</span>Targets</a>
+        <a class="nav-item" th:href="@{/schedules}"
+           th:classappend="${section == 'schedules'} ? 'active'"
+           th:attr="aria-current=${section == 'schedules' ? 'page' : null}"><span aria-hidden="true">◷</span>Schedules</a>
       </div>
       <div class="nav-group">
         <div class="nav-label">Operations</div>

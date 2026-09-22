@@ -2,6 +2,7 @@ package com.hoangluongtran0309.dbbackup.web;
 
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 import com.hoangluongtran0309.dbbackup.application.backup.RunBackupService;
@@ -25,6 +26,7 @@ class InterruptedJobRepair {
     private final RestoreBackupService restoreBackupService;
 
     @EventListener(ApplicationReadyEvent.class)
+    @Order(0)
     void repairInterruptedJobs() {
         runBackupService.failInterruptedBackups();
         restoreBackupService.failInterruptedRestores();

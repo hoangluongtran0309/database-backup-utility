@@ -95,16 +95,21 @@ included — before the next one starts.
 
 ## Deferred after engine coverage
 
-These are ordered, but not numbered as slices until the item before them is
-complete and their design is decided.
+The first post-engine item is now complete. The remaining items stay ordered,
+but are not numbered as slices until the item before them is complete and
+their design is decided.
 
-1. [ ] Backup jobs and a Quartz scheduler.
-2. [ ] Automatic retention.
-3. [ ] Storage profiles and S3-compatible storage, then GCS and Azure.
-4. [ ] Notifications.
-5. [ ] Restore verification in a temporary database.
-6. [ ] A CLI inbound adapter.
-7. [ ] CI/CD, security scanning and end-to-end hardening.
+- [x] **21. Backup schedules with Quartz.** Persist named target/cron/time-zone
+      definitions, create and pause them in the console, rebuild Quartz
+      triggers at startup, and route every fire through the ordinary backup
+      execution path. See ADR-023.
+
+1. [ ] Automatic retention.
+2. [ ] Storage profiles and S3-compatible storage, then GCS and Azure.
+3. [ ] Notifications.
+4. [ ] Restore verification in a temporary database.
+5. [ ] A CLI inbound adapter.
+6. [ ] CI/CD, security scanning and end-to-end hardening.
 
 ## Deliberately out of scope
 

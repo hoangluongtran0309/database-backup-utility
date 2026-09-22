@@ -37,6 +37,15 @@ spring:
       # matches it, and refuses to start when a migration is missing.
       ddl-auto: validate
 
+  quartz:
+    # backup_schedules is the source of truth. Quartz stays paused until the
+    # ApplicationReady reconciliation has rebuilt every in-memory trigger.
+    auto-startup: false
+    properties:
+      org.quartz.scheduler.instanceName: dbbackup-scheduler
+      org.quartz.threadPool.threadCount: 1
+      org.quartz.threadPool.threadNamePrefix: dbbackup-scheduler-
+
 management:
   endpoints:
     web:

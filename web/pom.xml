@@ -50,6 +50,12 @@
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-actuator</artifactId>
     </dependency>
+    <!-- Recurring backup triggers. Persistent schedule definitions remain in
+         our own domain table and are reconciled into Quartz at startup. -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-quartz</artifactId>
+    </dependency>
 
     <!-- Boot 4 splits the slice-test support out of spring-boot-starter-test. -->
     <dependency>

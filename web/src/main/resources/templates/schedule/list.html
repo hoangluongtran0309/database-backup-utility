@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout/base :: page('Schedules', 'schedules', ~{:: #content})}">
+<body>
+<div id="content">
+  <div class="page-header">
+    <div>
+      <div class="eyebrow">Automation</div>
+      <h1>Backup schedules</h1>
+      <p>Recurring full logical backups. Times are interpreted in each schedule's own zone.</p>
+    </div>
+    <div class="actions">
+      <a class="button button-primary" th:href="@{/schedules/new}">Add schedule</a>
+    </div>
+  </div>
+
+  <p class="empty-state panel" th:if="${schedules.isEmpty()}">
+    No schedules yet. <a th:href="@{/schedules/new}">Add one</a>, or keep backing up targets manually.
+  </p>
+
+  <div class="table-wrap responsive-cards" th:unless="${schedules.isEmpty()}">
+    <table>
+      <thead>
+        <tr>
+          <th scope="col">Name</th>
+          <th scope="col">Target</th>
+          <th scope="col">Cron</th>
+          <th scope="col">Next run</th>
+          <th scope="col">State</th>
+          <th scope="col"><span class="visually-hidden">Actions</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr th:each="view : ${schedules}" th:with="schedule=${view.schedule()}">
+          <td data-label="Name"><strong th:text="${schedule.name}">Nightly</strong></td>
+          <td data-label="Target" th:text="${targetNames.get(schedule.targetId)}">production</td>
+          <td data-label="Cron">
+            <div class="cell-stack">
+              <span class="mono" th:text="${schedule.cronExpression}">0 0 2 * * ?</span>
+              <span class="field-hint" th:text="${schedule.zoneId}">UTC</span>
+            </div>
+          </td>
+          <td data-label="Next run">
+            <span class="mono nowrap" th:if="${view.nextFireTime().isPresent()}"
+                  th:text="${#temporals.format(view.nextFireTime().get().atZone(T(java.time.ZoneId).of(schedule.zoneId)), 'yyyy-MM-dd HH:mm:ss z')}">2026-09-22 02:00:00 UTC</span>
+            <span class="badge badge-neutral" th:unless="${view.nextFireTime().isPresent()}">—</span>
+          </td>
+          <td data-label="State">
+            <span class="badge badge-success" th:if="${schedule.enabled}">Enabled</span>
+            <span class="badge badge-neutral" th:unless="${schedule.enabled}">Paused</span>
+          </td>
+          <td class="actions">
+            <div class="row-actions">
+              <a class="button button-small" th:href="@{/schedules/{id}/edit(id=${schedule.id})}">Edit</a>
+              <form method="post" th:action="@{/schedules/{id}/delete(id=${schedule.id})}"
+                    data-confirm="Delete this backup schedule? Existing backups are kept.">
+                <button class="button button-small button-danger" type="submit" data-busy-label="Deleting…">Delete</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+</body>
+</html>

@@ -35,6 +35,7 @@ import com.hoangluongtran0309.dbbackup.core.model.DatabaseEngine;
 import com.hoangluongtran0309.dbbackup.core.model.DatabaseTarget;
 import com.hoangluongtran0309.dbbackup.core.model.RestoreExecution;
 import com.hoangluongtran0309.dbbackup.core.port.BackupExecutionRepository;
+import com.hoangluongtran0309.dbbackup.core.port.BackupScheduleRepository;
 import com.hoangluongtran0309.dbbackup.core.port.DatabaseTargetRepository;
 import com.hoangluongtran0309.dbbackup.core.port.EncryptionPort;
 import com.hoangluongtran0309.dbbackup.core.port.RestoreExecutionRepository;
@@ -59,6 +60,9 @@ class ManageDatabaseTargetServiceTest {
     private RestoreExecutionRepository restores;
 
     @Mock
+    private BackupScheduleRepository schedules;
+
+    @Mock
     private BackupArtifactService artifacts;
 
     @Mock
@@ -76,7 +80,7 @@ class ManageDatabaseTargetServiceTest {
     void setUp() {
         org.mockito.Mockito.lenient().when(engineAdapters.supports(any())).thenReturn(true);
         service = new ManageDatabaseTargetService(
-                repository, backups, restores, artifacts, encryption, Clock.fixed(NOW, ZoneOffset.UTC),
+                repository, backups, restores, schedules, artifacts, encryption, Clock.fixed(NOW, ZoneOffset.UTC),
                 engineAdapters);
     }
 
@@ -421,6 +425,19 @@ class ManageDatabaseTargetServiceTest {
                 .thenReturn(new BulkDeletionPreview(List.of(), 0, 0L, 0L, "One of these backups is still running."));
 
         assertThat(service.previewRemoval(target.getId()).refusal()).contains("still running");
+    }
+
+    @Test
+    void refusesRemovalWhileTheTargetHasSchedules() {
+        DatabaseTarget target = stored();
+        when(repository.findById(target.getId())).thenReturn(Optional.of(target));
+        when(schedules.countForTarget(target.getId())).thenReturn(2L);
+
+        assertThatThrownBy(() -> service.delete(target.getId(), true))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("2 backup schedules");
+
+        verify(repository, never()).deleteById(any());
     }
 
     private static RegisterTargetCommand command() {

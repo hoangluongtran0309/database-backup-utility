@@ -70,6 +70,14 @@ grows until somebody deletes backups through the console — several at a time
 from the backup list, or all of a target's with the target
 ([ADR-015](adr/015-deleting-many-backups-and-a-target-with-them.md)).
 
+**Schedules use the application's clock and one explicit zone each.** Cron
+expressions use Quartz syntax, with seconds as the first field. The schedule
+row persists in metadata PostgreSQL and its in-memory Quartz trigger is rebuilt
+at startup. A fire missed while the application is down is skipped rather than
+replayed; after restart the next future fire is shown in the console. This
+deployment is intentionally single-instance for scheduling — running several
+application replicas would create the same trigger in each replica.
+
 **Reaching the databases to be backed up.** A MySQL, MariaDB, PostgreSQL,
 MongoDB or SQL Server instance on the Docker host is `host.docker.internal` from inside the
 container; compose maps that name explicitly because on Linux it does not
