@@ -254,6 +254,9 @@ label, legend { color: var(--text); font-size: .84rem; font-weight: 670; }
 input, select, textarea { width: 100%; min-height: 44px; padding: .58rem .7rem; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--surface-raised); color: var(--text); }
 input::placeholder { color: color-mix(in srgb, var(--muted) 75%, transparent); }
 input:focus, select:focus, textarea:focus { border-color: var(--primary); box-shadow: var(--focus); outline: 0; }
+.checkbox-row { display: flex; align-items: center; gap: .6rem; }
+.checkbox-row input { width: auto; min-height: auto; }
+.checkbox-row label { margin: 0; }
 /* The rule above is written for text fields; a checkbox stretched to 100% by
    44px is a grey slab, not a box to tick. */
 input[type="checkbox"] { width: 1.15rem; height: 1.15rem; min-height: 0; padding: 0; accent-color: var(--primary); cursor: pointer; }

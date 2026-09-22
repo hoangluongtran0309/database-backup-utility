@@ -6,7 +6,7 @@ Server logical backup and restore, driven from a small web console.
 The scope is deliberately narrow: **full logical dumps, same-engine restores,
 local disk**. MySQL, MariaDB, PostgreSQL, MongoDB, SQLite, Oracle and SQL Server
 are implemented. There is no physical
-backup, incremental chain, point-in-time recovery, scheduler or cloud storage.
+backup, incremental chain, point-in-time recovery or cloud storage.
 Each capability arrives as one complete vertical slice, code and documentation
 together. See [ROADMAP.md](ROADMAP.md) for what exists and what is next.
 
@@ -18,6 +18,13 @@ logical backup of it, restoring one of those backups into a target of the
 same engine, downloading or deleting its artifact, and reading the history of
 all of it. The target's password is encrypted with AES-256-GCM before it is
 stored.
+
+Named Quartz schedules can run the same full backup path on a recurring cron
+expression in an explicit IANA time zone. They can be created, edited, paused
+and deleted from the console, and show their next run. Schedule definitions
+survive restarts; a fire missed while the application is stopped is not
+replayed. See
+[ADR-023](docs/adr/023-quartz-triggers-are-derived-from-backup-schedules.md).
 
 A network target's connection details — name, host, port, user, password and, for
 MongoDB, its authentication database — can be edited without touching its

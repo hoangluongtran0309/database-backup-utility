@@ -698,6 +698,7 @@ class DatabaseTargetControllerTest {
                 target,
                 new BulkDeletionPreview(List.of(backup, backup), 2, 16384L, 1L, null),
                 3L,
+                0L,
                 null));
 
         mockMvc.perform(get("/databases/{id}/delete", target.getId()))
@@ -714,7 +715,7 @@ class DatabaseTargetControllerTest {
     void theRemovePageOfATargetWithoutBackupsAsksOnlyForAClick() throws Exception {
         DatabaseTarget target = target("drill");
         when(service.previewRemoval(target.getId())).thenReturn(new TargetRemovalPreview(
-                target, new BulkDeletionPreview(List.of(), 0, 0L, 0L, null), 0L, null));
+                target, new BulkDeletionPreview(List.of(), 0, 0L, 0L, null), 0L, 0L, null));
 
         mockMvc.perform(get("/databases/{id}/delete", target.getId()))
                 .andExpect(content().string(org.hamcrest.Matchers.not(
@@ -727,7 +728,7 @@ class DatabaseTargetControllerTest {
     void theRemovePageSaysWhyItCannotGoAndOffersNoButton() throws Exception {
         DatabaseTarget target = target("production");
         when(service.previewRemoval(target.getId())).thenReturn(new TargetRemovalPreview(
-                target, new BulkDeletionPreview(List.of(), 0, 0L, 0L, null), 0L,
+                target, new BulkDeletionPreview(List.of(), 0, 0L, 0L, null), 0L, 0L,
                 "A restore into this target is running. Wait for it to finish before removing the target."));
 
         mockMvc.perform(get("/databases/{id}/delete", target.getId()))

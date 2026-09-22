@@ -104,6 +104,7 @@
                 <button class="button button-small button-primary" type="submit" data-busy-label="Starting…"
                         th:disabled="${!availableEngines.contains(target.engine)}">Back up now</button>
               </form>
+              <a class="button button-small" th:href="@{/schedules/new(target=${target.id})}">Schedule</a>
               <a class="button button-small" th:href="@{/databases/{id}/edit(id=${target.id})}">Edit</a>
               <!-- A target with backups takes them with it, so it gets a page
                    that counts them and asks for its name (ADR-015). One without
