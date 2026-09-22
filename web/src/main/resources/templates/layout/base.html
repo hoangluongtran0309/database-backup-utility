@@ -2,8 +2,9 @@
 <!--
   The page shell. Every view calls it as
     th:replace="~{layout/base :: page('Title', 'section', ~{:: #content})}"
-  where `section` is the nav entry the page belongs to — 'targets', 'backups'
-  or 'restores' — and drives the highlighted sidebar item and the breadcrumb.
+  where `section` is the nav entry the page belongs to — 'targets',
+  'schedules', 'retention', 'backups' or 'restores' — and drives the
+  highlighted sidebar item and the breadcrumb.
 
   The error page passes 'error': it belongs to no section, and it shows no
   flash. Spring's error model carries an `error` attribute of its own (the
@@ -15,8 +16,8 @@
   same theme, styles and script.
 -->
 <html lang="en" xmlns:th="http://www.thymeleaf.org" th:fragment="page(title, section, content)"
-      th:with="sectionLabel=${section == 'targets' ? 'Targets' : (section == 'schedules' ? 'Schedules' : (section == 'backups' ? 'Backups' : (section == 'restores' ? 'Restores' : null)))},
-               sectionUrl=${section == 'schedules' ? '/schedules' : (section == 'backups' ? '/executions' : (section == 'restores' ? '/restores' : '/databases'))},
+      th:with="sectionLabel=${section == 'targets' ? 'Targets' : (section == 'schedules' ? 'Schedules' : (section == 'retention' ? 'Retention' : (section == 'backups' ? 'Backups' : (section == 'restores' ? 'Restores' : null))))},
+               sectionUrl=${section == 'schedules' ? '/schedules' : (section == 'retention' ? '/retention' : (section == 'backups' ? '/executions' : (section == 'restores' ? '/restores' : '/databases')))},
                showFlash=${section != 'error'}">
 <head th:fragment="head(title)">
   <meta charset="utf-8">
@@ -55,6 +56,9 @@
         <a class="nav-item" th:href="@{/schedules}"
            th:classappend="${section == 'schedules'} ? 'active'"
            th:attr="aria-current=${section == 'schedules' ? 'page' : null}"><span aria-hidden="true">◷</span>Schedules</a>
+        <a class="nav-item" th:href="@{/retention}"
+           th:classappend="${section == 'retention'} ? 'active'"
+           th:attr="aria-current=${section == 'retention' ? 'page' : null}"><span aria-hidden="true">⌛</span>Retention</a>
       </div>
       <div class="nav-group">
         <div class="nav-label">Operations</div>

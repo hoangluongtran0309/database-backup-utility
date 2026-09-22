@@ -71,6 +71,13 @@ public class BackupArtifactService {
     public record BulkDeletion(int deleted, int artifactsRemoved, int alreadyGone) {
     }
 
+    /** Outcome of the non-cascading deletion path used only by retention. */
+    public enum RetentionDeletion {
+        DELETED,
+        ALREADY_GONE,
+        PROTECTED
+    }
+
     private static final Comparator<BackupExecution> NEWEST_FIRST = Comparator
             .comparing(BackupExecution::getStartedAt).reversed()
             .thenComparing(BackupExecution::getId, Comparator.reverseOrder());
@@ -219,6 +226,29 @@ public class BackupArtifactService {
             }
         }
         return new BulkDeletion(found.size(), artifactsRemoved, asked.size() - found.size());
+    }
+
+    /**
+     * Deletes one successful backup only when it still has no restore history.
+     * Unlike operator-confirmed deletion, this path never deletes restore rows.
+     * The caller holds {@link BackupActivityGuard} so a restore cannot be
+     * accepted between this check and deletion.
+     */
+    public RetentionDeletion deleteForRetention(UUID executionId) {
+        BackupExecution execution = backups.findById(executionId).orElse(null);
+        if (execution == null) {
+            return RetentionDeletion.ALREADY_GONE;
+        }
+        if (execution.getStatus() != ExecutionStatus.SUCCEEDED
+                || restores.countForBackup(executionId) > 0) {
+            return RetentionDeletion.PROTECTED;
+        }
+        if (execution.getArtifactPath() != null) {
+            storage.delete(Path.of(execution.getArtifactPath()));
+        }
+        backups.deleteById(executionId);
+        log.info("Retention deleted backup {} and its artifact {}", executionId, execution.getArtifactPath());
+        return RetentionDeletion.DELETED;
     }
 
     private boolean remove(BackupExecution execution) {

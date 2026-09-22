@@ -26,6 +26,12 @@ survive restarts; a fire missed while the application is stopped is not
 replayed. See
 [ADR-023](docs/adr/023-quartz-triggers-are-derived-from-backup-schedules.md).
 
+Automatic retention is optional per target. After a successful backup it can
+keep the newest configured number of successful copies and remove older
+artifacts. Backups with any restore history are always protected in addition to
+that number, and the console shows the latest cleanup outcome. See
+[ADR-024](docs/adr/024-retention-keeps-new-unrestored-backups-per-target.md).
+
 A network target's connection details — name, host, port, user, password and, for
 MongoDB, its authentication database — can be edited without touching its
 backups, so a rotated password is an edit rather
@@ -84,10 +90,12 @@ restores into it. See
 Deleting a backup removes its file, its row and any restore records that refer
 to it — the confirmation page counts them first. Several can be ticked on the
 backup list and deleted together. A target can be removed with all its backups
-by typing its name. Nothing is deleted automatically: there is no retention
-policy, so the backup directory grows until somebody prunes it. See
-[ADR-008](docs/adr/008-deleting-a-backup-takes-its-history-with-it.md) and
-[ADR-015](docs/adr/015-deleting-many-backups-and-a-target-with-them.md).
+by typing its name. Optional per-target retention can prune older successful
+backups after a new successful copy exists; failed attempts and backups with
+restore history remain until manually removed. See
+[ADR-008](docs/adr/008-deleting-a-backup-takes-its-history-with-it.md),
+[ADR-015](docs/adr/015-deleting-many-backups-and-a-target-with-them.md), and
+[ADR-024](docs/adr/024-retention-keeps-new-unrestored-backups-per-target.md).
 
 ## Running it
 

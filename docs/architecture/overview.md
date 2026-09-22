@@ -213,6 +213,22 @@ and its bounded queue. A missed fire during downtime is skipped; the next
 future fire remains. See
 [ADR-023](../adr/023-quartz-triggers-are-derived-from-backup-schedules.md).
 
+## Applying retention
+
+`backup_retention_policies` optionally gives one target a count of successful
+backups to keep. Once a new backup is durably `SUCCEEDED`, the same worker asks
+for older successful backups that have no restore history. Protected backups
+are excluded before the newest N are skipped, so a restore drill never consumes
+one of the rotating recent-copy slots.
+
+Retention takes the same file-before-row failure direction as manual deletion,
+but it never removes restore rows. A striped in-process guard serializes the
+small deletion critical section with restore acceptance: whichever begins
+first determines whether the backup is protected or already gone. Cleanup
+failure is stored on the policy and never rewrites the successful backup that
+triggered it. See
+[ADR-024](../adr/024-retention-keeps-new-unrestored-backups-per-target.md).
+
 A restore follows the same two-step shape and shares the same pool, so the bound
 is on total heavy work rather than on each kind separately. What a restore
 actually does — and what it deliberately does not — is in
@@ -230,11 +246,11 @@ the stable execution-derived job name and sends `KILL_JOB`.
 
 ## Removing things
 
-Nothing is removed automatically. The chain is strict and walked by the use
-cases, never by the schema: a target cannot go while it has backups, and a
-backup cannot go while restore records refer to it. Deleting a backup removes
-those records, then its file, then its row — in that order, so a failure never
-strands a file on disk with nothing pointing at it. See
+Operator-confirmed removal follows a strict chain walked by the use cases: a
+target cannot go while it has backups, and a backup cannot go while restore
+records refer to it. Deleting a backup removes those records, then its file,
+then its row — in that order, so a failure never strands a file on disk with
+nothing pointing at it. See
 [ADR-008](../adr/008-deleting-a-backup-takes-its-history-with-it.md). Removing
 a target likewise removes the records of restores into it
 ([ADR-014](../adr/014-restore-into-any-registered-target.md)).
@@ -244,7 +260,9 @@ can take its backups with it once its name is typed. Every check — a backup
 still running, a restore still reading one — is made for all of them before any
 is touched
 ([ADR-015](../adr/015-deleting-many-backups-and-a-target-with-them.md)). Every
-foreign key is `RESTRICT`: the schema never removes history by itself.
+foreign key that protects backup or restore history is `RESTRICT`: the schema
+never removes that history by itself. Retention-policy metadata is the narrow
+exception and cascades with its target because it has no meaning on its own.
 
 `StoragePort` refuses to read or delete anything outside its configured root.
 Every path it receives was read back from the database, and a value in a

@@ -33,6 +33,7 @@ import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.hoangluongtran0309.dbbackup.application.EngineAdapterRegistry;
+import com.hoangluongtran0309.dbbackup.application.backup.BackupActivityGuard;
 import com.hoangluongtran0309.dbbackup.core.exception.RestoreFailedException;
 import com.hoangluongtran0309.dbbackup.core.model.BackupExecution;
 import com.hoangluongtran0309.dbbackup.core.model.DatabaseEngine;
@@ -78,7 +79,7 @@ class RestoreBackupServiceTest {
 
     private RestoreBackupService newService(Executor executor) {
         return new RestoreBackupService(backups, restores, targets, adapters, storage, encryption,
-                executor, Clock.fixed(NOW, ZoneOffset.UTC));
+                executor, Clock.fixed(NOW, ZoneOffset.UTC), new BackupActivityGuard());
     }
 
     // --- accepting ----------------------------------------------------------

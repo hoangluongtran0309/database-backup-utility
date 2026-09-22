@@ -55,5 +55,5 @@ instead of filling the bounded queue with stale backups.
 - Downtime does not cause catch-up backups. High availability and coordinated
   multi-instance scheduling would require a later decision to adopt a
   clustered JDBC JobStore or another leader-election mechanism.
-- This slice creates backups but never removes them. Automatic retention is a
-  separate policy and remains the next roadmap item.
+- This slice itself creates backups but never removes them. Automatic retention
+  was added separately by [ADR-024](024-retention-keeps-new-unrestored-backups-per-target.md).
