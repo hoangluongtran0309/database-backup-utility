@@ -59,10 +59,19 @@ as the start of a variable. Anything that is not a bcrypt hash of cost 10 or
 more stops the application at startup. Unlike the encryption key, losing it
 costs nothing: generate a new hash and restart.
 
-**Where the backups go.** The compose file uses a named volume, which is enough
-to survive the container but not the machine. These artifacts are the reason the
-tool exists — getting them somewhere else is outside this tool's job, and
-whatever already backs up that host should be pointed at the volume.
+**Where the backups go.** Local filesystem is the built-in default; compose
+stores it in the `backups` named volume. The Storage page can add an
+S3-compatible profile and a target can select it for future backups. The bucket
+must already exist. Use HTTPS in production; HTTP custom endpoints are intended
+for development. Static secrets are AES-256-GCM encrypted, while default-chain
+mode can use environment, web-identity, container or instance-role credentials.
+
+The S3 identity needs Put, Get, Head and Delete plus multipart upload and abort
+permissions for its bucket/prefix. Configure a bucket lifecycle rule to abort
+incomplete multipart uploads left by a process crash. Bucket creation,
+encryption policy and object-version cleanup remain operator responsibilities.
+`STORAGE_STAGING_DIR` needs room for one complete artifact per concurrent S3
+job; normal, failed and known interrupted operation directories are removed.
 
 **Retention starts disabled.** Configure it per target in the Retention page to
 keep the newest N successful backups. It runs only after a new successful

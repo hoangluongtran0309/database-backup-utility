@@ -43,6 +43,8 @@ dbbackup:
   storage:
     local:
       root: ${java.io.tmpdir}/dbbackup-it
+    staging:
+      root: ${java.io.tmpdir}/dbbackup-it-staging
 
   encryption:
     key: ZGJiYWNrdXAtaW50ZWdyYXRpb24tdGVzdC1rZXktMzI=

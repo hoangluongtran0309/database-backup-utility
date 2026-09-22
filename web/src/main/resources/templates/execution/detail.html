@@ -41,7 +41,7 @@
        the buttons that would need the file are not offered. -->
   <p class="alert alert-danger" role="alert"
      th:if="${execution.status.name() == 'SUCCEEDED' and !artifactOnDisk}">
-    The artifact is no longer on disk, so it cannot be verified, downloaded or restored.
+    The artifact is no longer available, so it cannot be verified, downloaded or restored.
     The record can still be deleted.
   </p>
 
@@ -71,6 +71,9 @@
 
       <dt>Artifact</dt>
       <dd th:replace="~{fragments/artifact-path :: artifactPath(${execution.artifactPath})}">—</dd>
+
+      <dt>Destination</dt>
+      <dd th:text="${storageProfileName}">Local filesystem</dd>
 
       <dt>Size</dt>
       <dd class="mono" th:text="${execution.sizeBytes != null ? execution.sizeBytes + ' bytes' : '—'}">—</dd>

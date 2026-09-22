@@ -14,7 +14,7 @@
 
   <div class="alert alert-danger" role="alert">
     <!-- The file is only promised gone when there is a file to remove. -->
-    <p th:if="${preview.artifactPresent()}"><strong>The artifact is deleted from disk. There is no undo.</strong></p>
+    <p th:if="${preview.artifactPresent()}"><strong>The artifact is deleted from its destination. There is no undo.</strong></p>
     <p th:unless="${preview.artifactPresent()}"><strong>There is no undo.</strong></p>
     <!-- Said before the click, not discovered after it. -->
     <p th:if="${preview.restoreCount() == 1}">
@@ -30,7 +30,7 @@
       This backup never produced a file, so only its record is deleted.
     </p>
     <p th:if="${preview.execution().artifactPath != null and !preview.artifactPresent()}">
-      The file is already missing from disk. Deleting the record here is all
+      The artifact is already missing from its destination. Deleting the record here is all
       that is left to do.
     </p>
   </div>

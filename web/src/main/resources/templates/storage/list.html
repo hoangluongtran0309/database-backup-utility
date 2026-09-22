@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout/base :: page('Storage', 'storage', ~{:: #content})}">
+<body><div id="content">
+  <div class="page-header"><div><div class="eyebrow">Setup</div><h1>Storage</h1>
+    <p>Local filesystem is built in. Add S3-compatible destinations for durable artifacts.</p></div>
+    <a class="button button-primary" th:href="@{/storage/new}">Add S3 profile</a></div>
+  <section class="panel"><h2>Local filesystem <span class="badge badge-neutral">Default</span></h2>
+    <p>Uses <code>BACKUP_DIR</code>. This built-in destination cannot be edited or removed.</p></section>
+  <p class="empty-state panel" th:if="${profiles.isEmpty()}">No S3 profiles yet.</p>
+  <div class="table-wrap" th:unless="${profiles.isEmpty()}"><table><thead><tr>
+    <th>Name</th><th>Bucket</th><th>Endpoint</th><th>Credentials</th><th>Last test</th><th></th>
+  </tr></thead><tbody><tr th:each="profile : ${profiles}">
+    <td><strong th:text="${profile.name}">archive</strong></td>
+    <td class="mono" th:text="|${profile.bucket}/${profile.keyPrefix}|">bucket/prefix</td>
+    <td th:text="${profile.endpoint == null ? 'AWS S3' : profile.endpoint}">AWS S3</td>
+    <td th:text="${profile.credentialMode.name() == 'STATIC' ? 'Static access key' : 'Default chain'}">Static</td>
+    <td><span class="badge badge-neutral" th:if="${profile.lastConnectionCheck == null}">Never tested</span>
+      <span class="badge badge-success" th:if="${profile.lastConnectionCheck != null and profile.lastConnectionCheck.successful}">Passed</span>
+      <span class="badge badge-danger" th:if="${profile.lastConnectionCheck != null and !profile.lastConnectionCheck.successful}"
+            th:title="${profile.lastConnectionCheck.message}">Failed</span></td>
+    <td class="actions"><div class="row-actions">
+      <form method="post" th:action="@{/storage/{id}/test(id=${profile.id})}"><button class="button button-small" type="submit">Test</button></form>
+      <a class="button button-small" th:href="@{/storage/{id}/edit(id=${profile.id})}">Edit</a>
+      <form method="post" th:action="@{/storage/{id}/delete(id=${profile.id})}"
+            th:attr="data-confirm=|Remove storage profile “${profile.name}”?|" data-confirm-title="Remove profile" data-confirm-accept="Remove">
+        <button class="button button-small button-danger" type="submit">Remove</button></form>
+    </div></td>
+  </tr></tbody></table></div>
+</div></body></html>

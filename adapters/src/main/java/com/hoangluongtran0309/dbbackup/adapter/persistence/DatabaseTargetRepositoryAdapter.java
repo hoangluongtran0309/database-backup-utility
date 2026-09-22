@@ -74,6 +74,11 @@ class DatabaseTargetRepositoryAdapter implements DatabaseTargetRepository {
         return jpaRepository.findById(id).map(DatabaseTargetMapper::toDomain);
     }
 
+    @Override
+    public long countForStorageProfile(UUID storageProfileId) {
+        return jpaRepository.countByStorageProfileId(storageProfileId);
+    }
+
     /** Checked before the delete, for the same reason as the name in {@link #save}. */
     @Override
     public void deleteById(UUID id) {

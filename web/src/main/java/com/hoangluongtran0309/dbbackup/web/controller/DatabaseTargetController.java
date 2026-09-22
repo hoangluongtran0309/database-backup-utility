@@ -21,6 +21,7 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 import com.hoangluongtran0309.dbbackup.application.backup.RunBackupService;
 import com.hoangluongtran0309.dbbackup.application.target.ManageDatabaseTargetService;
 import com.hoangluongtran0309.dbbackup.application.target.TestTargetConnectionService;
+import com.hoangluongtran0309.dbbackup.application.storage.ManageStorageProfileService;
 import com.hoangluongtran0309.dbbackup.core.exception.DuplicateTargetNameException;
 import com.hoangluongtran0309.dbbackup.core.exception.InvalidTargetException;
 import com.hoangluongtran0309.dbbackup.core.exception.TargetInUseException;
@@ -59,16 +60,23 @@ public class DatabaseTargetController {
             "username", "username",
             "authenticationDatabase", "authenticationDatabase",
             "dataPumpDirectory", "dataPumpDirectory",
-            "password", "password");
+            "password", "password",
+            "storageProfileId", "storageProfileId");
 
     private final ManageDatabaseTargetService service;
     private final TestTargetConnectionService connectionTest;
     private final RunBackupService backups;
     private final BackupExecutionRepository executions;
+    private final ManageStorageProfileService storageProfiles;
 
     @ModelAttribute("engines")
     List<DatabaseEngine> engines() {
         return service.availableEngines();
+    }
+
+    @ModelAttribute("storageProfiles")
+    Object storageProfiles() {
+        return storageProfiles.listAll();
     }
 
     /**
@@ -84,6 +92,8 @@ public class DatabaseTargetController {
         model.addAttribute("latestBackups", byTarget(executions.findLatestPerTarget()));
         model.addAttribute("lastSuccessfulBackups", byTarget(executions.findLatestSucceededPerTarget()));
         model.addAttribute("availableEngines", service.availableEngines());
+        model.addAttribute("storageProfileNames", storageProfiles.listAll().stream()
+                .collect(Collectors.toMap(p -> p.getId(), p -> p.getName())));
         return "database/list";
     }
 

@@ -10,9 +10,8 @@
   the decisions were made.
 
 The current last decision is
-[ADR-024](adr/024-retention-keeps-new-unrestored-backups-per-target.md), which
-defines per-target automatic retention and why backups with restore history do
-not count toward its rotating limit.
+[ADR-025](adr/025-s3-storage-profiles-and-local-staging.md), which defines
+provider-neutral artifact references, managed S3 profiles and local staging.
 
 These pages describe the code that exists. When a slice changes the code, it
 changes these files in the same commit.

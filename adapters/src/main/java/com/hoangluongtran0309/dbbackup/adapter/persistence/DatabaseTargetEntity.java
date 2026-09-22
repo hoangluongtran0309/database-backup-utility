@@ -56,6 +56,9 @@ class DatabaseTargetEntity {
     @Column(name = "data_pump_directory", length = 128)
     private String dataPumpDirectory;
 
+    @Column(name = "storage_profile_id")
+    private UUID storageProfileId;
+
     @Column(name = "password_enc", columnDefinition = "text")
     private String passwordEnc;
 

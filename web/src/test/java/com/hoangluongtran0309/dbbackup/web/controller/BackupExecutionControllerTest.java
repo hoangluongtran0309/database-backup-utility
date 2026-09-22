@@ -35,6 +35,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import com.hoangluongtran0309.dbbackup.application.backup.BackupArtifactService;
 import com.hoangluongtran0309.dbbackup.application.target.ManageDatabaseTargetService;
+import com.hoangluongtran0309.dbbackup.application.storage.ManageStorageProfileService;
 import com.hoangluongtran0309.dbbackup.core.model.BackupExecution;
 import com.hoangluongtran0309.dbbackup.core.model.DatabaseTarget;
 import com.hoangluongtran0309.dbbackup.core.port.BackupExecutionRepository;
@@ -66,6 +67,9 @@ class BackupExecutionControllerTest {
 
     @MockitoBean
     private BackupArtifactService artifacts;
+
+    @MockitoBean
+    private ManageStorageProfileService storageProfiles;
 
     @Test
     void showsAnEmptyStateWhenNothingHasBeenBackedUp() throws Exception {
@@ -198,13 +202,13 @@ class BackupExecutionControllerTest {
     void aMissingArtifactBecomesAMessageNotAServerError() throws Exception {
         UUID id = UUID.randomUUID();
         when(artifacts.download(id))
-                .thenThrow(new NoSuchElementException("The artifact for this backup is no longer on disk"));
+                .thenThrow(new NoSuchElementException("The artifact for this backup is no longer available"));
 
         mockMvc.perform(get("/executions/{id}/download", id))
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrl("/executions"))
                 .andExpect(flash().attribute("error",
-                        org.hamcrest.Matchers.containsString("no longer on disk")));
+                        org.hamcrest.Matchers.containsString("no longer available")));
     }
 
     // --- delete -------------------------------------------------------------
@@ -235,9 +239,9 @@ class BackupExecutionControllerTest {
 
         mockMvc.perform(get("/executions/{id}/delete", execution.getId()))
                 .andExpect(content().string(
-                        org.hamcrest.Matchers.containsString("already missing from disk")))
+                        org.hamcrest.Matchers.containsString("already missing from its destination")))
                 // Nothing left on disk to delete, so the page must not say it will.
-                .andExpect(content().string(not(containsString("deleted from disk"))))
+                .andExpect(content().string(not(containsString("deleted from storage"))))
                 .andExpect(content().string(
                         org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("restore record"))));
     }
@@ -265,8 +269,8 @@ class BackupExecutionControllerTest {
         mockMvc.perform(get("/executions/{id}/delete", execution.getId()))
                 .andExpect(content().string(containsString("There is no undo")))
                 .andExpect(content().string(containsString("never produced a file")))
-                .andExpect(content().string(not(containsString("deleted from disk"))))
-                .andExpect(content().string(not(containsString("already missing from disk"))));
+                .andExpect(content().string(not(containsString("deleted from storage"))))
+                .andExpect(content().string(not(containsString("already missing from its destination"))));
     }
 
     @Test
@@ -344,7 +348,7 @@ class BackupExecutionControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(view().name("execution/delete-many"))
                 .andExpect(content().string(containsString("Delete these 2 backups?")))
-                .andExpect(content().string(containsString("1 artifact, <span>8192</span> bytes, is deleted from disk")))
+                .andExpect(content().string(containsString("1 artifact, <span>8192</span> bytes, is deleted from storage")))
                 .andExpect(content().string(containsString("restore records refer to them and are deleted with them")))
                 .andExpect(content().string(containsString("shop_20260909_100000.sql.gz")))
                 // Carried to the POST, which is what deletes.
@@ -512,7 +516,7 @@ class BackupExecutionControllerTest {
                 .andExpect(content().string(containsString(SHA256)))
                 .andExpect(content().string(containsString(
                         "action=\"/executions/" + backup.getId() + "/verify\"")))
-                .andExpect(content().string(not(containsString("no longer on disk"))));
+                .andExpect(content().string(not(containsString("no longer available"))));
     }
 
     @Test
@@ -539,7 +543,7 @@ class BackupExecutionControllerTest {
         when(artifacts.isOnDisk(backup)).thenReturn(false);
 
         mockMvc.perform(get("/executions/{id}", backup.getId()))
-                .andExpect(content().string(containsString("no longer on disk")))
+                .andExpect(content().string(containsString("no longer available")))
                 .andExpect(content().string(not(containsString("/verify"))))
                 .andExpect(content().string(not(containsString("/download"))))
                 .andExpect(content().string(not(containsString("/restores/new"))))
@@ -578,7 +582,7 @@ class BackupExecutionControllerTest {
                 BackupArtifactService.Integrity.MISSING, SHA256, null));
 
         mockMvc.perform(post("/executions/{id}/verify", id).with(csrf()))
-                .andExpect(flash().attribute("error", "The artifact is no longer on disk"));
+                .andExpect(flash().attribute("error", "The artifact is no longer available"));
     }
 
     @Test

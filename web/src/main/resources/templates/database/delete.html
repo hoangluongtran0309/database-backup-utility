@@ -28,11 +28,11 @@
     </p>
     <p th:unless="${preview.takesBackups()}"><strong>There is no undo.</strong></p>
     <p th:if="${backups.artifactsOnDisk() == 1}">
-      1 artifact, <span th:text="${backups.bytesOnDisk()}">8192</span> bytes, is deleted from disk.
+      1 artifact, <span th:text="${backups.bytesOnDisk()}">8192</span> bytes, is deleted from storage.
     </p>
     <p th:if="${backups.artifactsOnDisk() > 1}">
       <span th:text="${backups.artifactsOnDisk()}">10</span> artifacts,
-      <span th:text="${backups.bytesOnDisk()}">81920</span> bytes in all, are deleted from disk.
+      <span th:text="${backups.bytesOnDisk()}">81920</span> bytes in all, are deleted from storage.
     </p>
     <p>Its stored credentials are deleted.</p>
     <!-- Restores into it and restores of its backups, each counted once. -->

@@ -2,6 +2,7 @@ package com.hoangluongtran0309.dbbackup.application.target;
 
 import com.hoangluongtran0309.dbbackup.core.exception.InvalidTargetException;
 import com.hoangluongtran0309.dbbackup.core.model.DatabaseEngine;
+import java.util.UUID;
 
 /**
  * What the operator typed, with the password still in plain text.
@@ -18,7 +19,8 @@ public record RegisterTargetCommand(
         String username,
         String password,
         String authenticationDatabase,
-        String dataPumpDirectory) {
+        String dataPumpDirectory,
+        UUID storageProfileId) {
 
     public RegisterTargetCommand(
             String name,
@@ -28,8 +30,15 @@ public record RegisterTargetCommand(
             String database,
             String username,
             String password,
-            String authenticationDatabase) {
-        this(name, engine, host, port, database, username, password, authenticationDatabase, null);
+        String authenticationDatabase) {
+        this(name, engine, host, port, database, username, password, authenticationDatabase, null, null);
+    }
+
+    public RegisterTargetCommand(
+            String name, DatabaseEngine engine, String host, Integer port, String database,
+            String username, String password, String authenticationDatabase, String dataPumpDirectory) {
+        this(name, engine, host, port, database, username, password, authenticationDatabase,
+                dataPumpDirectory, null);
     }
 
     public RegisterTargetCommand(
@@ -40,7 +49,7 @@ public record RegisterTargetCommand(
             String database,
             String username,
             String password) {
-        this(name, engine, host, port, database, username, password, null, null);
+        this(name, engine, host, port, database, username, password, null, null, null);
     }
 
     public RegisterTargetCommand {

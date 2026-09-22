@@ -38,6 +38,7 @@ import com.hoangluongtran0309.dbbackup.application.target.ManageDatabaseTargetSe
 import com.hoangluongtran0309.dbbackup.application.target.ManageDatabaseTargetService.TargetRemovalPreview;
 import com.hoangluongtran0309.dbbackup.application.target.RegisterTargetCommand;
 import com.hoangluongtran0309.dbbackup.application.target.TestTargetConnectionService;
+import com.hoangluongtran0309.dbbackup.application.storage.ManageStorageProfileService;
 import com.hoangluongtran0309.dbbackup.core.exception.DuplicateTargetNameException;
 import com.hoangluongtran0309.dbbackup.core.exception.TargetInUseException;
 import com.hoangluongtran0309.dbbackup.core.model.BackupExecution;
@@ -72,8 +73,12 @@ class DatabaseTargetControllerTest {
     @MockitoBean
     private BackupExecutionRepository executions;
 
+    @MockitoBean
+    private ManageStorageProfileService storageProfiles;
+
     @BeforeEach
     void implementedEnginesAreAvailable() {
+        when(storageProfiles.listAll()).thenReturn(List.of());
         when(service.availableEngines()).thenReturn(List.of(
                 DatabaseEngine.MYSQL,
                 DatabaseEngine.POSTGRESQL,
