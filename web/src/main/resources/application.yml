@@ -157,6 +157,10 @@ dbbackup:
   storage:
     local:
       root: ${BACKUP_DIR:./backups}
+    staging:
+      # One private directory per backup/restore operation. S3 artifacts are
+      # removed from here after upload or restore, including failures.
+      root: ${STORAGE_STAGING_DIR:${BACKUP_DIR:./backups}/.staging}
 
   encryption:
     # 32 bytes, Base64 encoded: openssl rand -base64 32

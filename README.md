@@ -3,10 +3,10 @@
 MySQL, MariaDB, PostgreSQL, MongoDB, SQLite, optional Oracle and optional SQL
 Server logical backup and restore, driven from a small web console.
 
-The scope is deliberately narrow: **full logical dumps, same-engine restores,
-local disk**. MySQL, MariaDB, PostgreSQL, MongoDB, SQLite, Oracle and SQL Server
+The scope is deliberately narrow: **full logical dumps and same-engine restores**
+to local disk or a managed S3-compatible profile. MySQL, MariaDB, PostgreSQL, MongoDB, SQLite, Oracle and SQL Server
 are implemented. There is no physical
-backup, incremental chain, point-in-time recovery or cloud storage.
+backup, incremental chain or point-in-time recovery. GCS and Azure are not yet supported.
 Each capability arrives as one complete vertical slice, code and documentation
 together. See [ROADMAP.md](ROADMAP.md) for what exists and what is next.
 
@@ -18,6 +18,14 @@ logical backup of it, restoring one of those backups into a target of the
 same engine, downloading or deleting its artifact, and reading the history of
 all of it. The target's password is encrypted with AES-256-GCM before it is
 stored.
+
+The built-in local filesystem remains the default destination. The Storage
+page can add S3-compatible profiles with static credentials or the AWS default
+credential chain, test them with a put/head/get/delete probe, and select one
+per target. Existing backups keep their original destination when a target is
+changed. S3 artifacts are staged locally only for dump/restore and the staging
+copy is removed afterwards. See
+[ADR-025](docs/adr/025-s3-storage-profiles-and-local-staging.md).
 
 Named Quartz schedules can run the same full backup path on a recurring cron
 expression in an explicit IANA time zone. They can be created, edited, paused
@@ -250,6 +258,7 @@ would also try to run the parent pom, which has no main class.)
 | `SQLSERVER_TRUST_SERVER_CERTIFICATE` | `false` | Keep encryption but skip CA/hostname verification; opt in only for a deliberately untrusted certificate |
 | `SQLSERVER_TEMP_DIR` | `./sqlserver-temp` | Per-job SqlPackage staging root; needs free space comparable to the database and is cleaned after each job |
 | `BACKUP_DIR` | `./backups` | Where dumps are written; created at startup. Relative, so it follows the working directory — `mvn -pl web spring-boot:run` puts it under `web/`. The image sets it to `/var/lib/dbbackup/backups`. |
+| `STORAGE_STAGING_DIR` | `<BACKUP_DIR>/.staging` | Per-job S3 staging; needs room for one artifact per concurrent job and is cleaned after each operation |
 | `JOB_CONCURRENCY` | `2` | How many backups and restores may run at once, together |
 | `JOB_QUEUE_CAPACITY` | `20` | Beyond this, a job is refused and recorded as failed |
 | `BACKUP_TIMEOUT` | `30m` | A dump running longer than this is killed |

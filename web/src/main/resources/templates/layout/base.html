@@ -16,8 +16,8 @@
   same theme, styles and script.
 -->
 <html lang="en" xmlns:th="http://www.thymeleaf.org" th:fragment="page(title, section, content)"
-      th:with="sectionLabel=${section == 'targets' ? 'Targets' : (section == 'schedules' ? 'Schedules' : (section == 'retention' ? 'Retention' : (section == 'backups' ? 'Backups' : (section == 'restores' ? 'Restores' : null))))},
-               sectionUrl=${section == 'schedules' ? '/schedules' : (section == 'retention' ? '/retention' : (section == 'backups' ? '/executions' : (section == 'restores' ? '/restores' : '/databases')))},
+      th:with="sectionLabel=${section == 'targets' ? 'Targets' : (section == 'storage' ? 'Storage' : (section == 'schedules' ? 'Schedules' : (section == 'retention' ? 'Retention' : (section == 'backups' ? 'Backups' : (section == 'restores' ? 'Restores' : null)))))},
+               sectionUrl=${section == 'storage' ? '/storage' : (section == 'schedules' ? '/schedules' : (section == 'retention' ? '/retention' : (section == 'backups' ? '/executions' : (section == 'restores' ? '/restores' : '/databases'))))},
                showFlash=${section != 'error'}">
 <head th:fragment="head(title)">
   <meta charset="utf-8">
@@ -53,6 +53,9 @@
         <a class="nav-item" th:href="@{/databases}"
            th:classappend="${section == 'targets'} ? 'active'"
            th:attr="aria-current=${section == 'targets' ? 'page' : null}"><span aria-hidden="true">◎</span>Targets</a>
+        <a class="nav-item" th:href="@{/storage}"
+           th:classappend="${section == 'storage'} ? 'active'"
+           th:attr="aria-current=${section == 'storage' ? 'page' : null}"><span aria-hidden="true">▣</span>Storage</a>
         <a class="nav-item" th:href="@{/schedules}"
            th:classappend="${section == 'schedules'} ? 'active'"
            th:attr="aria-current=${section == 'schedules' ? 'page' : null}"><span aria-hidden="true">◷</span>Schedules</a>

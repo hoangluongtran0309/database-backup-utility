@@ -1,5 +1,7 @@
 package com.hoangluongtran0309.dbbackup.application.target;
 
+import java.util.UUID;
+
 /**
  * New connection details for an existing target, with the password — if there
  * is one — still in plain text.
@@ -19,7 +21,8 @@ public record EditTargetCommand(
         String username,
         String password,
         String authenticationDatabase,
-        String dataPumpDirectory) {
+        String dataPumpDirectory,
+        UUID storageProfileId) {
 
     public EditTargetCommand(
             String name,
@@ -28,11 +31,17 @@ public record EditTargetCommand(
             String username,
             String password,
             String authenticationDatabase) {
-        this(name, host, port, username, password, authenticationDatabase, null);
+        this(name, host, port, username, password, authenticationDatabase, null, null);
     }
 
     public EditTargetCommand(String name, String host, Integer port, String username, String password) {
-        this(name, host, port, username, password, null, null);
+        this(name, host, port, username, password, null, null, null);
+    }
+
+    public EditTargetCommand(
+            String name, String host, Integer port, String username, String password,
+            String authenticationDatabase, String dataPumpDirectory) {
+        this(name, host, port, username, password, authenticationDatabase, dataPumpDirectory, null);
     }
 
     public boolean changesPassword() {

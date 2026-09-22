@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout/base :: page(${editing == null ? 'Add storage profile' : 'Edit storage profile'}, 'storage', ~{:: #content})}">
+<body><div id="content">
+  <div class="page-header"><div><div class="eyebrow">Storage</div>
+    <h1 th:text="${editing == null ? 'Add S3 profile' : 'Edit ' + editing.name}">Add S3 profile</h1>
+    <p>The bucket must already exist. Prefer HTTPS endpoints in production.</p></div></div>
+  <form class="form-panel" method="post" th:object="${form}"
+        th:action="@{${editing == null ? '/storage' : '/storage/' + editing.id}}">
+    <div th:replace="~{fragments/form-errors :: formErrors}"></div>
+    <div class="form-grid">
+      <div class="form-group form-group-full"><label for="name">Name</label><input id="name" th:field="*{name}" autofocus></div>
+      <div class="form-group form-group-full"><label for="endpoint">Endpoint</label><input id="endpoint" type="url" th:field="*{endpoint}" data-storage-endpoint placeholder="https://s3.example.com">
+        <p class="field-hint">Leave empty for AWS S3. Custom endpoints must be HTTP or HTTPS without query parameters.</p></div>
+      <div class="form-group"><label for="region">Region</label><input id="region" th:field="*{region}" placeholder="us-east-1"></div>
+      <div class="form-group"><label for="bucket">Bucket</label><input id="bucket" th:field="*{bucket}"></div>
+      <div class="form-group"><label for="keyPrefix">Key prefix</label><input id="keyPrefix" th:field="*{keyPrefix}" placeholder="database-backups"></div>
+      <div class="form-group"><label><input type="checkbox" th:field="*{pathStyle}" data-storage-path-style> Use path-style access</label>
+        <p class="field-hint">Usually required by S3-compatible development servers.</p></div>
+      <div class="form-group"><label for="credentialMode">Credentials</label><select id="credentialMode" th:field="*{credentialMode}">
+        <option th:each="mode : ${credentialModes}" th:value="${mode}" th:text="${mode.name() == 'STATIC' ? 'Static access key' : 'Default credential chain'}"></option></select></div>
+      <div class="form-group"><label for="accessKeyId">Access key ID</label><input id="accessKeyId" th:field="*{accessKeyId}" autocomplete="off"></div>
+      <div class="form-group form-group-full"><label for="secretAccessKey">Secret access key</label><input id="secretAccessKey" name="secretAccessKey" type="password" autocomplete="new-password">
+        <p class="field-hint" th:text="${editing == null ? 'Required for static credentials; encrypted before storage.' : 'Leave empty to keep the existing static secret.'}"></p></div>
+    </div>
+    <div class="form-actions"><button class="button button-primary" type="submit">Save profile</button><a class="button button-ghost" th:href="@{/storage}">Cancel</a></div>
+  </form>
+</div></body></html>

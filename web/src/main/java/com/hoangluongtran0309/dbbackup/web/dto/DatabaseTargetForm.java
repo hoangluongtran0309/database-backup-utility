@@ -1,5 +1,7 @@
 package com.hoangluongtran0309.dbbackup.web.dto;
 
+import java.util.UUID;
+
 import com.hoangluongtran0309.dbbackup.application.target.RegisterTargetCommand;
 import com.hoangluongtran0309.dbbackup.core.model.DatabaseEngine;
 
@@ -49,6 +51,7 @@ public class DatabaseTargetForm {
     private String dataPumpDirectory;
 
     private String password;
+    private UUID storageProfileId;
 
     public static DatabaseTargetForm blank() {
         DatabaseTargetForm form = new DatabaseTargetForm();
@@ -60,6 +63,6 @@ public class DatabaseTargetForm {
     public RegisterTargetCommand toCommand() {
         return new RegisterTargetCommand(
                 name, engine, host, port, database, username, password, authenticationDatabase,
-                dataPumpDirectory);
+                dataPumpDirectory, storageProfileId);
     }
 }

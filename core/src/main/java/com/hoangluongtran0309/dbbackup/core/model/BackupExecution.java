@@ -33,8 +33,11 @@ public final class BackupExecution {
     /** Null while {@link ExecutionStatus#RUNNING}, set on every terminal state. */
     private final Instant finishedAt;
 
-    /** Where the dump was written. Null unless the backup succeeded. */
-    private final String artifactPath;
+    /** Provider-specific path or object key. Null unless the backup succeeded. */
+    private final String artifactLocator;
+
+    /** Null means the built-in local filesystem destination. */
+    private final UUID storageProfileId;
 
     /** Null unless the backup succeeded. */
     private final Long sizeBytes;
@@ -56,7 +59,8 @@ public final class BackupExecution {
             ExecutionStatus status,
             Instant startedAt,
             Instant finishedAt,
-            String artifactPath,
+            String artifactLocator,
+            UUID storageProfileId,
             Long sizeBytes,
             String sha256,
             String errorMessage) {
@@ -66,7 +70,8 @@ public final class BackupExecution {
         this.status = require(status, "Status is required");
         this.startedAt = require(startedAt, "Start timestamp is required");
         this.finishedAt = finishedAt;
-        this.artifactPath = artifactPath;
+        this.artifactLocator = artifactLocator;
+        this.storageProfileId = storageProfileId;
         this.sizeBytes = sizeBytes;
         this.sha256 = sha256;
         this.errorMessage = truncate(errorMessage);
@@ -85,9 +90,14 @@ public final class BackupExecution {
 
     /** A backup that has just been accepted and not yet run. */
     public static BackupExecution started(UUID id, UUID targetId, Instant startedAt) {
+        return started(id, targetId, null, startedAt);
+    }
+
+    public static BackupExecution started(UUID id, UUID targetId, UUID storageProfileId, Instant startedAt) {
         return BackupExecution.builder()
                 .id(id)
                 .targetId(targetId)
+                .storageProfileId(storageProfileId)
                 .status(ExecutionStatus.RUNNING)
                 .startedAt(startedAt)
                 .build();
@@ -98,16 +108,17 @@ public final class BackupExecution {
      *        computed it once the file was closed. Required: every backup made
      *        from now on has one.
      */
-    public BackupExecution succeeded(String artifactPath, long sizeBytes, String sha256, Instant finishedAt) {
+    public BackupExecution succeeded(String artifactLocator, long sizeBytes, String sha256, Instant finishedAt) {
         requireStillRunning();
         require(sha256, "A successful backup needs its checksum");
         return BackupExecution.builder()
                 .id(id)
                 .targetId(targetId)
+                .storageProfileId(storageProfileId)
                 .status(ExecutionStatus.SUCCEEDED)
                 .startedAt(startedAt)
                 .finishedAt(finishedAt)
-                .artifactPath(artifactPath)
+                .artifactLocator(artifactLocator)
                 .sizeBytes(sizeBytes)
                 .sha256(sha256)
                 .build();
@@ -131,6 +142,20 @@ public final class BackupExecution {
                         ? "Backup failed, with no reason reported"
                         : errorMessage.strip())
                 .build();
+    }
+
+    /** Compatibility for callers from the local-only model. */
+    @Deprecated(forRemoval = false)
+    public String getArtifactPath() {
+        return artifactLocator;
+    }
+
+    /** Compatibility for older tests while persisted terminology is migrated. */
+    public static class BackupExecutionBuilder {
+        public BackupExecutionBuilder artifactPath(String value) {
+            this.artifactLocator = value;
+            return this;
+        }
     }
 
     /** How long it ran, or has been running so far. */

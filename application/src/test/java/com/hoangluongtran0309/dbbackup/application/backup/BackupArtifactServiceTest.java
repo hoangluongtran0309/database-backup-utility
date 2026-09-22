@@ -75,7 +75,7 @@ class BackupArtifactServiceTest {
 
         assertThatThrownBy(() -> service.download(BACKUP_ID))
                 .isInstanceOf(NoSuchElementException.class)
-                .hasMessageContaining("no longer on disk");
+                .hasMessageContaining("no longer available");
         verify(storage, never()).openForReading(any());
     }
 

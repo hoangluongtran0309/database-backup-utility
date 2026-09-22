@@ -95,7 +95,7 @@ included — before the next one starts.
 
 ## Deferred after engine coverage
 
-The first two post-engine items are now complete. The remaining items stay ordered,
+The first three post-engine items are now complete. The remaining items stay ordered,
 but are not numbered as slices until the item before them is complete and
 their design is decided.
 
@@ -106,8 +106,11 @@ their design is decided.
 - [x] **22. Automatic retention.** Configure each target to keep its newest N
       successful backups, prune after a new success, preserve every backup with
       restore history, and expose the last sweep outcome. See ADR-024.
+- [x] **23. Storage profiles and S3-compatible storage.** Keep local storage as
+      the built-in default; add managed S3 profiles, per-target selection,
+      staging, multipart transfer and provider-aware artifact operations. See ADR-025.
 
-1. [ ] Storage profiles and S3-compatible storage, then GCS and Azure.
+1. [ ] GCS and Azure storage providers.
 2. [ ] Notifications.
 3. [ ] Restore verification in a temporary database.
 4. [ ] A CLI inbound adapter.

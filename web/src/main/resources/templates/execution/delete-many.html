@@ -21,11 +21,11 @@
 
   <div class="alert alert-danger" role="alert" th:unless="${preview.refused()}">
     <p th:if="${preview.artifactsOnDisk() == 1}">
-      <strong>1 artifact, <span th:text="${preview.bytesOnDisk()}">8192</span> bytes, is deleted from disk. There is no undo.</strong>
+      <strong>1 artifact, <span th:text="${preview.bytesOnDisk()}">8192</span> bytes, is deleted from storage. There is no undo.</strong>
     </p>
     <p th:if="${preview.artifactsOnDisk() > 1}">
       <strong><span th:text="${preview.artifactsOnDisk()}">3</span> artifacts,
-        <span th:text="${preview.bytesOnDisk()}">24576</span> bytes in all, are deleted from disk. There is no undo.</strong>
+        <span th:text="${preview.bytesOnDisk()}">24576</span> bytes in all, are deleted from storage. There is no undo.</strong>
     </p>
     <p th:if="${preview.artifactsOnDisk() == 0}"><strong>There is no undo.</strong></p>
     <p th:if="${preview.restoreCount() == 1}">

@@ -348,7 +348,7 @@ class RestoreBackupServiceTest {
 
         runQueuedWork(service.start(BACKUP_ID, TARGET_ID));
 
-        assertThat(lastSaved().getErrorMessage()).contains("no longer on disk");
+        assertThat(lastSaved().getErrorMessage()).contains("no longer available");
         verifyNoInteractions(restoreEngine);
         verify(storage, never()).sha256Of(any());
     }

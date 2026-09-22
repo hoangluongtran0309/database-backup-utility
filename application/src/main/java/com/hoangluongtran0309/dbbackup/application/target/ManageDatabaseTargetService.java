@@ -6,20 +6,22 @@ import java.util.NoSuchElementException;
 import java.util.UUID;
 
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import com.hoangluongtran0309.dbbackup.application.EngineAdapterRegistry;
 import com.hoangluongtran0309.dbbackup.application.backup.BackupArtifactService;
 import com.hoangluongtran0309.dbbackup.application.backup.BackupArtifactService.BulkDeletionPreview;
 import com.hoangluongtran0309.dbbackup.core.exception.TargetInUseException;
 import com.hoangluongtran0309.dbbackup.core.model.BackupExecution;
+import com.hoangluongtran0309.dbbackup.core.model.ConnectionCheck;
 import com.hoangluongtran0309.dbbackup.core.model.DatabaseTarget;
 import com.hoangluongtran0309.dbbackup.core.port.BackupExecutionRepository;
 import com.hoangluongtran0309.dbbackup.core.port.BackupScheduleRepository;
 import com.hoangluongtran0309.dbbackup.core.port.DatabaseTargetRepository;
 import com.hoangluongtran0309.dbbackup.core.port.EncryptionPort;
 import com.hoangluongtran0309.dbbackup.core.port.RestoreExecutionRepository;
+import com.hoangluongtran0309.dbbackup.core.port.StorageProfileRepository;
 
-import lombok.RequiredArgsConstructor;
 
 /**
  * Registering, editing, listing and removing backup targets.
@@ -29,10 +31,9 @@ import lombok.RequiredArgsConstructor;
  * at the edge of the hexagon and keep this class testable without a database;
  * an interface in front of <em>this</em> class would buy nothing.
  *
- * <p>This is also the only type in the system that calls {@link EncryptionPort}.
+ * <p>Secrets are encrypted here before they enter the target domain model.
  */
 @Service
-@RequiredArgsConstructor
 public class ManageDatabaseTargetService {
 
     /**
@@ -68,6 +69,32 @@ public class ManageDatabaseTargetService {
     private final EncryptionPort encryption;
     private final Clock clock;
     private final EngineAdapterRegistry engineAdapters;
+    private final StorageProfileRepository storageProfiles;
+
+    @Autowired
+    public ManageDatabaseTargetService(DatabaseTargetRepository repository, BackupExecutionRepository backups,
+            RestoreExecutionRepository restores, BackupScheduleRepository schedules,
+            BackupArtifactService artifacts, EncryptionPort encryption, Clock clock,
+            EngineAdapterRegistry engineAdapters, StorageProfileRepository storageProfiles) {
+        this.repository = repository; this.backups = backups; this.restores = restores; this.schedules = schedules;
+        this.artifacts = artifacts; this.encryption = encryption; this.clock = clock;
+        this.engineAdapters = engineAdapters; this.storageProfiles = storageProfiles;
+    }
+
+    public ManageDatabaseTargetService(DatabaseTargetRepository repository, BackupExecutionRepository backups,
+            RestoreExecutionRepository restores, BackupScheduleRepository schedules,
+            BackupArtifactService artifacts, EncryptionPort encryption, Clock clock,
+            EngineAdapterRegistry engineAdapters) {
+        this(repository, backups, restores, schedules, artifacts, encryption, clock, engineAdapters,
+                new StorageProfileRepository() {
+                    @Override public com.hoangluongtran0309.dbbackup.core.model.StorageProfile save(
+                            com.hoangluongtran0309.dbbackup.core.model.StorageProfile p) { throw new UnsupportedOperationException(); }
+                    @Override public java.util.Optional<com.hoangluongtran0309.dbbackup.core.model.StorageProfile> findById(UUID id) { return java.util.Optional.empty(); }
+                    @Override public java.util.List<com.hoangluongtran0309.dbbackup.core.model.StorageProfile> findAll() { return java.util.List.of(); }
+                    @Override public void recordConnectionCheck(UUID id, ConnectionCheck check) { }
+                    @Override public void deleteById(UUID id) { }
+                });
+    }
 
     /**
      * @throws com.hoangluongtran0309.dbbackup.core.exception.InvalidTargetException
@@ -80,6 +107,7 @@ public class ManageDatabaseTargetService {
             throw new com.hoangluongtran0309.dbbackup.core.exception.InvalidTargetException(
                     "engine", "%s support is not enabled".formatted(command.engine().displayName()));
         }
+        requireStorageProfile(command.storageProfileId());
         DatabaseTarget target = DatabaseTarget.builder()
                 .id(UUID.randomUUID())
                 .name(command.name())
@@ -90,6 +118,7 @@ public class ManageDatabaseTargetService {
                 .username(command.username())
                 .authenticationDatabase(command.authenticationDatabase())
                 .dataPumpDirectory(command.dataPumpDirectory())
+                .storageProfileId(command.storageProfileId())
                 .passwordCiphertext(command.engine().isFileBased() ? null : encryption.encrypt(command.password()))
                 .createdAt(clock.instant())
                 .build();
@@ -116,6 +145,7 @@ public class ManageDatabaseTargetService {
      */
     public DatabaseTarget edit(UUID id, EditTargetCommand command) {
         DatabaseTarget current = get(id);
+        requireStorageProfile(command.storageProfileId());
         if (current.getEngine().isFileBased() && command.changesPassword()) {
             throw new com.hoangluongtran0309.dbbackup.core.exception.InvalidTargetException(
                     "password", "Password is not used by SQLite targets");
@@ -146,7 +176,8 @@ public class ManageDatabaseTargetService {
                 command.username(),
                 command.authenticationDatabase(),
                 command.dataPumpDirectory(),
-                command.changesPassword() ? encryption.encrypt(command.password()) : null);
+                command.changesPassword() ? encryption.encrypt(command.password()) : null,
+                command.storageProfileId());
 
         return repository.save(edited);
     }
@@ -236,5 +267,12 @@ public class ManageDatabaseTargetService {
 
     private static List<UUID> idsOf(List<BackupExecution> executions) {
         return executions.stream().map(BackupExecution::getId).toList();
+    }
+
+    private void requireStorageProfile(UUID id) {
+        if (id != null && storageProfiles.findById(id).isEmpty()) {
+            throw new com.hoangluongtran0309.dbbackup.core.exception.InvalidTargetException(
+                    "storageProfileId", "Selected storage profile no longer exists");
+        }
     }
 }

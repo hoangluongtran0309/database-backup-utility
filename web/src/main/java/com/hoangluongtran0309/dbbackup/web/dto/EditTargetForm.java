@@ -1,5 +1,7 @@
 package com.hoangluongtran0309.dbbackup.web.dto;
 
+import java.util.UUID;
+
 import com.hoangluongtran0309.dbbackup.application.target.EditTargetCommand;
 import com.hoangluongtran0309.dbbackup.core.model.DatabaseTarget;
 
@@ -42,6 +44,7 @@ public class EditTargetForm {
 
     /** Blank keeps the stored password. */
     private String password;
+    private UUID storageProfileId;
 
     /** Pre-filled from the target, all but the password. */
     public static EditTargetForm of(DatabaseTarget target) {
@@ -52,11 +55,13 @@ public class EditTargetForm {
         form.setUsername(target.getUsername());
         form.setAuthenticationDatabase(target.getAuthenticationDatabase());
         form.setDataPumpDirectory(target.getDataPumpDirectory());
+        form.setStorageProfileId(target.getStorageProfileId());
         return form;
     }
 
     public EditTargetCommand toCommand() {
         return new EditTargetCommand(
-                name, host, port, username, password, authenticationDatabase, dataPumpDirectory);
+                name, host, port, username, password, authenticationDatabase, dataPumpDirectory,
+                storageProfileId);
     }
 }
