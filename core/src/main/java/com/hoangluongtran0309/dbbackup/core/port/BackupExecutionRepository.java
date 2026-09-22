@@ -44,6 +44,13 @@ public interface BackupExecutionRepository {
      */
     List<BackupExecution> findAllForTarget(UUID targetId);
 
+    /**
+     * Successful backups that automatic retention may remove, newest first.
+     * Backups with any restore history are excluded before the newest
+     * {@code keepSuccessful} unprotected backups are skipped.
+     */
+    List<BackupExecution> findRetentionCandidates(UUID targetId, int keepSuccessful);
+
     /** Silent when the id is unknown. */
     void deleteById(UUID id);
 }

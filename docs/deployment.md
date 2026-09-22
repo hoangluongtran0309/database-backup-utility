@@ -64,11 +64,13 @@ to survive the container but not the machine. These artifacts are the reason the
 tool exists — getting them somewhere else is outside this tool's job, and
 whatever already backs up that host should be pointed at the volume.
 
-**Nothing prunes them.** There is no retention policy
-([ADR-008](adr/008-deleting-a-backup-takes-its-history-with-it.md)). The volume
-grows until somebody deletes backups through the console — several at a time
-from the backup list, or all of a target's with the target
-([ADR-015](adr/015-deleting-many-backups-and-a-target-with-them.md)).
+**Retention starts disabled.** Configure it per target in the Retention page to
+keep the newest N successful backups. It runs only after a new successful
+backup; saving a policy or restarting does not immediately prune existing
+files. Backups with restore history, failed attempts and running jobs stay
+outside automatic cleanup. Without a policy the volume still grows until an
+operator deletes backups through the console. See
+[ADR-024](adr/024-retention-keeps-new-unrestored-backups-per-target.md).
 
 **Schedules use the application's clock and one explicit zone each.** Cron
 expressions use Quartz syntax, with seconds as the first field. The schedule

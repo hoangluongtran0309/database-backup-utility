@@ -32,6 +32,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.hoangluongtran0309.dbbackup.application.EngineAdapterRegistry;
+import com.hoangluongtran0309.dbbackup.application.retention.ApplyBackupRetentionService;
 import com.hoangluongtran0309.dbbackup.core.exception.BackupFailedException;
 import com.hoangluongtran0309.dbbackup.core.model.BackupExecution;
 import com.hoangluongtran0309.dbbackup.core.model.DatabaseEngine;
@@ -58,6 +59,7 @@ class RunBackupServiceTest {
     @Mock private LogicalBackupPort backupEngine;
     @Mock private StoragePort storage;
     @Mock private EncryptionPort encryption;
+    @Mock private ApplyBackupRetentionService retention;
 
     @Captor private ArgumentCaptor<BackupExecution> saved;
 
@@ -76,7 +78,7 @@ class RunBackupServiceTest {
 
     private RunBackupService newService(Executor executor) {
         return new RunBackupService(targets, executions, adapters, storage, encryption,
-                executor, Clock.fixed(NOW, ZoneOffset.UTC));
+                executor, Clock.fixed(NOW, ZoneOffset.UTC), retention);
     }
 
     // --- accepting a backup -------------------------------------------------
@@ -190,6 +192,24 @@ class RunBackupServiceTest {
         assertThat(recorded.getSizeBytes()).isEqualTo(8192L);
         assertThat(recorded.getSha256()).isEqualTo(SHA256);
         assertThat(recorded.getFinishedAt()).isEqualTo(NOW);
+        verify(retention).applyAfterSuccessfulBackup(TARGET_ID);
+    }
+
+    @Test
+    void retentionFailureDoesNotTurnAGoodBackupIntoAFailure() {
+        givenTarget();
+        givenSaveEchoes();
+        when(encryption.decrypt(any())).thenReturn("s3cr3t");
+        when(storage.locationFor(any())).thenReturn(ARTIFACT);
+        when(backupEngine.dumpTo(any(), any(), any())).thenReturn(1L);
+        when(storage.sha256Of(ARTIFACT)).thenReturn(SHA256);
+        when(retention.applyAfterSuccessfulBackup(TARGET_ID))
+                .thenThrow(new IllegalStateException("retention metadata unavailable"));
+
+        runQueuedWork(service.start(TARGET_ID));
+
+        assertThat(lastSaved().getStatus()).isEqualTo(ExecutionStatus.SUCCEEDED);
+        verify(storage, never()).delete(ARTIFACT);
     }
 
     /** Checksummed after the dump, never before: the file is only complete once the engine returns. */
@@ -276,6 +296,7 @@ class RunBackupServiceTest {
         BackupExecution recorded = lastSaved();
         assertThat(recorded.getStatus()).isEqualTo(ExecutionStatus.FAILED);
         assertThat(recorded.getErrorMessage()).isEqualTo("mysqldump exited with 2: Access denied");
+        verifyNoInteractions(retention);
         // The engine already removed its own partial file.
         verify(storage, never()).delete(any());
     }

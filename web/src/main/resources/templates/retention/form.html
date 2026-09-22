@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout/base :: page(${policy == null ? 'Enable retention' : 'Edit retention'}, 'retention', ~{:: #content})}">
+<body>
+<div id="content">
+  <div class="page-header">
+    <div>
+      <div class="eyebrow">Automation</div>
+      <h1 th:text="${policy == null ? 'Enable retention' : 'Edit retention'}">Enable retention</h1>
+      <p>Target: <strong th:text="${target.name}">production</strong>. The policy first runs after its next successful backup.</p>
+    </div>
+  </div>
+
+  <form class="form-panel" method="post" th:object="${form}"
+        th:action="@{/retention/{id}(id=${target.id})}">
+    <div th:replace="~{fragments/form-errors :: formErrors}"></div>
+
+    <div class="form-group">
+      <label for="keepSuccessful">Successful backups to keep</label>
+      <input id="keepSuccessful" type="number" min="1" step="1" inputmode="numeric"
+             th:field="*{keepSuccessful}" autofocus
+             aria-describedby="retention-help"
+             th:classappend="${#fields.hasErrors('keepSuccessful')} ? 'input-error'">
+      <p class="field-hint" id="retention-help">
+        Backups with restore history are always kept in addition to this number. Failed and running attempts are never pruned.
+      </p>
+      <div th:replace="~{fragments/field-error :: fieldError('keepSuccessful')}"></div>
+    </div>
+
+    <div class="form-actions">
+      <button class="button button-primary" type="submit" data-busy-label="Saving…">Save retention policy</button>
+      <a class="button button-ghost" th:href="@{/retention}">Cancel</a>
+    </div>
+  </form>
+</div>
+</body>
+</html>
