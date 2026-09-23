@@ -4,5 +4,7 @@ public enum StorageCredentialMode {
     STATIC,
     DEFAULT_CHAIN,
     SERVICE_ACCOUNT_JSON,
-    APPLICATION_DEFAULT
+    APPLICATION_DEFAULT,
+    AZURE_DEFAULT,
+    ACCOUNT_KEY
 }

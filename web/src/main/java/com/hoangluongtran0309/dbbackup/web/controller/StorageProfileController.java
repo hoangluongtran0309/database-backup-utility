@@ -120,11 +120,14 @@ public class StorageProfileController {
     private String form(Model model, StorageProfile profile, StorageProvider provider) {
         if (profile != null) model.addAttribute("editing", profile);
         model.addAttribute("provider", provider);
-        model.addAttribute("credentialModes", provider == StorageProvider.S3
-                ? new StorageCredentialMode[] {
-                    StorageCredentialMode.STATIC, StorageCredentialMode.DEFAULT_CHAIN }
-                : new StorageCredentialMode[] {
-                    StorageCredentialMode.APPLICATION_DEFAULT, StorageCredentialMode.SERVICE_ACCOUNT_JSON });
+        model.addAttribute("credentialModes", switch (provider) {
+            case S3 -> new StorageCredentialMode[] {
+                StorageCredentialMode.STATIC, StorageCredentialMode.DEFAULT_CHAIN };
+            case GCS -> new StorageCredentialMode[] {
+                StorageCredentialMode.APPLICATION_DEFAULT, StorageCredentialMode.SERVICE_ACCOUNT_JSON };
+            case AZURE_BLOB -> new StorageCredentialMode[] {
+                StorageCredentialMode.AZURE_DEFAULT, StorageCredentialMode.ACCOUNT_KEY };
+        });
         return "storage/form";
     }
 
@@ -135,5 +138,6 @@ public class StorageProfileController {
     private static void clearSecrets(StorageProfileForm form) {
         form.setSecretAccessKey(null);
         form.setServiceAccountJson(null);
+        form.setAccountKey(null);
     }
 }

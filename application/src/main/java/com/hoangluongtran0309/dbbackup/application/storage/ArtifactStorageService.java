@@ -13,12 +13,14 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 
 import com.hoangluongtran0309.dbbackup.core.model.ArtifactReference;
+import com.hoangluongtran0309.dbbackup.core.model.AzureBlobStorageConnection;
 import com.hoangluongtran0309.dbbackup.core.model.GcsStorageConnection;
 import com.hoangluongtran0309.dbbackup.core.model.S3StorageConnection;
 import com.hoangluongtran0309.dbbackup.core.model.StorageCredentialMode;
 import com.hoangluongtran0309.dbbackup.core.model.StorageProfile;
 import com.hoangluongtran0309.dbbackup.core.model.StorageProvider;
 import com.hoangluongtran0309.dbbackup.core.port.EncryptionPort;
+import com.hoangluongtran0309.dbbackup.core.port.AzureBlobStoragePort;
 import com.hoangluongtran0309.dbbackup.core.port.GcsStoragePort;
 import com.hoangluongtran0309.dbbackup.core.port.S3StoragePort;
 import com.hoangluongtran0309.dbbackup.core.port.StagingStoragePort;
@@ -35,6 +37,7 @@ public class ArtifactStorageService {
     private final StagingStoragePort staging;
     private final S3StoragePort s3;
     private final GcsStoragePort gcs;
+    private final AzureBlobStoragePort azure;
     private final StorageProfileRepository profiles;
     private final EncryptionPort encryption;
 
@@ -67,6 +70,17 @@ public class ArtifactStorageService {
             @Override public void download(GcsStorageConnection c, String k, Path p) { throw unavailable(); }
             @Override public void delete(GcsStorageConnection c, String k) { throw unavailable(); }
         };
+        AzureBlobStoragePort noAzure = new AzureBlobStoragePort() {
+            private UnsupportedOperationException unavailable() {
+                return new UnsupportedOperationException("Azure Blob unavailable");
+            }
+            @Override public void test(AzureBlobStorageConnection c) { throw unavailable(); }
+            @Override public void upload(AzureBlobStorageConnection c, String k, Path p) { throw unavailable(); }
+            @Override public boolean exists(AzureBlobStorageConnection c, String k) { throw unavailable(); }
+            @Override public InputStream openForReading(AzureBlobStorageConnection c, String k) { throw unavailable(); }
+            @Override public void download(AzureBlobStorageConnection c, String k, Path p) { throw unavailable(); }
+            @Override public void delete(AzureBlobStorageConnection c, String k) { throw unavailable(); }
+        };
         StorageProfileRepository noProfiles = new StorageProfileRepository() {
             @Override public StorageProfile save(StorageProfile p) { throw new UnsupportedOperationException(); }
             @Override public java.util.Optional<StorageProfile> findById(UUID id) { return java.util.Optional.empty(); }
@@ -74,7 +88,7 @@ public class ArtifactStorageService {
             @Override public void recordConnectionCheck(UUID id, com.hoangluongtran0309.dbbackup.core.model.ConnectionCheck c) { }
             @Override public void deleteById(UUID id) { }
         };
-        return new ArtifactStorageService(local, noStaging, noS3, noGcs, noProfiles, new EncryptionPort() {
+        return new ArtifactStorageService(local, noStaging, noS3, noGcs, noAzure, noProfiles, new EncryptionPort() {
             @Override public String encrypt(String plaintext) { return plaintext; }
             @Override public String decrypt(String ciphertext) { return ciphertext; }
         });
@@ -95,10 +109,11 @@ public class ArtifactStorageService {
     public ArtifactReference publish(PreparedWrite write) {
         if (write.remote()) {
             StorageProfile profile = requireProfile(write.reference().storageProfileId());
-            if (profile.getProvider() == StorageProvider.S3) {
-                s3.upload(s3Connection(profile), write.reference().locator(), write.path());
-            } else {
-                gcs.upload(gcsConnection(profile), write.reference().locator(), write.path());
+            switch (profile.getProvider()) {
+                case S3 -> s3.upload(s3Connection(profile), write.reference().locator(), write.path());
+                case GCS -> gcs.upload(gcsConnection(profile), write.reference().locator(), write.path());
+                case AZURE_BLOB -> azure.upload(
+                        azureConnection(profile), write.reference().locator(), write.path());
             }
         }
         return write.reference();
@@ -111,10 +126,10 @@ public class ArtifactStorageService {
         Path path = staging.locationFor(operationId, filename);
         try {
             StorageProfile profile = requireProfile(reference.storageProfileId());
-            if (profile.getProvider() == StorageProvider.S3) {
-                s3.download(s3Connection(profile), reference.locator(), path);
-            } else {
-                gcs.download(gcsConnection(profile), reference.locator(), path);
+            switch (profile.getProvider()) {
+                case S3 -> s3.download(s3Connection(profile), reference.locator(), path);
+                case GCS -> gcs.download(gcsConnection(profile), reference.locator(), path);
+                case AZURE_BLOB -> azure.download(azureConnection(profile), reference.locator(), path);
             }
         } catch (RuntimeException e) {
             staging.deleteOperation(operationId);
@@ -126,17 +141,21 @@ public class ArtifactStorageService {
     public boolean exists(ArtifactReference reference) {
         if (reference.isLocal()) return local.exists(Path.of(reference.locator()));
         StorageProfile profile = requireProfile(reference.storageProfileId());
-        return profile.getProvider() == StorageProvider.S3
-                ? s3.exists(s3Connection(profile), reference.locator())
-                : gcs.exists(gcsConnection(profile), reference.locator());
+        return switch (profile.getProvider()) {
+            case S3 -> s3.exists(s3Connection(profile), reference.locator());
+            case GCS -> gcs.exists(gcsConnection(profile), reference.locator());
+            case AZURE_BLOB -> azure.exists(azureConnection(profile), reference.locator());
+        };
     }
 
     public InputStream openForReading(ArtifactReference reference) {
         if (reference.isLocal()) return local.openForReading(Path.of(reference.locator()));
         StorageProfile profile = requireProfile(reference.storageProfileId());
-        return profile.getProvider() == StorageProvider.S3
-                ? s3.openForReading(s3Connection(profile), reference.locator())
-                : gcs.openForReading(gcsConnection(profile), reference.locator());
+        return switch (profile.getProvider()) {
+            case S3 -> s3.openForReading(s3Connection(profile), reference.locator());
+            case GCS -> gcs.openForReading(gcsConnection(profile), reference.locator());
+            case AZURE_BLOB -> azure.openForReading(azureConnection(profile), reference.locator());
+        };
     }
 
     public String sha256(ArtifactReference reference) {
@@ -172,10 +191,10 @@ public class ArtifactStorageService {
             return;
         }
         StorageProfile profile = requireProfile(reference.storageProfileId());
-        if (profile.getProvider() == StorageProvider.S3) {
-            s3.delete(s3Connection(profile), reference.locator());
-        } else {
-            gcs.delete(gcsConnection(profile), reference.locator());
+        switch (profile.getProvider()) {
+            case S3 -> s3.delete(s3Connection(profile), reference.locator());
+            case GCS -> gcs.delete(gcsConnection(profile), reference.locator());
+            case AZURE_BLOB -> azure.delete(azureConnection(profile), reference.locator());
         }
     }
 
@@ -184,8 +203,11 @@ public class ArtifactStorageService {
     }
 
     public void test(StorageProfile profile) {
-        if (profile.getProvider() == StorageProvider.S3) s3.test(s3Connection(profile));
-        else gcs.test(gcsConnection(profile));
+        switch (profile.getProvider()) {
+            case S3 -> s3.test(s3Connection(profile));
+            case GCS -> gcs.test(gcsConnection(profile));
+            case AZURE_BLOB -> azure.test(azureConnection(profile));
+        }
     }
 
     private StorageProfile requireProfile(UUID id) {
@@ -206,6 +228,13 @@ public class ArtifactStorageService {
                 ? encryption.decrypt(profile.getServiceAccountJsonCiphertext()) : null;
         return new GcsStorageConnection(profile.getEndpoint(), profile.getProjectId(), profile.getBucket(),
                 profile.getKeyPrefix(), profile.getCredentialMode(), json);
+    }
+
+    private AzureBlobStorageConnection azureConnection(StorageProfile profile) {
+        String accountKey = profile.getCredentialMode() == StorageCredentialMode.ACCOUNT_KEY
+                ? encryption.decrypt(profile.getAccountKeyCiphertext()) : null;
+        return new AzureBlobStorageConnection(profile.getEndpoint(), profile.getAccountName(),
+                profile.getBucket(), profile.getKeyPrefix(), profile.getCredentialMode(), accountKey);
     }
 
     static String objectKey(String prefix, UUID targetId, UUID executionId, String filename) {

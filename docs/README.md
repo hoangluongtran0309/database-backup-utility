@@ -10,8 +10,8 @@
   the decisions were made.
 
 The current last decision is
-[ADR-026](adr/026-google-cloud-storage-profiles.md), which adds native Google
-Cloud Storage profiles and resumable upload to the provider-neutral artifact
+[ADR-027](adr/027-azure-blob-storage-profiles.md), which adds native Azure Blob
+Storage profiles and block-blob upload to the provider-neutral artifact
 workflow established by ADR-025.
 
 These pages describe the code that exists. When a slice changes the code, it

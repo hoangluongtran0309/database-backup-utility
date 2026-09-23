@@ -22,6 +22,7 @@ import com.hoangluongtran0309.dbbackup.core.model.StorageCredentialMode;
 import com.hoangluongtran0309.dbbackup.core.model.StorageProfile;
 import com.hoangluongtran0309.dbbackup.core.model.StorageProvider;
 import com.hoangluongtran0309.dbbackup.core.port.EncryptionPort;
+import com.hoangluongtran0309.dbbackup.core.port.AzureBlobStoragePort;
 import com.hoangluongtran0309.dbbackup.core.port.GcsStoragePort;
 import com.hoangluongtran0309.dbbackup.core.port.S3StoragePort;
 import com.hoangluongtran0309.dbbackup.core.port.StagingStoragePort;
@@ -34,11 +35,14 @@ class ArtifactStorageServiceTest {
     @Mock StagingStoragePort staging;
     @Mock S3StoragePort s3;
     @Mock GcsStoragePort gcs;
+    @Mock AzureBlobStoragePort azure;
     @Mock StorageProfileRepository profiles;
     @Mock EncryptionPort encryption;
     ArtifactStorageService service;
 
-    @BeforeEach void setUp() { service = new ArtifactStorageService(local, staging, s3, gcs, profiles, encryption); }
+    @BeforeEach void setUp() {
+        service = new ArtifactStorageService(local, staging, s3, gcs, azure, profiles, encryption);
+    }
 
     @Test
     void localWritesKeepTheAbsolutePathAsLocator() {
@@ -148,6 +152,72 @@ class ArtifactStorageServiceTest {
         verify(staging).deleteOperation(operationId);
     }
 
+    @Test
+    void azureOperationsStayOnAzureAndDecryptTheAccountKey() throws Exception {
+        UUID profileId = UUID.randomUUID();
+        UUID targetId = UUID.randomUUID();
+        UUID operationId = UUID.randomUUID();
+        Path staged = Path.of("/staging", operationId.toString(), "shop.dump");
+        StorageProfile profile = azureProfile(profileId, StorageCredentialMode.ACCOUNT_KEY, "sealed-key");
+        when(profiles.findById(profileId)).thenReturn(Optional.of(profile));
+        when(encryption.decrypt("sealed-key")).thenReturn("plain-key");
+        when(staging.locationFor(operationId, "shop.dump")).thenReturn(staged);
+
+        ArtifactReference reference;
+        try (var prepared = service.prepareWrite(profileId, targetId, operationId, "shop.dump")) {
+            reference = service.publish(prepared);
+        }
+        when(azure.exists(org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.eq(reference.locator()))).thenReturn(true);
+        when(azure.openForReading(org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.eq(reference.locator())))
+                .thenReturn(new ByteArrayInputStream("artifact".getBytes()));
+
+        assertThat(service.exists(reference)).isTrue();
+        try (var input = service.openForReading(reference)) {
+            assertThat(input.readAllBytes()).isEqualTo("artifact".getBytes());
+        }
+        try (var prepared = service.materialize(reference, operationId, "shop.dump")) {
+            assertThat(prepared.path()).isEqualTo(staged);
+        }
+        service.test(profile);
+        service.delete(reference);
+
+        var connection = org.mockito.ArgumentCaptor.forClass(
+                com.hoangluongtran0309.dbbackup.core.model.AzureBlobStorageConnection.class);
+        verify(azure).test(connection.capture());
+        assertThat(connection.getValue().accountKey()).isEqualTo("plain-key");
+        verify(azure).upload(org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.eq("daily/" + targetId + "/" + operationId + "/shop.dump"),
+                org.mockito.ArgumentMatchers.eq(staged));
+        verify(azure).download(org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.eq(reference.locator()),
+                org.mockito.ArgumentMatchers.eq(staged));
+        verify(azure).delete(org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.eq(reference.locator()));
+        verify(staging, org.mockito.Mockito.times(2)).deleteOperation(operationId);
+    }
+
+    @Test
+    void failedAzureDownloadDeletesItsOperationDirectory() {
+        UUID profileId = UUID.randomUUID();
+        UUID operationId = UUID.randomUUID();
+        Path staged = Path.of("/staging", operationId.toString(), "shop.dump");
+        when(profiles.findById(profileId)).thenReturn(Optional.of(
+                azureProfile(profileId, StorageCredentialMode.AZURE_DEFAULT, null)));
+        when(staging.locationFor(operationId, "shop.dump")).thenReturn(staged);
+        org.mockito.Mockito.doThrow(new IllegalStateException("azure unavailable"))
+                .when(azure).download(org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+
+        assertThatThrownBy(() -> service.materialize(
+                new ArtifactReference(profileId, "daily/t/e/shop.dump"), operationId, "shop.dump"))
+                .hasMessage("azure unavailable");
+
+        verify(staging).deleteOperation(operationId);
+        verify(encryption, org.mockito.Mockito.never()).decrypt(org.mockito.ArgumentMatchers.any());
+    }
+
     private static StorageProfile gcsProfile(
             UUID id, StorageCredentialMode mode, String encryptedJson) {
         return StorageProfile.builder().id(id).name("gcs").provider(StorageProvider.GCS)
@@ -163,5 +233,13 @@ class ArtifactStorageServiceTest {
                 .region("us-east-1").bucket("backups").keyPrefix("daily").pathStyle(true)
                 .credentialMode(StorageCredentialMode.STATIC).accessKeyId("access")
                 .secretAccessKeyCiphertext("encrypted-secret").createdAt(now).updatedAt(now).build();
+    }
+
+    private static StorageProfile azureProfile(
+            UUID id, StorageCredentialMode mode, String encryptedKey) {
+        return StorageProfile.builder().id(id).name("azure").provider(StorageProvider.AZURE_BLOB)
+                .accountName("backupaccount").bucket("backups").keyPrefix("daily")
+                .credentialMode(mode).accountKeyCiphertext(encryptedKey)
+                .createdAt(Instant.EPOCH).updatedAt(Instant.EPOCH).build();
     }
 }

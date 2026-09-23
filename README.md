@@ -4,9 +4,9 @@ MySQL, MariaDB, PostgreSQL, MongoDB, SQLite, optional Oracle and optional SQL
 Server logical backup and restore, driven from a small web console.
 
 The scope is deliberately narrow: **full logical dumps and same-engine restores**
-to local disk, S3-compatible storage or Google Cloud Storage. MySQL, MariaDB, PostgreSQL, MongoDB, SQLite, Oracle and SQL Server
+to local disk, S3-compatible storage, Google Cloud Storage or Azure Blob Storage. MySQL, MariaDB, PostgreSQL, MongoDB, SQLite, Oracle and SQL Server
 are implemented. There is no physical
-backup, incremental chain or point-in-time recovery. Azure is not yet supported.
+backup, incremental chain or point-in-time recovery.
 Each capability arrives as one complete vertical slice, code and documentation
 together. See [ROADMAP.md](ROADMAP.md) for what exists and what is next.
 
@@ -22,13 +22,15 @@ stored.
 The built-in local filesystem remains the default destination. The Storage
 page can add S3-compatible profiles with static credentials or the AWS default
 credential chain, and GCS profiles with Application Default Credentials (ADC)
-or an encrypted service-account JSON key. Each profile is tested with a
+or an encrypted service-account JSON key. Azure profiles use Azure Default
+Credential or an encrypted storage-account key. Each profile is tested with a
 create/metadata-read/content-read/delete probe and can be selected per target.
 Existing backups keep their original destination when a target is changed.
 Remote artifacts are staged locally only for dump/restore and the staging copy
 is removed afterwards. See
 [ADR-025](docs/adr/025-s3-storage-profiles-and-local-staging.md) and
-[ADR-026](docs/adr/026-google-cloud-storage-profiles.md).
+[ADR-026](docs/adr/026-google-cloud-storage-profiles.md), and
+[ADR-027](docs/adr/027-azure-blob-storage-profiles.md).
 
 Named Quartz schedules can run the same full backup path on a recurring cron
 expression in an explicit IANA time zone. They can be created, edited, paused

@@ -2,7 +2,8 @@ package com.hoangluongtran0309.dbbackup.core.model;
 
 public enum StorageProvider {
     S3("S3-compatible"),
-    GCS("Google Cloud Storage");
+    GCS("Google Cloud Storage"),
+    AZURE_BLOB("Azure Blob Storage");
 
     private final String displayName;
 

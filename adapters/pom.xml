@@ -58,6 +58,30 @@
       <artifactId>google-cloud-storage</artifactId>
       <version>${google.cloud.storage.version}</version>
     </dependency>
+    <dependency>
+      <groupId>com.azure</groupId>
+      <artifactId>azure-storage-blob</artifactId>
+      <exclusions>
+        <exclusion>
+          <groupId>com.azure</groupId>
+          <artifactId>azure-core-http-netty</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>com.azure</groupId>
+      <artifactId>azure-identity</artifactId>
+      <exclusions>
+        <exclusion>
+          <groupId>com.azure</groupId>
+          <artifactId>azure-core-http-netty</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>com.azure</groupId>
+      <artifactId>azure-core-http-jdk-httpclient</artifactId>
+    </dependency>
 
     <!--
       Testcontainers 2.x renamed its modules to a testcontainers-* prefix and
@@ -147,6 +171,7 @@
               <excludes>
                 <exclude>**/S3StorageAdapterIT.java</exclude>
                 <exclude>**/GcsStorageAdapterIT.java</exclude>
+                <exclude>**/AzureBlobStorageAdapterIT.java</exclude>
               </excludes>
             </configuration>
           </execution>
@@ -173,6 +198,20 @@
             <configuration>
               <includes>
                 <include>**/S3StorageAdapterIT.java</include>
+              </includes>
+              <forkCount>1</forkCount>
+              <reuseForks>false</reuseForks>
+            </configuration>
+          </execution>
+          <execution>
+            <id>azure-integration-tests</id>
+            <goals>
+              <goal>integration-test</goal>
+              <goal>verify</goal>
+            </goals>
+            <configuration>
+              <includes>
+                <include>**/AzureBlobStorageAdapterIT.java</include>
               </includes>
               <forkCount>1</forkCount>
               <reuseForks>false</reuseForks>

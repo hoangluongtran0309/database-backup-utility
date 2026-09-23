@@ -77,6 +77,8 @@ public class ManageStorageProfileService {
             SaveStorageProfileCommand command, StorageProfile current) {
         StorageCredentialMode mode = command.credentialMode();
         boolean s3 = command.provider() == StorageProvider.S3;
+        boolean gcs = command.provider() == StorageProvider.GCS;
+        boolean azure = command.provider() == StorageProvider.AZURE_BLOB;
         String accessKey = s3 && mode == StorageCredentialMode.STATIC ? command.accessKeyId() : null;
         String secretCiphertext = null;
         if (s3 && mode == StorageCredentialMode.STATIC) {
@@ -86,7 +88,7 @@ public class ManageStorageProfileService {
                 secretCiphertext = current.getSecretAccessKeyCiphertext();
         }
         String serviceAccountCiphertext = null;
-        if (!s3 && mode == StorageCredentialMode.SERVICE_ACCOUNT_JSON) {
+        if (gcs && mode == StorageCredentialMode.SERVICE_ACCOUNT_JSON) {
             if (command.suppliesServiceAccountJson()) {
                 serviceAccountCiphertext = encryption.encrypt(command.serviceAccountJson());
             } else if (current != null && current.getProvider() == StorageProvider.GCS
@@ -94,13 +96,24 @@ public class ManageStorageProfileService {
                 serviceAccountCiphertext = current.getServiceAccountJsonCiphertext();
             }
         }
+        String accountKeyCiphertext = null;
+        if (azure && mode == StorageCredentialMode.ACCOUNT_KEY) {
+            if (command.suppliesAccountKey()) {
+                accountKeyCiphertext = encryption.encrypt(command.accountKey());
+            } else if (current != null && current.getProvider() == StorageProvider.AZURE_BLOB
+                    && current.getCredentialMode() == StorageCredentialMode.ACCOUNT_KEY) {
+                accountKeyCiphertext = current.getAccountKeyCiphertext();
+            }
+        }
         return StorageProfile.builder().id(id).name(command.name()).provider(command.provider())
                 .endpoint(command.endpoint()).region(s3 ? command.region() : null)
-                .projectId(s3 ? null : command.projectId())
+                .projectId(gcs ? command.projectId() : null)
+                .accountName(azure ? command.accountName() : null)
                 .bucket(command.bucket()).keyPrefix(command.keyPrefix())
                 .pathStyle(s3 && command.pathStyle()).credentialMode(mode).accessKeyId(accessKey)
                 .secretAccessKeyCiphertext(secretCiphertext)
                 .serviceAccountJsonCiphertext(serviceAccountCiphertext)
+                .accountKeyCiphertext(accountKeyCiphertext)
                 .createdAt(createdAt).updatedAt(updatedAt)
                 .lastConnectionCheck(check).build();
     }
