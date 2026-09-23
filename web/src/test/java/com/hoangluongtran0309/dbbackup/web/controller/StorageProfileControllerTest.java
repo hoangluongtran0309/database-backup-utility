@@ -27,6 +27,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import com.hoangluongtran0309.dbbackup.application.storage.ManageStorageProfileService;
 import com.hoangluongtran0309.dbbackup.core.model.StorageCredentialMode;
 import com.hoangluongtran0309.dbbackup.core.model.StorageProfile;
+import com.hoangluongtran0309.dbbackup.core.model.StorageProvider;
 import com.hoangluongtran0309.dbbackup.web.security.SecurityConfig;
 
 @WebMvcTest(StorageProfileController.class)
@@ -62,6 +63,7 @@ class StorageProfileControllerTest {
         when(service.create(any())).thenReturn(profile(UUID.randomUUID()));
         mvc.perform(post("/storage").with(csrf())
                         .param("name", "archive").param("endpoint", "http://s3.test:9090")
+                        .param("provider", "S3")
                         .param("region", "us-east-1").param("bucket", "backups")
                         .param("credentialMode", "STATIC").param("accessKeyId", "access")
                         .param("secretAccessKey", "plain-secret"))
@@ -73,11 +75,55 @@ class StorageProfileControllerTest {
     void validationFailureNeverEchoesSubmittedSecret() throws Exception {
         mvc.perform(post("/storage").with(csrf())
                         .param("name", "")
+                        .param("provider", "S3")
                         .param("region", "us-east-1").param("bucket", "backups")
                         .param("credentialMode", "STATIC").param("accessKeyId", "access")
                         .param("secretAccessKey", "must-not-return-to-browser"))
                 .andExpect(status().isOk())
                 .andExpect(content().string(not(containsString("must-not-return-to-browser"))));
+    }
+
+    @Test @WithMockUser
+    void gcsFormUsesApplicationDefaultCredentialsAndGcsFields() throws Exception {
+        mvc.perform(get("/storage/new").param("provider", "GCS"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Google Cloud project ID")))
+                .andExpect(content().string(containsString("Application Default Credentials")))
+                .andExpect(content().string(containsString("name=\"serviceAccountJson\"")))
+                .andExpect(content().string(not(containsString("name=\"region\""))))
+                .andExpect(content().string(not(containsString("name=\"accessKeyId\""))));
+    }
+
+    @Test @WithMockUser
+    void createsAGcsApplicationDefaultProfileWithCsrf() throws Exception {
+        when(service.create(any())).thenReturn(gcsProfile(UUID.randomUUID()));
+        mvc.perform(post("/storage").with(csrf())
+                        .param("name", "gcs-archive").param("provider", "GCS")
+                        .param("projectId", "backup-project").param("bucket", "backups")
+                        .param("credentialMode", "APPLICATION_DEFAULT"))
+                .andExpect(status().is3xxRedirection()).andExpect(redirectedUrl("/storage"));
+        verify(service).create(any());
+    }
+
+    @Test @WithMockUser
+    void gcsValidationFailureNeverEchoesServiceAccountJson() throws Exception {
+        mvc.perform(post("/storage").with(csrf())
+                        .param("name", "").param("provider", "GCS")
+                        .param("projectId", "backup-project").param("bucket", "backups")
+                        .param("credentialMode", "SERVICE_ACCOUNT_JSON")
+                        .param("serviceAccountJson", "private-json-must-not-return"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(not(containsString("private-json-must-not-return"))));
+    }
+
+    @Test @WithMockUser
+    void editNeverRendersEncryptedGcsCredential() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(service.get(id)).thenReturn(gcsProfile(id));
+        mvc.perform(get("/storage/{id}/edit", id))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Leave empty to keep")))
+                .andExpect(content().string(not(containsString("encrypted-json-never-in-html"))));
     }
 
     @Test @WithMockUser
@@ -90,10 +136,20 @@ class StorageProfileControllerTest {
 
     private static StorageProfile profile(UUID id) {
         Instant now = Instant.parse("2026-09-22T08:00:00Z");
-        return StorageProfile.builder().id(id).name("archive").endpoint("http://s3.test:9090")
+        return StorageProfile.builder().id(id).name("archive").provider(StorageProvider.S3)
+                .endpoint("http://s3.test:9090")
                 .region("us-east-1").bucket("backups").keyPrefix("daily").pathStyle(true)
                 .credentialMode(StorageCredentialMode.STATIC).accessKeyId("access")
                 .secretAccessKeyCiphertext("ciphertext-never-in-html")
+                .createdAt(now).updatedAt(now).build();
+    }
+
+    private static StorageProfile gcsProfile(UUID id) {
+        Instant now = Instant.parse("2026-09-22T08:00:00Z");
+        return StorageProfile.builder().id(id).name("gcs-archive").provider(StorageProvider.GCS)
+                .projectId("backup-project").bucket("backups").keyPrefix("daily")
+                .credentialMode(StorageCredentialMode.SERVICE_ACCOUNT_JSON)
+                .serviceAccountJsonCiphertext("encrypted-json-never-in-html")
                 .createdAt(now).updatedAt(now).build();
     }
 }

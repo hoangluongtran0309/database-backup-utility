@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import com.hoangluongtran0309.dbbackup.application.storage.ManageStorageProfileService;
@@ -19,6 +20,7 @@ import com.hoangluongtran0309.dbbackup.core.exception.StorageProfileInUseExcepti
 import com.hoangluongtran0309.dbbackup.core.model.ConnectionCheck;
 import com.hoangluongtran0309.dbbackup.core.model.StorageCredentialMode;
 import com.hoangluongtran0309.dbbackup.core.model.StorageProfile;
+import com.hoangluongtran0309.dbbackup.core.model.StorageProvider;
 import com.hoangluongtran0309.dbbackup.web.dto.StorageProfileForm;
 
 import jakarta.validation.Valid;
@@ -35,17 +37,17 @@ public class StorageProfileController {
         return "storage/list";
     }
 
-    @GetMapping("/new") String newForm(Model model) {
-        model.addAttribute("form", StorageProfileForm.blank());
-        model.addAttribute("credentialModes", StorageCredentialMode.values());
-        return "storage/form";
+    @GetMapping("/new") String newForm(
+            @RequestParam(defaultValue = "S3") StorageProvider provider, Model model) {
+        model.addAttribute("form", StorageProfileForm.blank(provider));
+        return form(model, null, provider);
     }
 
     @PostMapping String create(@Valid @ModelAttribute("form") StorageProfileForm form,
             BindingResult binding, Model model, RedirectAttributes flash) {
         if (binding.hasErrors()) {
-            form.setSecretAccessKey(null);
-            return form(model, null);
+            clearSecrets(form);
+            return form(model, null, providerOf(form));
         }
         try {
             StorageProfile saved = service.create(form.toCommand());
@@ -56,8 +58,8 @@ public class StorageProfileController {
         } catch (IllegalArgumentException e) {
             binding.reject("storage.invalid", e.getMessage());
         }
-        form.setSecretAccessKey(null);
-        return form(model, null);
+        clearSecrets(form);
+        return form(model, null, providerOf(form));
     }
 
     @GetMapping("/{id}/edit") String edit(@PathVariable UUID id, Model model, RedirectAttributes flash) {
@@ -65,7 +67,7 @@ public class StorageProfileController {
             StorageProfile profile = service.get(id);
             model.addAttribute("editing", profile);
             model.addAttribute("form", StorageProfileForm.of(profile));
-            return form(model, profile);
+            return form(model, profile, profile.getProvider());
         } catch (NoSuchElementException e) {
             flash.addFlashAttribute("error", "That storage profile no longer exists");
             return "redirect:/storage";
@@ -89,9 +91,9 @@ public class StorageProfileController {
                 binding.reject("storage.invalid", e.getMessage());
             }
         }
-        form.setSecretAccessKey(null);
+        clearSecrets(form);
         model.addAttribute("editing", current);
-        return form(model, current);
+        return form(model, current, current.getProvider());
     }
 
     @PostMapping("/{id}/test") String test(@PathVariable UUID id, RedirectAttributes flash) {
@@ -115,9 +117,23 @@ public class StorageProfileController {
         return "redirect:/storage";
     }
 
-    private String form(Model model, StorageProfile profile) {
+    private String form(Model model, StorageProfile profile, StorageProvider provider) {
         if (profile != null) model.addAttribute("editing", profile);
-        model.addAttribute("credentialModes", StorageCredentialMode.values());
+        model.addAttribute("provider", provider);
+        model.addAttribute("credentialModes", provider == StorageProvider.S3
+                ? new StorageCredentialMode[] {
+                    StorageCredentialMode.STATIC, StorageCredentialMode.DEFAULT_CHAIN }
+                : new StorageCredentialMode[] {
+                    StorageCredentialMode.APPLICATION_DEFAULT, StorageCredentialMode.SERVICE_ACCOUNT_JSON });
         return "storage/form";
+    }
+
+    private static StorageProvider providerOf(StorageProfileForm form) {
+        return form.getProvider() == null ? StorageProvider.S3 : form.getProvider();
+    }
+
+    private static void clearSecrets(StorageProfileForm form) {
+        form.setSecretAccessKey(null);
+        form.setServiceAccountJson(null);
     }
 }

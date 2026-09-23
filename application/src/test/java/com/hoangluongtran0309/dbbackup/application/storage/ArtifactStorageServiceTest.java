@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.io.ByteArrayInputStream;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.Optional;
@@ -19,7 +20,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import com.hoangluongtran0309.dbbackup.core.model.ArtifactReference;
 import com.hoangluongtran0309.dbbackup.core.model.StorageCredentialMode;
 import com.hoangluongtran0309.dbbackup.core.model.StorageProfile;
+import com.hoangluongtran0309.dbbackup.core.model.StorageProvider;
 import com.hoangluongtran0309.dbbackup.core.port.EncryptionPort;
+import com.hoangluongtran0309.dbbackup.core.port.GcsStoragePort;
 import com.hoangluongtran0309.dbbackup.core.port.S3StoragePort;
 import com.hoangluongtran0309.dbbackup.core.port.StagingStoragePort;
 import com.hoangluongtran0309.dbbackup.core.port.StoragePort;
@@ -30,11 +33,12 @@ class ArtifactStorageServiceTest {
     @Mock StoragePort local;
     @Mock StagingStoragePort staging;
     @Mock S3StoragePort s3;
+    @Mock GcsStoragePort gcs;
     @Mock StorageProfileRepository profiles;
     @Mock EncryptionPort encryption;
     ArtifactStorageService service;
 
-    @BeforeEach void setUp() { service = new ArtifactStorageService(local, staging, s3, profiles, encryption); }
+    @BeforeEach void setUp() { service = new ArtifactStorageService(local, staging, s3, gcs, profiles, encryption); }
 
     @Test
     void localWritesKeepTheAbsolutePathAsLocator() {
@@ -84,9 +88,78 @@ class ArtifactStorageServiceTest {
         verify(staging).deleteOperation(operationId);
     }
 
+    @Test
+    void gcsWritesUseTheSameCollisionFreeObjectKey() {
+        UUID profileId = UUID.randomUUID();
+        UUID targetId = UUID.randomUUID();
+        UUID executionId = UUID.randomUUID();
+        Path staged = Path.of("/staging", executionId.toString(), "shop.dump");
+        StorageProfile profile = StorageProfile.builder().id(profileId).name("gcs")
+                .provider(StorageProvider.GCS).projectId("project").bucket("backups").keyPrefix("daily")
+                .credentialMode(StorageCredentialMode.APPLICATION_DEFAULT)
+                .createdAt(Instant.EPOCH).updatedAt(Instant.EPOCH).build();
+        when(profiles.findById(profileId)).thenReturn(Optional.of(profile));
+        when(staging.locationFor(executionId, "shop.dump")).thenReturn(staged);
+
+        try (var prepared = service.prepareWrite(profileId, targetId, executionId, "shop.dump")) {
+            ArtifactReference reference = service.publish(prepared);
+            verify(gcs).upload(org.mockito.ArgumentMatchers.any(),
+                    org.mockito.ArgumentMatchers.eq("daily/" + targetId + "/" + executionId + "/shop.dump"),
+                    org.mockito.ArgumentMatchers.eq(staged));
+        }
+    }
+
+    @Test
+    void gcsReadMaterializeTestAndDeleteStayOnGcs() throws Exception {
+        UUID profileId = UUID.randomUUID();
+        UUID operationId = UUID.randomUUID();
+        StorageProfile profile = gcsProfile(profileId, StorageCredentialMode.SERVICE_ACCOUNT_JSON,
+                "sealed-json");
+        ArtifactReference reference = new ArtifactReference(profileId, "daily/t/e/shop.dump");
+        Path staged = Path.of("/staging", operationId.toString(), "shop.dump");
+        when(profiles.findById(profileId)).thenReturn(Optional.of(profile));
+        when(encryption.decrypt("sealed-json")).thenReturn("plain-json");
+        when(gcs.exists(org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.eq(reference.locator()))).thenReturn(true);
+        when(gcs.openForReading(org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.eq(reference.locator())))
+                .thenReturn(new ByteArrayInputStream("artifact".getBytes()));
+        when(staging.locationFor(operationId, "shop.dump")).thenReturn(staged);
+
+        assertThat(service.exists(reference)).isTrue();
+        try (var input = service.openForReading(reference)) {
+            assertThat(input.readAllBytes()).isEqualTo("artifact".getBytes());
+        }
+        try (var prepared = service.materialize(reference, operationId, "shop.dump")) {
+            assertThat(prepared.path()).isEqualTo(staged);
+        }
+        service.test(profile);
+        service.delete(reference);
+
+        var connection = org.mockito.ArgumentCaptor.forClass(
+                com.hoangluongtran0309.dbbackup.core.model.GcsStorageConnection.class);
+        verify(gcs).test(connection.capture());
+        assertThat(connection.getValue().serviceAccountJson()).isEqualTo("plain-json");
+        verify(gcs).download(org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.eq(reference.locator()),
+                org.mockito.ArgumentMatchers.eq(staged));
+        verify(gcs).delete(org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.eq(reference.locator()));
+        verify(staging).deleteOperation(operationId);
+    }
+
+    private static StorageProfile gcsProfile(
+            UUID id, StorageCredentialMode mode, String encryptedJson) {
+        return StorageProfile.builder().id(id).name("gcs").provider(StorageProvider.GCS)
+                .projectId("project").bucket("backups").keyPrefix("daily")
+                .credentialMode(mode).serviceAccountJsonCiphertext(encryptedJson)
+                .createdAt(Instant.EPOCH).updatedAt(Instant.EPOCH).build();
+    }
+
     private static StorageProfile profile(UUID id) {
         Instant now = Instant.parse("2026-09-22T08:00:00Z");
-        return StorageProfile.builder().id(id).name("archive").endpoint("http://s3.test:9090")
+        return StorageProfile.builder().id(id).name("archive").provider(StorageProvider.S3)
+                .endpoint("http://s3.test:9090")
                 .region("us-east-1").bucket("backups").keyPrefix("daily").pathStyle(true)
                 .credentialMode(StorageCredentialMode.STATIC).accessKeyId("access")
                 .secretAccessKeyCiphertext("encrypted-secret").createdAt(now).updatedAt(now).build();

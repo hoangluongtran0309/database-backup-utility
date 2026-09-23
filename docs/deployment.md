@@ -61,17 +61,34 @@ costs nothing: generate a new hash and restart.
 
 **Where the backups go.** Local filesystem is the built-in default; compose
 stores it in the `backups` named volume. The Storage page can add an
-S3-compatible profile and a target can select it for future backups. The bucket
-must already exist. Use HTTPS in production; HTTP custom endpoints are intended
-for development. Static secrets are AES-256-GCM encrypted, while default-chain
-mode can use environment, web-identity, container or instance-role credentials.
+S3-compatible or Google Cloud Storage profile and a target can select it for
+future backups. The bucket must already exist. Use HTTPS in production; HTTP
+custom endpoints are intended only for development emulators. S3 static
+secrets and GCS service-account JSON keys are AES-256-GCM encrypted.
+
+Prefer GCS Application Default Credentials (ADC). Depending on the deployment,
+ADC can discover a workload identity or a credential file named by
+`GOOGLE_APPLICATION_CREDENTIALS`; mount that file read-only when using it in a
+container. A stored JSON key is supported for deployments without workload
+identity, but key creation, rotation and revocation remain operator duties and
+the key should be scoped to the backup bucket. Arbitrary Google credential
+configuration JSON is rejected: JSON-key mode accepts only a service account.
 
 The S3 identity needs Put, Get, Head and Delete plus multipart upload and abort
 permissions for its bucket/prefix. Configure a bucket lifecycle rule to abort
 incomplete multipart uploads left by a process crash. Bucket creation,
 encryption policy and object-version cleanup remain operator responsibilities.
-`STORAGE_STAGING_DIR` needs room for one complete artifact per concurrent S3
-job; normal, failed and known interrupted operation directories are removed.
+
+The GCS identity needs `storage.objects.create`, `storage.objects.get` and
+`storage.objects.delete` for its bucket/prefix. Uploads use resumable sessions;
+Google Cloud can retain an unfinished session for up to one week after a
+process crash. Bucket soft-delete, Object Versioning, lifecycle and encryption
+policy remain operator responsibilities, including cleanup or recovery of old
+generations.
+
+`STORAGE_STAGING_DIR` needs room for one complete artifact per concurrent
+remote-storage job; normal, failed and known interrupted operation directories
+are removed. No durable local copy remains after a successful remote upload.
 
 **Retention starts disabled.** Configure it per target in the Retention page to
 keep the newest N successful backups. It runs only after a new successful

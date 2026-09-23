@@ -93,7 +93,8 @@ public class DatabaseTargetController {
         model.addAttribute("lastSuccessfulBackups", byTarget(executions.findLatestSucceededPerTarget()));
         model.addAttribute("availableEngines", service.availableEngines());
         model.addAttribute("storageProfileNames", storageProfiles.listAll().stream()
-                .collect(Collectors.toMap(p -> p.getId(), p -> p.getName())));
+                .collect(Collectors.toMap(p -> p.getId(),
+                        p -> p.getName() + " — " + p.getProvider().getDisplayName())));
         return "database/list";
     }
 

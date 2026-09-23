@@ -3,6 +3,7 @@ package com.hoangluongtran0309.dbbackup.web.dto;
 import com.hoangluongtran0309.dbbackup.application.storage.SaveStorageProfileCommand;
 import com.hoangluongtran0309.dbbackup.core.model.StorageCredentialMode;
 import com.hoangluongtran0309.dbbackup.core.model.StorageProfile;
+import com.hoangluongtran0309.dbbackup.core.model.StorageProvider;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -12,26 +13,37 @@ import lombok.Data;
 @Data
 public class StorageProfileForm {
     @NotBlank @Size(max = 100) private String name;
+    @NotNull private StorageProvider provider;
     @Size(max = 2048) private String endpoint;
-    @NotBlank @Size(max = 64) private String region;
+    @Size(max = 64) private String region;
+    @Size(max = 255) private String projectId;
     @NotBlank @Size(max = 255) private String bucket;
     @Size(max = 1024) private String keyPrefix;
     private boolean pathStyle;
     @NotNull private StorageCredentialMode credentialMode;
     @Size(max = 256) private String accessKeyId;
     private String secretAccessKey;
+    @Size(max = 65536) private String serviceAccountJson;
 
     public static StorageProfileForm blank() {
+        return blank(StorageProvider.S3);
+    }
+
+    public static StorageProfileForm blank(StorageProvider provider) {
         StorageProfileForm form = new StorageProfileForm();
-        form.setCredentialMode(StorageCredentialMode.STATIC);
+        form.setProvider(provider);
+        form.setCredentialMode(provider == StorageProvider.S3
+                ? StorageCredentialMode.STATIC : StorageCredentialMode.APPLICATION_DEFAULT);
         return form;
     }
 
     public static StorageProfileForm of(StorageProfile profile) {
         StorageProfileForm form = new StorageProfileForm();
         form.setName(profile.getName());
+        form.setProvider(profile.getProvider());
         form.setEndpoint(profile.getEndpoint());
         form.setRegion(profile.getRegion());
+        form.setProjectId(profile.getProjectId());
         form.setBucket(profile.getBucket());
         form.setKeyPrefix(profile.getKeyPrefix());
         form.setPathStyle(profile.isPathStyle());
@@ -41,7 +53,7 @@ public class StorageProfileForm {
     }
 
     public SaveStorageProfileCommand toCommand() {
-        return new SaveStorageProfileCommand(name, endpoint, region, bucket, keyPrefix, pathStyle,
-                credentialMode, accessKeyId, secretAccessKey);
+        return new SaveStorageProfileCommand(name, provider, endpoint, region, projectId, bucket, keyPrefix,
+                pathStyle, credentialMode, accessKeyId, secretAccessKey, serviceAccountJson);
     }
 }

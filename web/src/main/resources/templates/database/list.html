@@ -44,7 +44,7 @@
           <td data-label="Destination">
             <span th:if="${target.storageProfileId == null}">Local filesystem</span>
             <a th:unless="${target.storageProfileId == null}" th:href="@{/storage/{id}/edit(id=${target.storageProfileId})}"
-               th:text="${storageProfileNames.get(target.storageProfileId)}">S3 profile</a>
+               th:text="${storageProfileNames.get(target.storageProfileId)}">Remote profile</a>
           </td>
           <!-- The user rides under the address rather than in a column of its
                own: with Last backup added the row no longer fitted, and who a

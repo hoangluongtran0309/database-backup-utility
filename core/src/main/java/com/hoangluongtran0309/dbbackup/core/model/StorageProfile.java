@@ -8,12 +8,13 @@ import java.util.UUID;
 import lombok.Builder;
 import lombok.Getter;
 
-/** A named S3-compatible destination. Secrets are always encrypted at rest. */
+/** A named remote artifact destination. Secrets are always encrypted at rest. */
 @Getter
 public final class StorageProfile {
 
     private final UUID id;
     private final String name;
+    private final StorageProvider provider;
     private final String endpoint;
     private final String region;
     private final String bucket;
@@ -22,6 +23,8 @@ public final class StorageProfile {
     private final StorageCredentialMode credentialMode;
     private final String accessKeyId;
     private final String secretAccessKeyCiphertext;
+    private final String projectId;
+    private final String serviceAccountJsonCiphertext;
     private final Instant createdAt;
     private final Instant updatedAt;
     private final ConnectionCheck lastConnectionCheck;
@@ -30,6 +33,7 @@ public final class StorageProfile {
     private StorageProfile(
             UUID id,
             String name,
+            StorageProvider provider,
             String endpoint,
             String region,
             String bucket,
@@ -38,26 +42,52 @@ public final class StorageProfile {
             StorageCredentialMode credentialMode,
             String accessKeyId,
             String secretAccessKeyCiphertext,
+            String projectId,
+            String serviceAccountJsonCiphertext,
             Instant createdAt,
             Instant updatedAt,
             ConnectionCheck lastConnectionCheck) {
         this.id = require(id, "Profile id is required");
         this.name = text(name, "Profile name", 100);
+        this.provider = require(provider, "Storage provider is required");
         this.endpoint = endpoint(endpoint);
-        this.region = text(region, "Region", 64);
         this.bucket = text(bucket, "Bucket", 255);
         this.keyPrefix = prefix(keyPrefix);
-        this.pathStyle = pathStyle;
         this.credentialMode = require(credentialMode, "Credential mode is required");
-        if (credentialMode == StorageCredentialMode.STATIC) {
-            this.accessKeyId = text(accessKeyId, "Access key ID", 256);
-            this.secretAccessKeyCiphertext = text(secretAccessKeyCiphertext, "Secret access key", 4096);
-        } else {
-            if (present(accessKeyId) || present(secretAccessKeyCiphertext)) {
-                throw new IllegalArgumentException("Default credential chain must not store static credentials");
+        if (provider == StorageProvider.S3) {
+            this.region = text(region, "Region", 64);
+            this.pathStyle = pathStyle;
+            this.projectId = absent(projectId, "S3 profile must not contain a Google Cloud project ID");
+            this.serviceAccountJsonCiphertext = absent(serviceAccountJsonCiphertext,
+                    "S3 profile must not contain Google service-account credentials");
+            if (credentialMode == StorageCredentialMode.STATIC) {
+                this.accessKeyId = text(accessKeyId, "Access key ID", 256);
+                this.secretAccessKeyCiphertext = text(secretAccessKeyCiphertext, "Secret access key", 4096);
+            } else if (credentialMode == StorageCredentialMode.DEFAULT_CHAIN) {
+                this.accessKeyId = absent(accessKeyId,
+                        "Default credential chain must not store static credentials");
+                this.secretAccessKeyCiphertext = absent(secretAccessKeyCiphertext,
+                        "Default credential chain must not store static credentials");
+            } else {
+                throw new IllegalArgumentException("S3 profile has an invalid credential mode");
             }
-            this.accessKeyId = null;
-            this.secretAccessKeyCiphertext = null;
+        } else {
+            this.region = absent(region, "GCS profile must not contain an S3 region");
+            if (pathStyle) throw new IllegalArgumentException("GCS profile must not enable S3 path-style access");
+            this.pathStyle = false;
+            this.accessKeyId = absent(accessKeyId, "GCS profile must not contain an S3 access key");
+            this.secretAccessKeyCiphertext = absent(secretAccessKeyCiphertext,
+                    "GCS profile must not contain an S3 secret key");
+            this.projectId = text(projectId, "Google Cloud project ID", 255);
+            if (credentialMode == StorageCredentialMode.SERVICE_ACCOUNT_JSON) {
+                this.serviceAccountJsonCiphertext = text(
+                        serviceAccountJsonCiphertext, "Service-account JSON", 131072);
+            } else if (credentialMode == StorageCredentialMode.APPLICATION_DEFAULT) {
+                this.serviceAccountJsonCiphertext = absent(serviceAccountJsonCiphertext,
+                        "Application Default Credentials must not store service-account JSON");
+            } else {
+                throw new IllegalArgumentException("GCS profile has an invalid credential mode");
+            }
         }
         this.createdAt = require(createdAt, "Creation timestamp is required");
         this.updatedAt = require(updatedAt, "Update timestamp is required");
@@ -65,11 +95,13 @@ public final class StorageProfile {
     }
 
     public boolean sameLocation(StorageProfile other) {
-        return Objects.equals(endpoint, other.endpoint)
-                && region.equals(other.region)
+        if (provider != other.provider) return false;
+        boolean common = Objects.equals(endpoint, other.endpoint)
                 && bucket.equals(other.bucket)
-                && keyPrefix.equals(other.keyPrefix)
-                && pathStyle == other.pathStyle;
+                && keyPrefix.equals(other.keyPrefix);
+        return provider == StorageProvider.S3
+                ? common && region.equals(other.region) && pathStyle == other.pathStyle
+                : common && projectId.equals(other.projectId);
     }
 
     public StorageProfile withConnectionCheck(ConnectionCheck check, Instant now) {
@@ -121,6 +153,11 @@ public final class StorageProfile {
             throw new IllegalArgumentException(label + " must be at most " + max + " characters");
         }
         return result;
+    }
+
+    private static String absent(String value, String message) {
+        if (present(value)) throw new IllegalArgumentException(message);
+        return null;
     }
 
     private static boolean present(String value) {
