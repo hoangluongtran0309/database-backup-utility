@@ -12,6 +12,7 @@ import com.hoangluongtran0309.dbbackup.core.exception.StorageProfileInUseExcepti
 import com.hoangluongtran0309.dbbackup.core.model.ConnectionCheck;
 import com.hoangluongtran0309.dbbackup.core.model.StorageCredentialMode;
 import com.hoangluongtran0309.dbbackup.core.model.StorageProfile;
+import com.hoangluongtran0309.dbbackup.core.model.StorageProvider;
 import com.hoangluongtran0309.dbbackup.core.port.BackupExecutionRepository;
 import com.hoangluongtran0309.dbbackup.core.port.DatabaseTargetRepository;
 import com.hoangluongtran0309.dbbackup.core.port.EncryptionPort;
@@ -40,10 +41,13 @@ public class ManageStorageProfileService {
 
     public StorageProfile edit(UUID id, SaveStorageProfileCommand command) {
         StorageProfile current = get(id);
+        if (current.getProvider() != command.provider()) {
+            throw new IllegalArgumentException("Storage provider cannot be changed");
+        }
         StorageProfile edited = build(id, current.getCreatedAt(), clock.instant(), null, command, current);
         if (backups.countForStorageProfile(id) > 0 && !current.sameLocation(edited)) {
             throw new IllegalStateException(
-                    "Endpoint, region, bucket, prefix and path style cannot change after the profile is referenced");
+                    "Provider location settings cannot change after the profile is referenced");
         }
         return profiles.save(edited);
     }
@@ -53,7 +57,8 @@ public class ManageStorageProfileService {
         ConnectionCheck result;
         try {
             artifacts.test(profile);
-            result = new ConnectionCheck(true, "Put, head, get and delete succeeded", clock.instant());
+            result = new ConnectionCheck(true, "Create, metadata read, content read and delete succeeded",
+                    clock.instant());
         } catch (RuntimeException e) {
             result = new ConnectionCheck(false, safeMessage(e), clock.instant());
         }
@@ -71,17 +76,32 @@ public class ManageStorageProfileService {
     private StorageProfile build(UUID id, Instant createdAt, Instant updatedAt, ConnectionCheck check,
             SaveStorageProfileCommand command, StorageProfile current) {
         StorageCredentialMode mode = command.credentialMode();
-        String accessKey = mode == StorageCredentialMode.STATIC ? command.accessKeyId() : null;
+        boolean s3 = command.provider() == StorageProvider.S3;
+        String accessKey = s3 && mode == StorageCredentialMode.STATIC ? command.accessKeyId() : null;
         String secretCiphertext = null;
-        if (mode == StorageCredentialMode.STATIC) {
+        if (s3 && mode == StorageCredentialMode.STATIC) {
             if (command.suppliesSecret()) secretCiphertext = encryption.encrypt(command.secretAccessKey());
-            else if (current != null && current.getCredentialMode() == StorageCredentialMode.STATIC)
+            else if (current != null && current.getProvider() == StorageProvider.S3
+                    && current.getCredentialMode() == StorageCredentialMode.STATIC)
                 secretCiphertext = current.getSecretAccessKeyCiphertext();
         }
-        return StorageProfile.builder().id(id).name(command.name()).endpoint(command.endpoint())
-                .region(command.region()).bucket(command.bucket()).keyPrefix(command.keyPrefix())
-                .pathStyle(command.pathStyle()).credentialMode(mode).accessKeyId(accessKey)
-                .secretAccessKeyCiphertext(secretCiphertext).createdAt(createdAt).updatedAt(updatedAt)
+        String serviceAccountCiphertext = null;
+        if (!s3 && mode == StorageCredentialMode.SERVICE_ACCOUNT_JSON) {
+            if (command.suppliesServiceAccountJson()) {
+                serviceAccountCiphertext = encryption.encrypt(command.serviceAccountJson());
+            } else if (current != null && current.getProvider() == StorageProvider.GCS
+                    && current.getCredentialMode() == StorageCredentialMode.SERVICE_ACCOUNT_JSON) {
+                serviceAccountCiphertext = current.getServiceAccountJsonCiphertext();
+            }
+        }
+        return StorageProfile.builder().id(id).name(command.name()).provider(command.provider())
+                .endpoint(command.endpoint()).region(s3 ? command.region() : null)
+                .projectId(s3 ? null : command.projectId())
+                .bucket(command.bucket()).keyPrefix(command.keyPrefix())
+                .pathStyle(s3 && command.pathStyle()).credentialMode(mode).accessKeyId(accessKey)
+                .secretAccessKeyCiphertext(secretCiphertext)
+                .serviceAccountJsonCiphertext(serviceAccountCiphertext)
+                .createdAt(createdAt).updatedAt(updatedAt)
                 .lastConnectionCheck(check).build();
     }
 

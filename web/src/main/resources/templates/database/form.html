@@ -152,7 +152,7 @@
         <select id="storageProfileId" th:field="*{storageProfileId}">
           <option value="">Local filesystem (default)</option>
           <option th:each="profile : ${storageProfiles}" th:value="${profile.id}"
-                  th:text="|${profile.name} — S3 ${profile.bucket}|">S3 profile</option>
+                  th:text="|${profile.name} — ${profile.provider.displayName} ${profile.bucket}|">Remote profile</option>
         </select>
         <p class="field-hint">Changing this affects new backups only. Existing artifacts stay where they are.</p>
       </div>

@@ -109,8 +109,11 @@ their design is decided.
 - [x] **23. Storage profiles and S3-compatible storage.** Keep local storage as
       the built-in default; add managed S3 profiles, per-target selection,
       staging, multipart transfer and provider-aware artifact operations. See ADR-025.
+- [x] **24. Google Cloud Storage profiles.** Add native GCS profiles with ADC
+      or encrypted service-account JSON, resumable upload, provider-aware
+      history and custom endpoints for regional or development use. See ADR-026.
 
-1. [ ] GCS and Azure storage providers.
+1. [ ] Azure Blob Storage provider.
 2. [ ] Notifications.
 3. [ ] Restore verification in a temporary database.
 4. [ ] A CLI inbound adapter.

@@ -28,6 +28,7 @@ class StorageProfileTest {
     @Test
     void staticCredentialsRequireBothValues() {
         assertThatThrownBy(() -> StorageProfile.builder().id(UUID.randomUUID()).name("archive")
+                .provider(StorageProvider.S3)
                 .region("us-east-1").bucket("backups").credentialMode(StorageCredentialMode.STATIC)
                 .accessKeyId("key").createdAt(NOW).updatedAt(NOW).build())
                 .hasMessageContaining("Secret access key");
@@ -36,6 +37,7 @@ class StorageProfileTest {
     @Test
     void defaultChainCannotPersistStaticCredentials() {
         assertThatThrownBy(() -> StorageProfile.builder().id(UUID.randomUUID()).name("archive")
+                .provider(StorageProvider.S3)
                 .region("us-east-1").bucket("backups").credentialMode(StorageCredentialMode.DEFAULT_CHAIN)
                 .accessKeyId("key").createdAt(NOW).updatedAt(NOW).build())
                 .hasMessageContaining("must not store static credentials");
@@ -55,8 +57,27 @@ class StorageProfileTest {
         assertThat(connection.toString()).doesNotContain("access-must-not-be-logged", "secret-must-not-be-logged");
     }
 
+    @Test
+    void gcsRequiresProviderSpecificFieldsAndCredentials() {
+        StorageProfile profile = StorageProfile.builder().id(UUID.randomUUID()).name("gcs")
+                .provider(StorageProvider.GCS).projectId("backup-project").bucket("backups")
+                .credentialMode(StorageCredentialMode.SERVICE_ACCOUNT_JSON)
+                .serviceAccountJsonCiphertext("encrypted-json").createdAt(NOW).updatedAt(NOW).build();
+        assertThat(profile.getProvider()).isEqualTo(StorageProvider.GCS);
+        assertThatThrownBy(() -> profile.toBuilder().region("us-east-1").build())
+                .hasMessageContaining("must not contain an S3 region");
+    }
+
+    @Test
+    void gcsConnectionNeverPrintsServiceAccountJson() {
+        GcsStorageConnection connection = new GcsStorageConnection(null, "project", "backups", "daily",
+                StorageCredentialMode.SERVICE_ACCOUNT_JSON, "private-json-must-not-be-logged");
+        assertThat(connection.toString()).doesNotContain("private-json-must-not-be-logged");
+    }
+
     private static StorageProfile staticProfile(String endpoint, String prefix) {
-        return StorageProfile.builder().id(UUID.randomUUID()).name("archive").endpoint(endpoint)
+        return StorageProfile.builder().id(UUID.randomUUID()).name("archive")
+                .provider(StorageProvider.S3).endpoint(endpoint)
                 .region("us-east-1").bucket("backups").keyPrefix(prefix).pathStyle(true)
                 .credentialMode(StorageCredentialMode.STATIC).accessKeyId("key")
                 .secretAccessKeyCiphertext("encrypted").createdAt(NOW).updatedAt(NOW).build();

@@ -34,6 +34,7 @@ class DatabaseEngineMigrationIT {
         UUID targetId = UUID.randomUUID();
         UUID backupId = UUID.randomUUID();
         UUID restoreId = UUID.randomUUID();
+        UUID s3ProfileId = UUID.randomUUID();
         String ciphertext = "ciphertext-that-must-survive";
         try (Connection connection = connection(); Statement statement = connection.createStatement()) {
             statement.executeUpdate("""
@@ -52,6 +53,22 @@ class DatabaseEngineMigrationIT {
                         (id, backup_execution_id, target_id, status, started_at, finished_at)
                     VALUES ('%s', '%s', '%s', 'SUCCEEDED', now(), now())
                     """.formatted(restoreId, backupId, targetId));
+        }
+
+        Flyway.configure()
+                .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
+                .target(MigrationVersion.fromVersion("15"))
+                .load()
+                .migrate();
+
+        try (Connection connection = connection(); Statement statement = connection.createStatement()) {
+            statement.executeUpdate("""
+                    INSERT INTO storage_profiles
+                        (id, name, endpoint_url, region, bucket, key_prefix, path_style,
+                         credential_mode, access_key_id, secret_access_key_enc, created_at, updated_at)
+                    VALUES ('%s', 'legacy s3', 'http://s3.test:9090', 'us-east-1', 'backups', 'daily', TRUE,
+                            'STATIC', 'access', 'encrypted-secret', now(), now())
+                    """.formatted(s3ProfileId));
         }
 
         Flyway.configure()
@@ -78,6 +95,12 @@ class DatabaseEngineMigrationIT {
             assertThat(single(statement,
                     "SELECT storage_profile_id::text FROM database_targets WHERE id = '" + targetId + "'"))
                     .isNull();
+            assertThat(single(statement,
+                    "SELECT provider FROM storage_profiles WHERE id = '" + s3ProfileId + "'"))
+                    .isEqualTo("S3");
+            assertThat(single(statement,
+                    "SELECT secret_access_key_enc FROM storage_profiles WHERE id = '" + s3ProfileId + "'"))
+                    .isEqualTo("encrypted-secret");
             assertThat(single(statement,
                     "SELECT count(*)::text FROM restore_executions WHERE id = '" + restoreId + "'"))
                     .isEqualTo("1");

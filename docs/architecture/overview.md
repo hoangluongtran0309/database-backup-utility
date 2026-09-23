@@ -47,10 +47,10 @@ split rather than side effects of it:
   ([ADR-011](../adr/011-one-operator-account-from-the-environment.md)).
 - **Only `application` calls `EncryptionPort`.** Adapters never hold the key, so
   there is exactly one place in the system where a secret is unwrapped, and one
-  place to review. `DatabaseTarget.passwordCiphertext` and static S3 secrets hold ciphertext at every
-  moment of a credential-bearing target's life; SQLite targets have no
-  ciphertext. A plaintext password belongs in a separate type named for what it
-  carries.
+  place to review. `DatabaseTarget.passwordCiphertext`, static S3 secrets and
+  GCS service-account JSON keys hold ciphertext at every persisted moment;
+  SQLite targets have no ciphertext. Plaintext credentials exist only in
+  short-lived connection values whose string representation redacts them.
 
 ## Metadata PostgreSQL and PostgreSQL targets are separate
 
@@ -193,13 +193,15 @@ are separate on purpose — see
    writes a BACPAC to `<database>_<timestamp>.bacpac`.
 
 `ArtifactStorageService` is the only application router between local storage,
-staging and S3. A RUNNING execution snapshots the target's profile id. Local
-successes keep an absolute path; S3 successes keep
+staging, S3 and GCS. A RUNNING execution snapshots the target's profile id.
+Local successes keep an absolute path; S3 and GCS successes keep
 `<prefix>/<target-id>/<execution-id>/<filename>`. Upload completes before the
 row becomes `SUCCEEDED`. Restore downloads to private staging and verifies
 SHA-256 before the engine starts; download and verification otherwise stream
-directly from S3. See
-[ADR-025](../adr/025-s3-storage-profiles-and-local-staging.md).
+directly from the owning provider. S3 uses multipart transfer; GCS uses its
+native JSON API and resumable upload. See
+[ADR-025](../adr/025-s3-storage-profiles-and-local-staging.md) and
+[ADR-026](../adr/026-google-cloud-storage-profiles.md).
 
 Meanwhile the detail page follows the row: it re-fetches itself every two
 seconds and swaps in the part that changed, until the row reaches a finished

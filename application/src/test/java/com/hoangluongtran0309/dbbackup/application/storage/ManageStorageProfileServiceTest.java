@@ -23,6 +23,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import com.hoangluongtran0309.dbbackup.core.exception.StorageProfileInUseException;
 import com.hoangluongtran0309.dbbackup.core.model.StorageCredentialMode;
 import com.hoangluongtran0309.dbbackup.core.model.StorageProfile;
+import com.hoangluongtran0309.dbbackup.core.model.StorageProvider;
 import com.hoangluongtran0309.dbbackup.core.port.BackupExecutionRepository;
 import com.hoangluongtran0309.dbbackup.core.port.DatabaseTargetRepository;
 import com.hoangluongtran0309.dbbackup.core.port.EncryptionPort;
@@ -113,17 +114,100 @@ class ManageStorageProfileServiceTest {
         assertThat(saved.getValue().getSecretAccessKeyCiphertext()).isEqualTo("sealed-secret");
     }
 
+    @Test
+    void serviceAccountJsonIsEncryptedAndBlankEditKeepsIt() {
+        when(encryption.encrypt("plain-json")).thenReturn("sealed-json");
+        when(profiles.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        StorageProfile created = service.create(new SaveStorageProfileCommand("gcs", StorageProvider.GCS,
+                null, null, "backup-project", "backups", "daily", false,
+                StorageCredentialMode.SERVICE_ACCOUNT_JSON, null, null, "plain-json"));
+        assertThat(created.getServiceAccountJsonCiphertext()).isEqualTo("sealed-json");
+
+        when(profiles.findById(created.getId())).thenReturn(Optional.of(created));
+        StorageProfile edited = service.edit(created.getId(), new SaveStorageProfileCommand("renamed",
+                StorageProvider.GCS, null, null, "backup-project", "backups", "daily", false,
+                StorageCredentialMode.SERVICE_ACCOUNT_JSON, null, null, null));
+        assertThat(edited.getServiceAccountJsonCiphertext()).isEqualTo("sealed-json");
+    }
+
+    @Test
+    void switchingGcsToApplicationDefaultErasesStoredJson() {
+        StorageProfile current = gcsProfile(StorageCredentialMode.SERVICE_ACCOUNT_JSON, "sealed-json");
+        when(profiles.findById(current.getId())).thenReturn(Optional.of(current));
+        when(profiles.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        StorageProfile edited = service.edit(current.getId(), gcsCommand(
+                StorageCredentialMode.APPLICATION_DEFAULT, null, "backup-project"));
+
+        assertThat(edited.getCredentialMode()).isEqualTo(StorageCredentialMode.APPLICATION_DEFAULT);
+        assertThat(edited.getServiceAccountJsonCiphertext()).isNull();
+    }
+
+    @Test
+    void switchingGcsToJsonRequiresANewKey() {
+        StorageProfile current = gcsProfile(StorageCredentialMode.APPLICATION_DEFAULT, null);
+        when(profiles.findById(current.getId())).thenReturn(Optional.of(current));
+
+        assertThatThrownBy(() -> service.edit(current.getId(), gcsCommand(
+                StorageCredentialMode.SERVICE_ACCOUNT_JSON, null, "backup-project")))
+                .hasMessageContaining("Service-account JSON is required");
+    }
+
+    @Test
+    void referencedGcsProjectCannotChangeButCredentialsCanRotate() {
+        StorageProfile current = gcsProfile(StorageCredentialMode.SERVICE_ACCOUNT_JSON, "sealed-json");
+        when(profiles.findById(current.getId())).thenReturn(Optional.of(current));
+        when(backups.countForStorageProfile(current.getId())).thenReturn(1L);
+
+        assertThatThrownBy(() -> service.edit(current.getId(), gcsCommand(
+                StorageCredentialMode.SERVICE_ACCOUNT_JSON, null, "different-project")))
+                .hasMessageContaining("cannot change");
+        verify(profiles, never()).save(any());
+    }
+
+    @Test
+    void providerCannotChange() {
+        StorageProfile current = profile();
+        when(profiles.findById(current.getId())).thenReturn(Optional.of(current));
+        assertThatThrownBy(() -> service.edit(current.getId(), new SaveStorageProfileCommand(
+                current.getName(), StorageProvider.GCS, null, null, "project", "backups", "daily", false,
+                StorageCredentialMode.APPLICATION_DEFAULT, null, null, null)))
+                .hasMessageContaining("provider cannot be changed");
+    }
+
+    @Test
+    void serviceAccountJsonIsLimitedByUtf8Bytes() {
+        String oversized = "€".repeat(22_000);
+        assertThatThrownBy(() -> new SaveStorageProfileCommand("gcs", StorageProvider.GCS,
+                null, null, "project", "backups", "", false,
+                StorageCredentialMode.SERVICE_ACCOUNT_JSON, null, null, oversized))
+                .hasMessageContaining("64 KiB");
+    }
+
     private static SaveStorageProfileCommand command(String name, String endpoint,
             StorageCredentialMode mode, String accessKey, String secret) {
-        return new SaveStorageProfileCommand(name, endpoint, "us-east-1", "backups", "daily", true,
-                mode, accessKey, secret);
+        return new SaveStorageProfileCommand(name, StorageProvider.S3, endpoint, "us-east-1", null,
+                "backups", "daily", true, mode, accessKey, secret, null);
+    }
+
+    private static SaveStorageProfileCommand gcsCommand(
+            StorageCredentialMode mode, String json, String projectId) {
+        return new SaveStorageProfileCommand("gcs", StorageProvider.GCS, null, null, projectId,
+                "backups", "daily", false, mode, null, null, json);
     }
 
     private static StorageProfile profile() {
-        return StorageProfile.builder().id(UUID.randomUUID()).name("archive")
+        return StorageProfile.builder().id(UUID.randomUUID()).name("archive").provider(StorageProvider.S3)
                 .endpoint("http://s3.test:9090").region("us-east-1").bucket("backups")
                 .keyPrefix("daily").pathStyle(true).credentialMode(StorageCredentialMode.STATIC)
                 .accessKeyId("access").secretAccessKeyCiphertext("encrypted-secret")
+                .createdAt(NOW).updatedAt(NOW).build();
+    }
+
+    private static StorageProfile gcsProfile(StorageCredentialMode mode, String encryptedJson) {
+        return StorageProfile.builder().id(UUID.randomUUID()).name("gcs").provider(StorageProvider.GCS)
+                .projectId("backup-project").bucket("backups").keyPrefix("daily")
+                .credentialMode(mode).serviceAccountJsonCiphertext(encryptedJson)
                 .createdAt(NOW).updatedAt(NOW).build();
     }
 }

@@ -67,9 +67,13 @@ public class BackupExecutionController {
         model.addAttribute("targetName", target == null ? null : target.getName());
         model.addAttribute("targetEngine", target == null ? null : target.getEngine());
         model.addAttribute("artifactOnDisk", artifacts.isOnDisk(execution));
-        model.addAttribute("storageProfileName", execution.getStorageProfileId() == null
-                ? "Local filesystem"
-                : storageProfiles.get(execution.getStorageProfileId()).getName());
+        if (execution.getStorageProfileId() == null) {
+            model.addAttribute("storageProfileName", "Local filesystem");
+        } else {
+            var profile = storageProfiles.get(execution.getStorageProfileId());
+            model.addAttribute("storageProfileName",
+                    profile.getName() + " — " + profile.getProvider().getDisplayName());
+        }
         return "execution/detail";
     }
 
