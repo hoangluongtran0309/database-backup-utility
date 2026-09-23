@@ -86,6 +86,28 @@ class StorageProfileRepositoryAdapterIT {
     }
 
     @Test
+    void roundTripsAzureDefaultAndEncryptedAccountKeyConfigurations() {
+        StorageProfile defaultCredential = StorageProfile.builder().id(UUID.randomUUID())
+                .name("azure-default-" + UUID.randomUUID()).provider(StorageProvider.AZURE_BLOB)
+                .accountName("backupaccount").bucket("backups").keyPrefix("daily")
+                .credentialMode(StorageCredentialMode.AZURE_DEFAULT)
+                .createdAt(NOW).updatedAt(NOW).build();
+        StorageProfile foundDefault = profiles.findById(profiles.save(defaultCredential).getId()).orElseThrow();
+        assertThat(foundDefault.getAccountName()).isEqualTo("backupaccount");
+        assertThat(foundDefault.getAccountKeyCiphertext()).isNull();
+
+        StorageProfile accountKey = defaultCredential.toBuilder().id(UUID.randomUUID())
+                .name("azure-key-" + UUID.randomUUID()).credentialMode(StorageCredentialMode.ACCOUNT_KEY)
+                .accountKeyCiphertext("encrypted-account-key").build();
+        StorageProfile foundKey = profiles.findById(profiles.save(accountKey).getId()).orElseThrow();
+        assertThat(foundKey.getCredentialMode()).isEqualTo(StorageCredentialMode.ACCOUNT_KEY);
+        assertThat(foundKey.getAccountKeyCiphertext()).isEqualTo("encrypted-account-key");
+
+        profiles.deleteById(foundDefault.getId());
+        profiles.deleteById(foundKey.getId());
+    }
+
+    @Test
     void databaseRejectsAProviderConfigurationWithFieldsFromTheOtherProvider() {
         assertThatThrownBy(() -> jdbc.update("""
                 INSERT INTO storage_profiles
@@ -94,6 +116,15 @@ class StorageProfileRepositoryAdapterIT {
                 VALUES (?, ?, 'GCS', NULL, 'us-east-1', 'backup-project', 'backups', '',
                         FALSE, 'APPLICATION_DEFAULT', now(), now())
                 """, UUID.randomUUID(), "invalid-gcs-" + UUID.randomUUID()))
+                .hasMessageContaining("chk_storage_profiles_configuration");
+
+        assertThatThrownBy(() -> jdbc.update("""
+                INSERT INTO storage_profiles
+                    (id, name, provider, endpoint_url, region, project_id, account_name, bucket,
+                     key_prefix, path_style, credential_mode, created_at, updated_at)
+                VALUES (?, ?, 'AZURE_BLOB', NULL, NULL, 'google-project', 'backupaccount', 'backups',
+                        '', FALSE, 'AZURE_DEFAULT', now(), now())
+                """, UUID.randomUUID(), "invalid-azure-" + UUID.randomUUID()))
                 .hasMessageContaining("chk_storage_profiles_configuration");
     }
 

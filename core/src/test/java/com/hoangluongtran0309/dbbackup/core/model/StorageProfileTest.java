@@ -75,6 +75,27 @@ class StorageProfileTest {
         assertThat(connection.toString()).doesNotContain("private-json-must-not-be-logged");
     }
 
+    @Test
+    void azureRequiresAnAccountNameAndProviderSpecificCredentials() {
+        StorageProfile profile = StorageProfile.builder().id(UUID.randomUUID()).name("azure")
+                .provider(StorageProvider.AZURE_BLOB).accountName("backupaccount").bucket("backups")
+                .credentialMode(StorageCredentialMode.ACCOUNT_KEY)
+                .accountKeyCiphertext("encrypted-key").createdAt(NOW).updatedAt(NOW).build();
+        assertThat(profile.getProvider()).isEqualTo(StorageProvider.AZURE_BLOB);
+        assertThatThrownBy(() -> profile.toBuilder().accountName("Invalid-Account").build())
+                .hasMessageContaining("lower-case");
+        assertThatThrownBy(() -> profile.toBuilder().projectId("google-project").build())
+                .hasMessageContaining("must not contain a Google Cloud project ID");
+    }
+
+    @Test
+    void azureConnectionNeverPrintsTheAccountKey() {
+        AzureBlobStorageConnection connection = new AzureBlobStorageConnection(null, "backupaccount",
+                "backups", "daily", StorageCredentialMode.ACCOUNT_KEY,
+                "account-key-must-not-be-logged");
+        assertThat(connection.toString()).doesNotContain("account-key-must-not-be-logged");
+    }
+
     private static StorageProfile staticProfile(String endpoint, String prefix) {
         return StorageProfile.builder().id(UUID.randomUUID()).name("archive")
                 .provider(StorageProvider.S3).endpoint(endpoint)

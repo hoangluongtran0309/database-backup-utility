@@ -40,6 +40,8 @@ class StorageProfileEntity {
     @Column(name = "project_id", length = 255) private String projectId;
     @Column(name = "service_account_json_enc", columnDefinition = "text")
     private String serviceAccountJsonEnc;
+    @Column(name = "account_name", length = 24) private String accountName;
+    @Column(name = "account_key_enc", columnDefinition = "text") private String accountKeyEnc;
     @Column(name = "created_at", nullable = false) private Instant createdAt;
     @Column(name = "updated_at", nullable = false) private Instant updatedAt;
     @Column(name = "last_connection_successful") private Boolean lastConnectionSuccessful;

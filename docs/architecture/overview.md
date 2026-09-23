@@ -193,15 +193,16 @@ are separate on purpose — see
    writes a BACPAC to `<database>_<timestamp>.bacpac`.
 
 `ArtifactStorageService` is the only application router between local storage,
-staging, S3 and GCS. A RUNNING execution snapshots the target's profile id.
-Local successes keep an absolute path; S3 and GCS successes keep
+staging, S3, GCS and Azure Blob Storage. A RUNNING execution snapshots the target's profile id.
+Local successes keep an absolute path; remote successes keep
 `<prefix>/<target-id>/<execution-id>/<filename>`. Upload completes before the
 row becomes `SUCCEEDED`. Restore downloads to private staging and verifies
 SHA-256 before the engine starts; download and verification otherwise stream
 directly from the owning provider. S3 uses multipart transfer; GCS uses its
-native JSON API and resumable upload. See
+native JSON API and resumable upload; Azure uses block blobs. See
 [ADR-025](../adr/025-s3-storage-profiles-and-local-staging.md) and
-[ADR-026](../adr/026-google-cloud-storage-profiles.md).
+[ADR-026](../adr/026-google-cloud-storage-profiles.md), and
+[ADR-027](../adr/027-azure-blob-storage-profiles.md).
 
 Meanwhile the detail page follows the row: it re-fetches itself every two
 seconds and swaps in the part that changed, until the row reaches a finished

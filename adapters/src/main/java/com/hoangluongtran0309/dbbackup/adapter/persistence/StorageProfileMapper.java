@@ -21,6 +21,8 @@ final class StorageProfileMapper {
         entity.setSecretAccessKeyEnc(profile.getSecretAccessKeyCiphertext());
         entity.setProjectId(profile.getProjectId());
         entity.setServiceAccountJsonEnc(profile.getServiceAccountJsonCiphertext());
+        entity.setAccountName(profile.getAccountName());
+        entity.setAccountKeyEnc(profile.getAccountKeyCiphertext());
         entity.setCreatedAt(profile.getCreatedAt());
         entity.setUpdatedAt(profile.getUpdatedAt());
         ConnectionCheck check = profile.getLastConnectionCheck();
@@ -45,6 +47,8 @@ final class StorageProfileMapper {
                 .accessKeyId(entity.getAccessKeyId()).secretAccessKeyCiphertext(entity.getSecretAccessKeyEnc())
                 .projectId(entity.getProjectId())
                 .serviceAccountJsonCiphertext(entity.getServiceAccountJsonEnc())
+                .accountName(entity.getAccountName())
+                .accountKeyCiphertext(entity.getAccountKeyEnc())
                 .createdAt(entity.getCreatedAt()).updatedAt(entity.getUpdatedAt())
                 .lastConnectionCheck(check).build();
     }

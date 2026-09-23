@@ -13,26 +13,34 @@
       <div class="form-group form-group-full"><label for="name">Name</label><input id="name" th:field="*{name}" autofocus></div>
       <div class="form-group form-group-full"><label for="endpoint">Endpoint</label><input id="endpoint" type="url" th:field="*{endpoint}"
           th:attr="data-storage-endpoint=${provider.name() == 'S3'} ? '' : null"
-          th:placeholder="${provider.name() == 'S3' ? 'https://s3.example.com' : 'https://storage.googleapis.com'}">
+          th:placeholder="${provider.name() == 'S3' ? 'https://s3.example.com' :
+            (provider.name() == 'GCS' ? 'https://storage.googleapis.com' : 'http://azurite:10000/devstoreaccount1')}">
         <p class="field-hint" th:if="${provider.name() == 'S3'}">Leave empty for AWS S3. Custom endpoints must be HTTP or HTTPS without query parameters.</p>
-        <p class="field-hint" th:if="${provider.name() == 'GCS'}">Leave empty for Google Cloud. HTTP endpoints are for development emulators only.</p></div>
+        <p class="field-hint" th:if="${provider.name() == 'GCS'}">Leave empty for Google Cloud. HTTP endpoints are for development emulators only.</p>
+        <p class="field-hint" th:if="${provider.name() == 'AZURE_BLOB'}">Leave empty for the account's public Azure endpoint. HTTP endpoints are for development emulators only.</p></div>
       <div class="form-group" th:if="${provider.name() == 'S3'}"><label for="region">Region</label><input id="region" th:field="*{region}" placeholder="us-east-1"></div>
       <div class="form-group" th:if="${provider.name() == 'GCS'}"><label for="projectId">Google Cloud project ID</label><input id="projectId" th:field="*{projectId}" placeholder="my-project"></div>
-      <div class="form-group"><label for="bucket">Bucket</label><input id="bucket" th:field="*{bucket}"></div>
-      <div class="form-group"><label for="keyPrefix">Key prefix</label><input id="keyPrefix" th:field="*{keyPrefix}" placeholder="database-backups"></div>
+      <div class="form-group" th:if="${provider.name() == 'AZURE_BLOB'}"><label for="accountName">Storage account name</label><input id="accountName" th:field="*{accountName}" placeholder="backupsaccount"></div>
+      <div class="form-group"><label for="bucket" th:text="${provider.name() == 'AZURE_BLOB' ? 'Container' : 'Bucket'}">Bucket</label><input id="bucket" th:field="*{bucket}"></div>
+      <div class="form-group"><label for="keyPrefix" th:text="${provider.name() == 'AZURE_BLOB' ? 'Blob prefix' : 'Key prefix'}">Key prefix</label><input id="keyPrefix" th:field="*{keyPrefix}" placeholder="database-backups"></div>
       <div class="form-group" th:if="${provider.name() == 'S3'}"><label><input type="checkbox" th:field="*{pathStyle}" data-storage-path-style> Use path-style access</label>
         <p class="field-hint">Usually required by S3-compatible development servers.</p></div>
       <div class="form-group"><label for="credentialMode">Credentials</label><select id="credentialMode" th:field="*{credentialMode}">
         <option th:each="mode : ${credentialModes}" th:value="${mode}"
                 th:text="${mode.name() == 'STATIC' ? 'Static access key' :
                   (mode.name() == 'DEFAULT_CHAIN' ? 'AWS default credential chain' :
-                  (mode.name() == 'APPLICATION_DEFAULT' ? 'Application Default Credentials (recommended)' : 'Service-account JSON key'))}"></option></select></div>
+                  (mode.name() == 'APPLICATION_DEFAULT' ? 'Application Default Credentials (recommended)' :
+                  (mode.name() == 'SERVICE_ACCOUNT_JSON' ? 'Service-account JSON key' :
+                  (mode.name() == 'AZURE_DEFAULT' ? 'Azure Default Credential (recommended)' : 'Storage account key'))))}"></option></select></div>
       <div class="form-group" th:if="${provider.name() == 'S3'}"><label for="accessKeyId">Access key ID</label><input id="accessKeyId" th:field="*{accessKeyId}" autocomplete="off"></div>
       <div class="form-group form-group-full" th:if="${provider.name() == 'S3'}"><label for="secretAccessKey">Secret access key</label><input id="secretAccessKey" name="secretAccessKey" type="password" autocomplete="new-password">
         <p class="field-hint" th:text="${editing == null ? 'Required for static credentials; encrypted before storage.' : 'Leave empty to keep the existing static secret.'}"></p></div>
       <div class="form-group form-group-full" th:if="${provider.name() == 'GCS'}"><label for="serviceAccountJson">Service-account JSON</label>
         <textarea id="serviceAccountJson" name="serviceAccountJson" rows="8" autocomplete="off"></textarea>
         <p class="field-hint" th:text="${editing == null ? 'Required only for JSON-key mode; encrypted before storage. Prefer ADC when possible.' : 'Leave empty to keep the existing JSON key.'}"></p></div>
+      <div class="form-group form-group-full" th:if="${provider.name() == 'AZURE_BLOB'}"><label for="accountKey">Storage account key</label>
+        <input id="accountKey" name="accountKey" type="password" autocomplete="new-password">
+        <p class="field-hint" th:text="${editing == null ? 'Required only for account-key mode; encrypted before storage. Prefer Azure Default Credential.' : 'Leave empty to keep the existing account key.'}"></p></div>
     </div>
     <div class="form-actions"><button class="button button-primary" type="submit">Save profile</button><a class="button button-ghost" th:href="@{/storage}">Cancel</a></div>
   </form>

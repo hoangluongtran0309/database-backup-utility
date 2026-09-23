@@ -13,7 +13,7 @@
 
   <groupId>com.hoangluongtran0309</groupId>
   <artifactId>database-backup-utility</artifactId>
-  <version>0.13.0</version>
+  <version>0.14.0</version>
   <packaging>pom</packaging>
 
   <name>database-backup-utility</name>
@@ -34,6 +34,7 @@
     <argLine>-javaagent:${settings.localRepository}/org/mockito/mockito-core/${mockito.version}/mockito-core-${mockito.version}.jar</argLine>
     <aws.sdk.version>2.54.20</aws.sdk.version>
     <google.cloud.storage.version>2.71.0</google.cloud.storage.version>
+    <azure.sdk.bom.version>1.3.8</azure.sdk.bom.version>
   </properties>
 
   <dependencyManagement>
@@ -42,6 +43,13 @@
         <groupId>software.amazon.awssdk</groupId>
         <artifactId>bom</artifactId>
         <version>${aws.sdk.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+      <dependency>
+        <groupId>com.azure</groupId>
+        <artifactId>azure-sdk-bom</artifactId>
+        <version>${azure.sdk.bom.version}</version>
         <type>pom</type>
         <scope>import</scope>
       </dependency>

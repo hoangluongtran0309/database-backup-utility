@@ -102,6 +102,12 @@ class DatabaseEngineMigrationIT {
                     "SELECT secret_access_key_enc FROM storage_profiles WHERE id = '" + s3ProfileId + "'"))
                     .isEqualTo("encrypted-secret");
             assertThat(single(statement,
+                    "SELECT account_name FROM storage_profiles WHERE id = '" + s3ProfileId + "'"))
+                    .isNull();
+            assertThat(single(statement,
+                    "SELECT account_key_enc FROM storage_profiles WHERE id = '" + s3ProfileId + "'"))
+                    .isNull();
+            assertThat(single(statement,
                     "SELECT count(*)::text FROM restore_executions WHERE id = '" + restoreId + "'"))
                     .isEqualTo("1");
             assertThat(single(statement,
