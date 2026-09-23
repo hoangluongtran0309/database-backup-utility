@@ -112,12 +112,14 @@ their design is decided.
 - [x] **24. Google Cloud Storage profiles.** Add native GCS profiles with ADC
       or encrypted service-account JSON, resumable upload, provider-aware
       history and custom endpoints for regional or development use. See ADR-026.
+- [x] **25. Azure Blob Storage profiles.** Add native Azure profiles with
+      DefaultAzureCredential or an encrypted storage-account key, block-blob
+      transfer and custom endpoints for regional or development use. See ADR-027.
 
-1. [ ] Azure Blob Storage provider.
-2. [ ] Notifications.
-3. [ ] Restore verification in a temporary database.
-4. [ ] A CLI inbound adapter.
-5. [ ] CI/CD, security scanning and end-to-end hardening.
+1. [ ] Notifications.
+2. [ ] Restore verification in a temporary database.
+3. [ ] A CLI inbound adapter.
+4. [ ] CI/CD, security scanning and end-to-end hardening.
 
 ## Deliberately out of scope
 

@@ -61,10 +61,11 @@ costs nothing: generate a new hash and restart.
 
 **Where the backups go.** Local filesystem is the built-in default; compose
 stores it in the `backups` named volume. The Storage page can add an
-S3-compatible or Google Cloud Storage profile and a target can select it for
-future backups. The bucket must already exist. Use HTTPS in production; HTTP
-custom endpoints are intended only for development emulators. S3 static
-secrets and GCS service-account JSON keys are AES-256-GCM encrypted.
+S3-compatible, Google Cloud Storage or Azure Blob Storage profile and a target
+can select it for future backups. The bucket or container must already exist.
+Use HTTPS in production; HTTP custom endpoints are intended only for
+development emulators. S3 static secrets, GCS service-account JSON keys and
+Azure storage-account keys are AES-256-GCM encrypted.
 
 Prefer GCS Application Default Credentials (ADC). Depending on the deployment,
 ADC can discover a workload identity or a credential file named by
@@ -85,6 +86,19 @@ Google Cloud can retain an unfinished session for up to one week after a
 process crash. Bucket soft-delete, Object Versioning, lifecycle and encryption
 policy remain operator responsibilities, including cleanup or recovery of old
 generations.
+
+Prefer Azure Default Credential. On Azure it can use workload or managed
+identity; outside Azure, configure a service principal with `AZURE_TENANT_ID`,
+`AZURE_CLIENT_ID` and `AZURE_CLIENT_SECRET`. Set `AZURE_TOKEN_CREDENTIALS=prod`
+to keep the production chain from trying developer tools. A user-assigned
+managed identity also uses `AZURE_CLIENT_ID`. The identity needs a data-plane
+role such as Storage Blob Data Contributor on the selected container. An
+encrypted storage-account key is available for on-premises installations and
+Azurite, but it grants account-wide authority and should be rotated.
+
+Azure uploads use block blobs. Container creation, soft-delete and version
+cleanup, SAS credentials, custom CAs, customer-managed encryption keys and
+browser-direct transfer remain outside this slice and are operator concerns.
 
 `STORAGE_STAGING_DIR` needs room for one complete artifact per concurrent
 remote-storage job; normal, failed and known interrupted operation directories

@@ -17,6 +17,7 @@ public class StorageProfileForm {
     @Size(max = 2048) private String endpoint;
     @Size(max = 64) private String region;
     @Size(max = 255) private String projectId;
+    @Size(max = 24) private String accountName;
     @NotBlank @Size(max = 255) private String bucket;
     @Size(max = 1024) private String keyPrefix;
     private boolean pathStyle;
@@ -24,6 +25,7 @@ public class StorageProfileForm {
     @Size(max = 256) private String accessKeyId;
     private String secretAccessKey;
     @Size(max = 65536) private String serviceAccountJson;
+    private String accountKey;
 
     public static StorageProfileForm blank() {
         return blank(StorageProvider.S3);
@@ -32,8 +34,11 @@ public class StorageProfileForm {
     public static StorageProfileForm blank(StorageProvider provider) {
         StorageProfileForm form = new StorageProfileForm();
         form.setProvider(provider);
-        form.setCredentialMode(provider == StorageProvider.S3
-                ? StorageCredentialMode.STATIC : StorageCredentialMode.APPLICATION_DEFAULT);
+        form.setCredentialMode(switch (provider) {
+            case S3 -> StorageCredentialMode.STATIC;
+            case GCS -> StorageCredentialMode.APPLICATION_DEFAULT;
+            case AZURE_BLOB -> StorageCredentialMode.AZURE_DEFAULT;
+        });
         return form;
     }
 
@@ -44,6 +49,7 @@ public class StorageProfileForm {
         form.setEndpoint(profile.getEndpoint());
         form.setRegion(profile.getRegion());
         form.setProjectId(profile.getProjectId());
+        form.setAccountName(profile.getAccountName());
         form.setBucket(profile.getBucket());
         form.setKeyPrefix(profile.getKeyPrefix());
         form.setPathStyle(profile.isPathStyle());
@@ -53,7 +59,8 @@ public class StorageProfileForm {
     }
 
     public SaveStorageProfileCommand toCommand() {
-        return new SaveStorageProfileCommand(name, provider, endpoint, region, projectId, bucket, keyPrefix,
-                pathStyle, credentialMode, accessKeyId, secretAccessKey, serviceAccountJson);
+        return new SaveStorageProfileCommand(name, provider, endpoint, region, projectId, accountName,
+                bucket, keyPrefix, pathStyle, credentialMode, accessKeyId, secretAccessKey,
+                serviceAccountJson, accountKey);
     }
 }

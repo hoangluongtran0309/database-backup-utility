@@ -11,13 +11,15 @@ public record SaveStorageProfileCommand(
         String endpoint,
         String region,
         String projectId,
+        String accountName,
         String bucket,
         String keyPrefix,
         boolean pathStyle,
         StorageCredentialMode credentialMode,
         String accessKeyId,
         String secretAccessKey,
-        String serviceAccountJson) {
+        String serviceAccountJson,
+        String accountKey) {
     public SaveStorageProfileCommand {
         if (serviceAccountJson != null
                 && serviceAccountJson.getBytes(StandardCharsets.UTF_8).length > 64 * 1024) {
@@ -31,5 +33,9 @@ public record SaveStorageProfileCommand(
 
     public boolean suppliesServiceAccountJson() {
         return serviceAccountJson != null && !serviceAccountJson.isBlank();
+    }
+
+    public boolean suppliesAccountKey() {
+        return accountKey != null && !accountKey.isBlank();
     }
 }

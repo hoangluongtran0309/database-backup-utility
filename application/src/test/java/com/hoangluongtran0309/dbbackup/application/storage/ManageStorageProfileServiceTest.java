@@ -119,14 +119,14 @@ class ManageStorageProfileServiceTest {
         when(encryption.encrypt("plain-json")).thenReturn("sealed-json");
         when(profiles.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         StorageProfile created = service.create(new SaveStorageProfileCommand("gcs", StorageProvider.GCS,
-                null, null, "backup-project", "backups", "daily", false,
-                StorageCredentialMode.SERVICE_ACCOUNT_JSON, null, null, "plain-json"));
+                null, null, "backup-project", null, "backups", "daily", false,
+                StorageCredentialMode.SERVICE_ACCOUNT_JSON, null, null, "plain-json", null));
         assertThat(created.getServiceAccountJsonCiphertext()).isEqualTo("sealed-json");
 
         when(profiles.findById(created.getId())).thenReturn(Optional.of(created));
         StorageProfile edited = service.edit(created.getId(), new SaveStorageProfileCommand("renamed",
-                StorageProvider.GCS, null, null, "backup-project", "backups", "daily", false,
-                StorageCredentialMode.SERVICE_ACCOUNT_JSON, null, null, null));
+                StorageProvider.GCS, null, null, "backup-project", null, "backups", "daily", false,
+                StorageCredentialMode.SERVICE_ACCOUNT_JSON, null, null, null, null));
         assertThat(edited.getServiceAccountJsonCiphertext()).isEqualTo("sealed-json");
     }
 
@@ -170,8 +170,8 @@ class ManageStorageProfileServiceTest {
         StorageProfile current = profile();
         when(profiles.findById(current.getId())).thenReturn(Optional.of(current));
         assertThatThrownBy(() -> service.edit(current.getId(), new SaveStorageProfileCommand(
-                current.getName(), StorageProvider.GCS, null, null, "project", "backups", "daily", false,
-                StorageCredentialMode.APPLICATION_DEFAULT, null, null, null)))
+                current.getName(), StorageProvider.GCS, null, null, "project", null, "backups", "daily", false,
+                StorageCredentialMode.APPLICATION_DEFAULT, null, null, null, null)))
                 .hasMessageContaining("provider cannot be changed");
     }
 
@@ -179,21 +179,78 @@ class ManageStorageProfileServiceTest {
     void serviceAccountJsonIsLimitedByUtf8Bytes() {
         String oversized = "€".repeat(22_000);
         assertThatThrownBy(() -> new SaveStorageProfileCommand("gcs", StorageProvider.GCS,
-                null, null, "project", "backups", "", false,
-                StorageCredentialMode.SERVICE_ACCOUNT_JSON, null, null, oversized))
+                null, null, "project", null, "backups", "", false,
+                StorageCredentialMode.SERVICE_ACCOUNT_JSON, null, null, oversized, null))
                 .hasMessageContaining("64 KiB");
+    }
+
+    @Test
+    void azureAccountKeyIsEncryptedAndBlankEditKeepsIt() {
+        when(encryption.encrypt("plain-account-key")).thenReturn("sealed-account-key");
+        when(profiles.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        StorageProfile created = service.create(azureCommand(
+                StorageCredentialMode.ACCOUNT_KEY, "plain-account-key", "backupaccount"));
+        assertThat(created.getAccountKeyCiphertext()).isEqualTo("sealed-account-key");
+
+        when(profiles.findById(created.getId())).thenReturn(Optional.of(created));
+        StorageProfile edited = service.edit(created.getId(), azureCommand(
+                StorageCredentialMode.ACCOUNT_KEY, null, "backupaccount"));
+        assertThat(edited.getAccountKeyCiphertext()).isEqualTo("sealed-account-key");
+    }
+
+    @Test
+    void switchingAzureCredentialModesClearsOrRequiresTheAccountKey() {
+        StorageProfile keyed = azureProfile(StorageCredentialMode.ACCOUNT_KEY, "sealed-key");
+        when(profiles.findById(keyed.getId())).thenReturn(Optional.of(keyed));
+        when(profiles.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        StorageProfile defaultCredential = service.edit(keyed.getId(), azureCommand(
+                StorageCredentialMode.AZURE_DEFAULT, null, "backupaccount"));
+        assertThat(defaultCredential.getAccountKeyCiphertext()).isNull();
+
+        when(profiles.findById(keyed.getId())).thenReturn(Optional.of(defaultCredential));
+        assertThatThrownBy(() -> service.edit(keyed.getId(), azureCommand(
+                StorageCredentialMode.ACCOUNT_KEY, null, "backupaccount")))
+                .hasMessageContaining("Account key is required");
+    }
+
+    @Test
+    void referencedAzureAccountCannotChangeButCredentialsCanRotate() {
+        StorageProfile current = azureProfile(StorageCredentialMode.AZURE_DEFAULT, null);
+        when(profiles.findById(current.getId())).thenReturn(Optional.of(current));
+        when(backups.countForStorageProfile(current.getId())).thenReturn(1L);
+
+        assertThatThrownBy(() -> service.edit(current.getId(), azureCommand(
+                StorageCredentialMode.AZURE_DEFAULT, null, "differentaccount")))
+                .hasMessageContaining("cannot change");
+        verify(profiles, never()).save(any());
+
+        when(encryption.encrypt("rotated-key")).thenReturn("sealed-rotated-key");
+        when(profiles.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        StorageProfile rotated = service.edit(current.getId(), azureCommand(
+                StorageCredentialMode.ACCOUNT_KEY, "rotated-key", "backupaccount"));
+
+        assertThat(rotated.getCredentialMode()).isEqualTo(StorageCredentialMode.ACCOUNT_KEY);
+        assertThat(rotated.getAccountKeyCiphertext()).isEqualTo("sealed-rotated-key");
     }
 
     private static SaveStorageProfileCommand command(String name, String endpoint,
             StorageCredentialMode mode, String accessKey, String secret) {
-        return new SaveStorageProfileCommand(name, StorageProvider.S3, endpoint, "us-east-1", null,
-                "backups", "daily", true, mode, accessKey, secret, null);
+        return new SaveStorageProfileCommand(name, StorageProvider.S3, endpoint, "us-east-1", null, null,
+                "backups", "daily", true, mode, accessKey, secret, null, null);
     }
 
     private static SaveStorageProfileCommand gcsCommand(
             StorageCredentialMode mode, String json, String projectId) {
-        return new SaveStorageProfileCommand("gcs", StorageProvider.GCS, null, null, projectId,
-                "backups", "daily", false, mode, null, null, json);
+        return new SaveStorageProfileCommand("gcs", StorageProvider.GCS, null, null, projectId, null,
+                "backups", "daily", false, mode, null, null, json, null);
+    }
+
+    private static SaveStorageProfileCommand azureCommand(
+            StorageCredentialMode mode, String accountKey, String accountName) {
+        return new SaveStorageProfileCommand("azure", StorageProvider.AZURE_BLOB, null, null, null,
+                accountName, "backups", "daily", false, mode, null, null, null, accountKey);
     }
 
     private static StorageProfile profile() {
@@ -209,5 +266,12 @@ class ManageStorageProfileServiceTest {
                 .projectId("backup-project").bucket("backups").keyPrefix("daily")
                 .credentialMode(mode).serviceAccountJsonCiphertext(encryptedJson)
                 .createdAt(NOW).updatedAt(NOW).build();
+    }
+
+    private static StorageProfile azureProfile(StorageCredentialMode mode, String encryptedKey) {
+        return StorageProfile.builder().id(UUID.randomUUID()).name("azure")
+                .provider(StorageProvider.AZURE_BLOB).accountName("backupaccount")
+                .bucket("backups").keyPrefix("daily").credentialMode(mode)
+                .accountKeyCiphertext(encryptedKey).createdAt(NOW).updatedAt(NOW).build();
     }
 }

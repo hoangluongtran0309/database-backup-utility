@@ -3,9 +3,10 @@
       th:replace="~{layout/base :: page('Storage', 'storage', ~{:: #content})}">
 <body><div id="content">
   <div class="page-header"><div><div class="eyebrow">Setup</div><h1>Storage</h1>
-    <p>Local filesystem is built in. Add S3-compatible or Google Cloud Storage destinations for durable artifacts.</p></div>
+    <p>Local filesystem is built in. Add S3-compatible, Google Cloud Storage or Azure Blob destinations for durable artifacts.</p></div>
     <div class="actions"><a class="button" th:href="@{/storage/new(provider='S3')}">Add S3 profile</a>
-      <a class="button button-primary" th:href="@{/storage/new(provider='GCS')}">Add GCS profile</a></div></div>
+      <a class="button" th:href="@{/storage/new(provider='GCS')}">Add GCS profile</a>
+      <a class="button button-primary" th:href="@{/storage/new(provider='AZURE_BLOB')}">Add Azure profile</a></div></div>
   <section class="panel"><h2>Local filesystem <span class="badge badge-neutral">Default</span></h2>
     <p>Uses <code>BACKUP_DIR</code>. This built-in destination cannot be edited or removed.</p></section>
   <p class="empty-state panel" th:if="${profiles.isEmpty()}">No remote storage profiles yet.</p>
@@ -15,10 +16,13 @@
     <td><strong th:text="${profile.name}">archive</strong></td>
     <td th:text="${profile.provider.displayName}">Google Cloud Storage</td>
     <td class="mono" th:text="|${profile.bucket}/${profile.keyPrefix}|">bucket/prefix</td>
-    <td th:text="${profile.endpoint == null ? (profile.provider.name() == 'S3' ? 'AWS S3' : 'Google Cloud') : profile.endpoint}">Provider default</td>
+    <td th:text="${profile.endpoint == null ? (profile.provider.name() == 'S3' ? 'AWS S3' :
+      (profile.provider.name() == 'GCS' ? 'Google Cloud' : 'https://' + profile.accountName + '.blob.core.windows.net')) : profile.endpoint}">Provider default</td>
     <td th:text="${profile.credentialMode.name() == 'STATIC' ? 'Static access key' :
       (profile.credentialMode.name() == 'DEFAULT_CHAIN' ? 'AWS default chain' :
-      (profile.credentialMode.name() == 'APPLICATION_DEFAULT' ? 'Google ADC' : 'Service-account JSON'))}">Credentials</td>
+      (profile.credentialMode.name() == 'APPLICATION_DEFAULT' ? 'Google ADC' :
+      (profile.credentialMode.name() == 'SERVICE_ACCOUNT_JSON' ? 'Service-account JSON' :
+      (profile.credentialMode.name() == 'AZURE_DEFAULT' ? 'Azure Default Credential' : 'Storage account key'))))}">Credentials</td>
     <td><span class="badge badge-neutral" th:if="${profile.lastConnectionCheck == null}">Never tested</span>
       <span class="badge badge-success" th:if="${profile.lastConnectionCheck != null and profile.lastConnectionCheck.successful}">Passed</span>
       <span class="badge badge-danger" th:if="${profile.lastConnectionCheck != null and !profile.lastConnectionCheck.successful}"

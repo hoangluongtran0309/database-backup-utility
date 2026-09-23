@@ -51,6 +51,12 @@ services:
       SQLITE_ROOT: /var/lib/dbbackup/sqlite
       BACKUP_DIR: /var/lib/dbbackup/backups
       STORAGE_STAGING_DIR: /var/lib/dbbackup/backups/.staging
+      # Optional Azure Default Credential inputs. Managed identity needs none
+      # of the tenant/secret values; AZURE_CLIENT_ID may select a user-assigned identity.
+      AZURE_TENANT_ID: ${AZURE_TENANT_ID:-}
+      AZURE_CLIENT_ID: ${AZURE_CLIENT_ID:-}
+      AZURE_CLIENT_SECRET: ${AZURE_CLIENT_SECRET:-}
+      AZURE_TOKEN_CREDENTIALS: ${AZURE_TOKEN_CREDENTIALS:-}
     ports:
       - "8080:8080"
     volumes:
