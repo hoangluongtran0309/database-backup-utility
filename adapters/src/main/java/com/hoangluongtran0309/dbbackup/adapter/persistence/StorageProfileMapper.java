@@ -10,6 +10,7 @@ final class StorageProfileMapper {
         StorageProfileEntity entity = new StorageProfileEntity();
         entity.setId(profile.getId());
         entity.setName(profile.getName());
+        entity.setProvider(profile.getProvider());
         entity.setEndpoint(profile.getEndpoint());
         entity.setRegion(profile.getRegion());
         entity.setBucket(profile.getBucket());
@@ -18,6 +19,8 @@ final class StorageProfileMapper {
         entity.setCredentialMode(profile.getCredentialMode());
         entity.setAccessKeyId(profile.getAccessKeyId());
         entity.setSecretAccessKeyEnc(profile.getSecretAccessKeyCiphertext());
+        entity.setProjectId(profile.getProjectId());
+        entity.setServiceAccountJsonEnc(profile.getServiceAccountJsonCiphertext());
         entity.setCreatedAt(profile.getCreatedAt());
         entity.setUpdatedAt(profile.getUpdatedAt());
         ConnectionCheck check = profile.getLastConnectionCheck();
@@ -35,10 +38,13 @@ final class StorageProfileMapper {
                         entity.getLastConnectionSuccessful(), entity.getLastConnectionMessage(),
                         entity.getLastConnectionCheckedAt());
         return StorageProfile.builder()
-                .id(entity.getId()).name(entity.getName()).endpoint(entity.getEndpoint())
+                .id(entity.getId()).name(entity.getName()).provider(entity.getProvider())
+                .endpoint(entity.getEndpoint())
                 .region(entity.getRegion()).bucket(entity.getBucket()).keyPrefix(entity.getKeyPrefix())
                 .pathStyle(entity.isPathStyle()).credentialMode(entity.getCredentialMode())
                 .accessKeyId(entity.getAccessKeyId()).secretAccessKeyCiphertext(entity.getSecretAccessKeyEnc())
+                .projectId(entity.getProjectId())
+                .serviceAccountJsonCiphertext(entity.getServiceAccountJsonEnc())
                 .createdAt(entity.getCreatedAt()).updatedAt(entity.getUpdatedAt())
                 .lastConnectionCheck(check).build();
     }

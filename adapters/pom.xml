@@ -53,6 +53,11 @@
       <groupId>software.amazon.awssdk</groupId>
       <artifactId>s3-transfer-manager</artifactId>
     </dependency>
+    <dependency>
+      <groupId>com.google.cloud</groupId>
+      <artifactId>google-cloud-storage</artifactId>
+      <version>${google.cloud.storage.version}</version>
+    </dependency>
 
     <!--
       Testcontainers 2.x renamed its modules to a testcontainers-* prefix and
@@ -141,7 +146,22 @@
             <configuration>
               <excludes>
                 <exclude>**/S3StorageAdapterIT.java</exclude>
+                <exclude>**/GcsStorageAdapterIT.java</exclude>
               </excludes>
+            </configuration>
+          </execution>
+          <execution>
+            <id>gcs-integration-tests</id>
+            <goals>
+              <goal>integration-test</goal>
+              <goal>verify</goal>
+            </goals>
+            <configuration>
+              <includes>
+                <include>**/GcsStorageAdapterIT.java</include>
+              </includes>
+              <forkCount>1</forkCount>
+              <reuseForks>false</reuseForks>
             </configuration>
           </execution>
           <execution>

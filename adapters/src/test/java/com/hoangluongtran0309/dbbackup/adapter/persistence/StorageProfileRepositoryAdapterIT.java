@@ -9,6 +9,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.junit.jupiter.Container;
@@ -22,6 +23,7 @@ import com.hoangluongtran0309.dbbackup.core.model.DatabaseEngine;
 import com.hoangluongtran0309.dbbackup.core.model.DatabaseTarget;
 import com.hoangluongtran0309.dbbackup.core.model.StorageCredentialMode;
 import com.hoangluongtran0309.dbbackup.core.model.StorageProfile;
+import com.hoangluongtran0309.dbbackup.core.model.StorageProvider;
 import com.hoangluongtran0309.dbbackup.core.port.BackupExecutionRepository;
 import com.hoangluongtran0309.dbbackup.core.port.DatabaseTargetRepository;
 import com.hoangluongtran0309.dbbackup.core.port.StorageProfileRepository;
@@ -40,6 +42,7 @@ class StorageProfileRepositoryAdapterIT {
     @Autowired StorageProfileRepository profiles;
     @Autowired DatabaseTargetRepository targets;
     @Autowired BackupExecutionRepository backups;
+    @Autowired JdbcTemplate jdbc;
 
     @Test
     void roundTripsEncryptedStaticCredentialsAndConfiguration() {
@@ -50,6 +53,48 @@ class StorageProfileRepositoryAdapterIT {
         assertThat(found.getSecretAccessKeyCiphertext()).isEqualTo("encrypted-secret");
         assertThat(found.isPathStyle()).isTrue();
         profiles.deleteById(saved.getId());
+    }
+
+    @Test
+    void roundTripsGcsApplicationDefaultConfiguration() {
+        StorageProfile profile = StorageProfile.builder().id(UUID.randomUUID())
+                .name("gcs-" + UUID.randomUUID()).provider(StorageProvider.GCS)
+                .endpoint("http://gcs.test:4443").projectId("backup-project")
+                .bucket("backups").keyPrefix("daily")
+                .credentialMode(StorageCredentialMode.APPLICATION_DEFAULT)
+                .createdAt(NOW).updatedAt(NOW).build();
+        StorageProfile found = profiles.findById(profiles.save(profile).getId()).orElseThrow();
+        assertThat(found.getProvider()).isEqualTo(StorageProvider.GCS);
+        assertThat(found.getProjectId()).isEqualTo("backup-project");
+        assertThat(found.getRegion()).isNull();
+        assertThat(found.getServiceAccountJsonCiphertext()).isNull();
+        profiles.deleteById(found.getId());
+    }
+
+    @Test
+    void roundTripsEncryptedGcsServiceAccountConfiguration() {
+        StorageProfile profile = StorageProfile.builder().id(UUID.randomUUID())
+                .name("gcs-json-" + UUID.randomUUID()).provider(StorageProvider.GCS)
+                .projectId("backup-project").bucket("backups").keyPrefix("daily")
+                .credentialMode(StorageCredentialMode.SERVICE_ACCOUNT_JSON)
+                .serviceAccountJsonCiphertext("encrypted-service-account")
+                .createdAt(NOW).updatedAt(NOW).build();
+        StorageProfile found = profiles.findById(profiles.save(profile).getId()).orElseThrow();
+        assertThat(found.getCredentialMode()).isEqualTo(StorageCredentialMode.SERVICE_ACCOUNT_JSON);
+        assertThat(found.getServiceAccountJsonCiphertext()).isEqualTo("encrypted-service-account");
+        profiles.deleteById(found.getId());
+    }
+
+    @Test
+    void databaseRejectsAProviderConfigurationWithFieldsFromTheOtherProvider() {
+        assertThatThrownBy(() -> jdbc.update("""
+                INSERT INTO storage_profiles
+                    (id, name, provider, endpoint_url, region, project_id, bucket, key_prefix,
+                     path_style, credential_mode, created_at, updated_at)
+                VALUES (?, ?, 'GCS', NULL, 'us-east-1', 'backup-project', 'backups', '',
+                        FALSE, 'APPLICATION_DEFAULT', now(), now())
+                """, UUID.randomUUID(), "invalid-gcs-" + UUID.randomUUID()))
+                .hasMessageContaining("chk_storage_profiles_configuration");
     }
 
     @Test
@@ -81,7 +126,8 @@ class StorageProfileRepositoryAdapterIT {
     }
 
     private static StorageProfile profile(String name) {
-        return StorageProfile.builder().id(UUID.randomUUID()).name(name).endpoint("http://s3.test:9090")
+        return StorageProfile.builder().id(UUID.randomUUID()).name(name).provider(StorageProvider.S3)
+                .endpoint("http://s3.test:9090")
                 .region("us-east-1").bucket("backups").keyPrefix("daily").pathStyle(true)
                 .credentialMode(StorageCredentialMode.STATIC).accessKeyId("access")
                 .secretAccessKeyCiphertext("encrypted-secret").createdAt(NOW).updatedAt(NOW).build();

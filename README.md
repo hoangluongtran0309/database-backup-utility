@@ -4,9 +4,9 @@ MySQL, MariaDB, PostgreSQL, MongoDB, SQLite, optional Oracle and optional SQL
 Server logical backup and restore, driven from a small web console.
 
 The scope is deliberately narrow: **full logical dumps and same-engine restores**
-to local disk or a managed S3-compatible profile. MySQL, MariaDB, PostgreSQL, MongoDB, SQLite, Oracle and SQL Server
+to local disk, S3-compatible storage or Google Cloud Storage. MySQL, MariaDB, PostgreSQL, MongoDB, SQLite, Oracle and SQL Server
 are implemented. There is no physical
-backup, incremental chain or point-in-time recovery. GCS and Azure are not yet supported.
+backup, incremental chain or point-in-time recovery. Azure is not yet supported.
 Each capability arrives as one complete vertical slice, code and documentation
 together. See [ROADMAP.md](ROADMAP.md) for what exists and what is next.
 
@@ -21,11 +21,14 @@ stored.
 
 The built-in local filesystem remains the default destination. The Storage
 page can add S3-compatible profiles with static credentials or the AWS default
-credential chain, test them with a put/head/get/delete probe, and select one
-per target. Existing backups keep their original destination when a target is
-changed. S3 artifacts are staged locally only for dump/restore and the staging
-copy is removed afterwards. See
-[ADR-025](docs/adr/025-s3-storage-profiles-and-local-staging.md).
+credential chain, and GCS profiles with Application Default Credentials (ADC)
+or an encrypted service-account JSON key. Each profile is tested with a
+create/metadata-read/content-read/delete probe and can be selected per target.
+Existing backups keep their original destination when a target is changed.
+Remote artifacts are staged locally only for dump/restore and the staging copy
+is removed afterwards. See
+[ADR-025](docs/adr/025-s3-storage-profiles-and-local-staging.md) and
+[ADR-026](docs/adr/026-google-cloud-storage-profiles.md).
 
 Named Quartz schedules can run the same full backup path on a recurring cron
 expression in an explicit IANA time zone. They can be created, edited, paused
@@ -71,7 +74,7 @@ named `<service>_<timestamp>.dmp`; SQL Server artifacts are BACPAC files named
 
 Each backup records the SHA-256 of its artifact — the same value `sha256sum`
 prints for the download. The backup's page can verify the file against it, and
-every restore checks it first: an artifact that has changed on disk is not
+every restore checks it first: an artifact that has changed in storage is not
 applied. Backups made before 0.2.0 show "Not recorded". See
 [ADR-013](docs/adr/013-a-checksum-for-every-artifact.md).
 
@@ -258,7 +261,7 @@ would also try to run the parent pom, which has no main class.)
 | `SQLSERVER_TRUST_SERVER_CERTIFICATE` | `false` | Keep encryption but skip CA/hostname verification; opt in only for a deliberately untrusted certificate |
 | `SQLSERVER_TEMP_DIR` | `./sqlserver-temp` | Per-job SqlPackage staging root; needs free space comparable to the database and is cleaned after each job |
 | `BACKUP_DIR` | `./backups` | Where dumps are written; created at startup. Relative, so it follows the working directory — `mvn -pl web spring-boot:run` puts it under `web/`. The image sets it to `/var/lib/dbbackup/backups`. |
-| `STORAGE_STAGING_DIR` | `<BACKUP_DIR>/.staging` | Per-job S3 staging; needs room for one artifact per concurrent job and is cleaned after each operation |
+| `STORAGE_STAGING_DIR` | `<BACKUP_DIR>/.staging` | Per-job remote-storage staging; needs room for one artifact per concurrent job and is cleaned after each operation |
 | `JOB_CONCURRENCY` | `2` | How many backups and restores may run at once, together |
 | `JOB_QUEUE_CAPACITY` | `20` | Beyond this, a job is refused and recorded as failed |
 | `BACKUP_TIMEOUT` | `30m` | A dump running longer than this is killed |
@@ -275,8 +278,9 @@ mvn verify   # adds the integration tests, which need Docker
 Testcontainers. The SQL Server IT drives the installed `sqlcmd` and SqlPackage
 against SQL Server 2022. The Oracle IT drives `sqlplus`/`expdp`/`impdp` through wrappers
 inside its Oracle Free container, so no Oracle client is installed on the
-runner. H2 is not used anywhere, and no test skips itself when something it
-needs is missing.
+runner. Storage integration tests use Adobe S3Mock and fake-gcs-server in
+isolated forks. H2 is not used anywhere, and no test skips itself when
+something it needs is missing.
 
 ## Working on it
 
