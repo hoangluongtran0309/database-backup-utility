@@ -242,6 +242,24 @@ failure is stored on the policy and never rewrites the successful backup that
 triggered it. See
 [ADR-024](../adr/024-retention-keeps-new-unrestored-backups-per-target.md).
 
+## Dispatching notifications
+
+`notification_channels` stores reusable typed destinations and encrypted
+transport secrets. `database_target_notification_channels` links each target
+to selected backup and restore lifecycle events. `NotificationDispatcher`
+loads those links only when an event occurs, decrypts the channel credential at
+the last possible moment, selects one of four `NotificationPort` adapters and
+isolates each delivery failure from the next channel and from the execution.
+
+Backup and restore workers publish `STARTED` before touching the engine and a
+single terminal event only after the final row is durable. Queue rejection and
+startup repair use the same failure path. A cross-target restore reads the
+destination target's subscriptions, but the message carries both target
+identities. Telegram, Slack and Webhook requests have bounded HTTP timeouts;
+Email uses optional deployment-wide SMTP. There is deliberately no outbox,
+retry or delivery-history model. See
+[ADR-028](../adr/028-target-scoped-notification-channels.md).
+
 A restore follows the same two-step shape and shares the same pool, so the bound
 is on total heavy work rather than on each kind separately. What a restore
 actually does — and what it deliberately does not — is in
@@ -334,3 +352,11 @@ stored target.
 `V13` adds durable backup schedules. Their target foreign key is restrictive:
 a schedule must be deliberately deleted before its target can be removed.
 Case-folded, trimmed names are unique just as target names are.
+
+`V14` adds per-target retention policies. `V15` adds S3 storage profiles and
+execution-time profile snapshots; `V16` generalizes them for GCS and `V17`
+adds Azure Blob Storage without rewriting existing profile references.
+
+`V18` adds typed notification channels and per-target event subscriptions.
+Target deletion cascades only the link rows, while channel deletion is
+restricted until every target has stopped using it.

@@ -10,9 +10,9 @@
   the decisions were made.
 
 The current last decision is
-[ADR-027](adr/027-azure-blob-storage-profiles.md), which adds native Azure Blob
-Storage profiles and block-blob upload to the provider-neutral artifact
-workflow established by ADR-025.
+[ADR-028](adr/028-target-scoped-notification-channels.md), which adds reusable
+notification channels and per-target backup/restore event subscriptions with
+best-effort bounded delivery.
 
 These pages describe the code that exists. When a slice changes the code, it
 changes these files in the same commit.

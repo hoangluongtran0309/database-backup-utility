@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout/base :: page(${editing == null ? 'Add notification channel' : 'Edit notification channel'}, 'notifications', ~{:: #content})}">
+<body><div id="content">
+  <div class="page-header"><div><div class="eyebrow">Notifications</div>
+    <h1 th:text="${editing == null ? 'Add ' + channelType.displayName + ' channel' : 'Edit ' + editing.name}">Add channel</h1>
+    <p>Sending a test performs a real delivery to this destination.</p></div></div>
+  <form class="form-panel" method="post" th:object="${form}"
+        th:action="@{${editing == null ? '/notifications' : '/notifications/' + editing.id}}">
+    <input type="hidden" th:field="*{type}">
+    <div th:replace="~{fragments/form-errors :: formErrors}"></div>
+    <div class="form-grid">
+      <div class="form-group form-group-full"><label for="name">Name</label>
+        <input id="name" type="text" th:field="*{name}" maxlength="100" autofocus>
+        <div th:replace="~{fragments/field-error :: fieldError('name')}"></div></div>
+
+      <div class="form-group" th:if="${channelType.name() == 'TELEGRAM'}"><label for="chatId">Telegram chat ID</label>
+        <input id="chatId" type="text" th:field="*{chatId}" maxlength="100"></div>
+      <div class="form-group" th:if="${channelType.name() == 'TELEGRAM'}"><label for="botToken">Telegram bot token</label>
+        <input id="botToken" name="botToken" type="password" autocomplete="new-password">
+        <p class="field-hint" th:text="${editing == null ? 'Encrypted before storage.' : 'Leave empty to keep the stored token.'}"></p></div>
+
+      <div class="form-group form-group-full" th:if="${channelType.name() == 'SLACK'}"><label for="webhookUrl">Slack incoming webhook URL</label>
+        <input id="webhookUrl" name="webhookUrl" type="password" autocomplete="new-password" placeholder="https://hooks.slack.com/services/…">
+        <p class="field-hint" th:text="${editing == null ? 'Only official Slack HTTPS hosts are accepted; the URL is encrypted.' : 'Leave empty to keep the stored webhook.'}"></p></div>
+
+      <div class="form-group form-group-full" th:if="${channelType.name() == 'WEBHOOK'}"><label for="webhookUrl">Webhook URL</label>
+        <input id="webhookUrl" name="webhookUrl" type="password" autocomplete="new-password" placeholder="https://alerts.example.com/dbbackup">
+        <p class="field-hint" th:text="${editing == null ? 'HTTP or HTTPS; encrypted because URLs commonly contain credentials.' : 'Leave empty to keep the stored URL.'}"></p></div>
+
+      <div class="form-group form-group-full" th:if="${channelType.name() == 'EMAIL'}"><label for="emailTo">Email recipient</label>
+        <input id="emailTo" type="email" th:field="*{emailTo}" maxlength="255">
+        <p class="field-hint">SMTP transport is configured deployment-wide.</p></div>
+    </div>
+    <div class="form-actions"><button class="button button-primary" type="submit">Save channel</button>
+      <a class="button button-ghost" th:href="@{/notifications}">Cancel</a></div>
+  </form>
+</div></body></html>

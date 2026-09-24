@@ -34,6 +34,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.hoangluongtran0309.dbbackup.application.EngineAdapterRegistry;
 import com.hoangluongtran0309.dbbackup.application.backup.BackupActivityGuard;
+import com.hoangluongtran0309.dbbackup.application.notification.NotificationDispatcher;
+import com.hoangluongtran0309.dbbackup.application.storage.ArtifactStorageService;
 import com.hoangluongtran0309.dbbackup.core.exception.RestoreFailedException;
 import com.hoangluongtran0309.dbbackup.core.model.BackupExecution;
 import com.hoangluongtran0309.dbbackup.core.model.DatabaseEngine;
@@ -41,6 +43,7 @@ import com.hoangluongtran0309.dbbackup.core.model.DatabaseTarget;
 import com.hoangluongtran0309.dbbackup.core.model.ExecutionStatus;
 import com.hoangluongtran0309.dbbackup.core.model.DatabaseConnection;
 import com.hoangluongtran0309.dbbackup.core.model.RestoreExecution;
+import com.hoangluongtran0309.dbbackup.core.model.NotificationEventType;
 import com.hoangluongtran0309.dbbackup.core.port.BackupExecutionRepository;
 import com.hoangluongtran0309.dbbackup.core.port.DatabaseTargetRepository;
 import com.hoangluongtran0309.dbbackup.core.port.EncryptionPort;
@@ -64,6 +67,7 @@ class RestoreBackupServiceTest {
     @Mock private LogicalRestorePort restoreEngine;
     @Mock private StoragePort storage;
     @Mock private EncryptionPort encryption;
+    @Mock private NotificationDispatcher notifications;
 
     @Captor private ArgumentCaptor<RestoreExecution> saved;
 
@@ -78,8 +82,9 @@ class RestoreBackupServiceTest {
     }
 
     private RestoreBackupService newService(Executor executor) {
-        return new RestoreBackupService(backups, restores, targets, adapters, storage, encryption,
-                executor, Clock.fixed(NOW, ZoneOffset.UTC), new BackupActivityGuard());
+        return new RestoreBackupService(backups, restores, targets, adapters,
+                ArtifactStorageService.localOnly(storage), encryption,
+                executor, Clock.fixed(NOW, ZoneOffset.UTC), new BackupActivityGuard(), notifications);
     }
 
     // --- accepting ----------------------------------------------------------
@@ -187,6 +192,8 @@ class RestoreBackupServiceTest {
         verify(restores, Mockito.times(2)).save(saved.capture());
         assertThat(saved.getAllValues().get(1).getStatus()).isEqualTo(ExecutionStatus.FAILED);
         assertThat(saved.getAllValues().get(1).getErrorMessage()).contains("Too many jobs");
+        verify(notifications).publishRestore(any(), any(),
+                eq(saved.getAllValues().get(1)), eq(NotificationEventType.RESTORE_FAILED));
     }
 
     @Test
@@ -218,6 +225,8 @@ class RestoreBackupServiceTest {
         assertThat(connection.getValue().database()).isEqualTo("shop");
         assertThat(lastSaved().getStatus()).isEqualTo(ExecutionStatus.SUCCEEDED);
         assertThat(lastSaved().getFinishedAt()).isEqualTo(NOW);
+        verify(notifications).publishRestore(any(), any(), any(), eq(NotificationEventType.RESTORE_STARTED));
+        verify(notifications).publishRestore(any(), any(), any(), eq(NotificationEventType.RESTORE_SUCCESS));
     }
 
     @Test
@@ -296,6 +305,10 @@ class RestoreBackupServiceTest {
         assertThat(connection.getValue().password()).isEqualTo("dr1ll");
         assertThat(lastSaved().getTargetId()).isEqualTo(otherId);
         verify(targets).findById(TARGET_ID);
+        ArgumentCaptor<DatabaseTarget> notifiedDestination = ArgumentCaptor.forClass(DatabaseTarget.class);
+        verify(notifications).publishRestore(any(), notifiedDestination.capture(), any(),
+                eq(NotificationEventType.RESTORE_SUCCESS));
+        assertThat(notifiedDestination.getValue().getId()).isEqualTo(otherId);
     }
 
     @Test
@@ -378,10 +391,13 @@ class RestoreBackupServiceTest {
         RestoreExecution stranded =
                 RestoreExecution.started(UUID.randomUUID(), BACKUP_ID, TARGET_ID, NOW.minusSeconds(900));
         when(restores.findRunning()).thenReturn(List.of(stranded));
+        givenSucceededBackup();
+        givenTarget();
         givenSaveEchoes();
 
         assertThat(service.failInterruptedRestores()).isEqualTo(1);
         assertThat(lastSaved().getErrorMessage()).contains("the application stopped");
+        verify(notifications).publishRestore(any(), any(), any(), eq(NotificationEventType.RESTORE_FAILED));
     }
 
     @Test
