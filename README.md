@@ -45,6 +45,14 @@ artifacts. Backups with any restore history are always protected in addition to
 that number, and the console shows the latest cleanup outcome. See
 [ADR-024](docs/adr/024-retention-keeps-new-unrestored-backups-per-target.md).
 
+Reusable Telegram, Slack, Email and generic Webhook channels can notify the
+owners of each target about selected backup and restore lifecycle events.
+Restore notifications follow the destination target and identify both source
+and destination. Delivery is best-effort with finite timeouts: a notification
+failure never changes a backup or restore result. Channel secrets are encrypted
+and never shown again; Email uses optional deployment-wide SMTP settings. See
+[ADR-028](docs/adr/028-target-scoped-notification-channels.md).
+
 A network target's connection details — name, host, port, user, password and, for
 MongoDB, its authentication database — can be edited without touching its
 backups, so a rotated password is an edit rather
@@ -238,6 +246,13 @@ would also try to run the parent pom, which has no main class.)
 | `DB_URL` | `jdbc:postgresql://localhost:5432/dbbackup` | Metadata store |
 | `DB_USERNAME` | `dbbackup` | Metadata store user |
 | `DB_PASSWORD` | `dbbackup` | Metadata store password |
+| `DBBACKUP_SMTP_HOST` | empty | Optional deployment-wide SMTP host; an empty value disables Email delivery without blocking startup |
+| `DBBACKUP_SMTP_PORT` | `587` | SMTP port |
+| `DBBACKUP_SMTP_USERNAME` | empty | Optional SMTP username |
+| `DBBACKUP_SMTP_PASSWORD` | empty | Optional SMTP password |
+| `DBBACKUP_SMTP_FROM` | `dbbackup@localhost` | Sender address for Email channels |
+| `DBBACKUP_SMTP_AUTH` | `true` | Enable SMTP authentication |
+| `DBBACKUP_SMTP_STARTTLS` | `true` | Upgrade SMTP connections with STARTTLS |
 | `MYSQL_CLIENT_PATH` | `/usr/bin/mysql` | The `mysql` client binary; checked for executability at startup |
 | `MYSQLDUMP_PATH` | `/usr/bin/mysqldump` | The `mysqldump` binary; likewise checked at startup |
 | `MARIADB_CLIENT_PATH` | `/usr/bin/mariadb` | MariaDB's command-line client for probes and restores |

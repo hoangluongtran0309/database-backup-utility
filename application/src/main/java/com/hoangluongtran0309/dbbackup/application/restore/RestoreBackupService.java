@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.beans.factory.annotation.Autowired;
 
 import com.hoangluongtran0309.dbbackup.application.EngineAdapterRegistry;
+import com.hoangluongtran0309.dbbackup.application.notification.NotificationDispatcher;
 import com.hoangluongtran0309.dbbackup.application.backup.BackupActivityGuard;
 import com.hoangluongtran0309.dbbackup.application.storage.ArtifactStorageService;
 import com.hoangluongtran0309.dbbackup.application.storage.ArtifactStorageService.PreparedRead;
@@ -23,6 +24,7 @@ import com.hoangluongtran0309.dbbackup.core.model.ArtifactReference;
 import com.hoangluongtran0309.dbbackup.core.model.DatabaseConnection;
 import com.hoangluongtran0309.dbbackup.core.model.DatabaseTarget;
 import com.hoangluongtran0309.dbbackup.core.model.ExecutionStatus;
+import com.hoangluongtran0309.dbbackup.core.model.NotificationEventType;
 import com.hoangluongtran0309.dbbackup.core.model.RestoreExecution;
 import com.hoangluongtran0309.dbbackup.core.port.BackupExecutionRepository;
 import com.hoangluongtran0309.dbbackup.core.port.DatabaseTargetRepository;
@@ -53,14 +55,23 @@ public class RestoreBackupService {
     private final Executor jobExecutor;
     private final Clock clock;
     private final BackupActivityGuard activityGuard;
+    private final NotificationDispatcher notifications;
 
     @Autowired
     public RestoreBackupService(BackupExecutionRepository backups, RestoreExecutionRepository restores,
             DatabaseTargetRepository targets, EngineAdapterRegistry adapters, ArtifactStorageService storage,
-            EncryptionPort encryption, Executor jobExecutor, Clock clock, BackupActivityGuard activityGuard) {
+            EncryptionPort encryption, Executor jobExecutor, Clock clock, BackupActivityGuard activityGuard,
+            NotificationDispatcher notifications) {
         this.backups = backups; this.restores = restores; this.targets = targets; this.adapters = adapters;
         this.storage = storage; this.encryption = encryption; this.jobExecutor = jobExecutor;
         this.clock = clock; this.activityGuard = activityGuard;
+        this.notifications = notifications;
+    }
+
+    public RestoreBackupService(BackupExecutionRepository backups, RestoreExecutionRepository restores,
+            DatabaseTargetRepository targets, EngineAdapterRegistry adapters, ArtifactStorageService storage,
+            EncryptionPort encryption, Executor jobExecutor, Clock clock, BackupActivityGuard activityGuard) {
+        this(backups, restores, targets, adapters, storage, encryption, jobExecutor, clock, activityGuard, null);
     }
 
     public RestoreBackupService(BackupExecutionRepository backups, RestoreExecutionRepository restores,
@@ -68,7 +79,7 @@ public class RestoreBackupService {
             com.hoangluongtran0309.dbbackup.core.port.StoragePort storage, EncryptionPort encryption,
             Executor jobExecutor, Clock clock, BackupActivityGuard activityGuard) {
         this(backups, restores, targets, adapters, ArtifactStorageService.localOnly(storage), encryption,
-                jobExecutor, clock, activityGuard);
+                jobExecutor, clock, activityGuard, null);
     }
 
     /**
@@ -115,9 +126,11 @@ public class RestoreBackupService {
 
         try {
             jobExecutor.execute(() -> run(
-                    execution.getId(), source.backupNamespace(), target, backup, restoreEngine));
+                    execution.getId(), source, target, backup, restoreEngine));
         } catch (RejectedExecutionException e) {
-            finish(execution, "Too many jobs are already running or queued. Try again shortly.");
+            notify(source, target,
+                    finish(execution, "Too many jobs are already running or queued. Try again shortly."),
+                    NotificationEventType.RESTORE_FAILED);
         }
         return execution.getId();
     }
@@ -125,15 +138,18 @@ public class RestoreBackupService {
     /** Runs one accepted restore. Called on a background thread; never throws. */
     void run(
             UUID restoreId,
-            String sourceNamespace,
+            DatabaseTarget source,
             DatabaseTarget target,
             BackupExecution backup,
             LogicalRestorePort restoreEngine) {
         RestoreExecution execution = restores.findById(restoreId).orElseThrow();
+        notify(source, target, execution, NotificationEventType.RESTORE_STARTED);
         String filename = Path.of(backup.getArtifactLocator()).getFileName().toString();
         ArtifactReference reference = new ArtifactReference(backup.getStorageProfileId(), backup.getArtifactLocator());
         if (!storage.exists(reference)) {
-            finish(execution, "The backup artifact is no longer available. Nothing was restored.");
+            notify(source, target,
+                    finish(execution, "The backup artifact is no longer available. Nothing was restored."),
+                    NotificationEventType.RESTORE_FAILED);
             return;
         }
         try (PreparedRead artifact = storage.materialize(reference, restoreId, filename)) {
@@ -141,15 +157,16 @@ public class RestoreBackupService {
 
             DatabaseConnection connection = connectionTo(target);
 
-            restoreEngine.restore(connection, sourceNamespace, artifact.path(), restoreId);
-            restores.save(execution.succeeded(clock.instant()));
+            restoreEngine.restore(connection, source.backupNamespace(), artifact.path(), restoreId);
+            RestoreExecution succeeded = restores.save(execution.succeeded(clock.instant()));
+            notify(source, target, succeeded, NotificationEventType.RESTORE_SUCCESS);
             log.info("Restore {} of {} into target {} succeeded", restoreId, reference.locator(), target.getName());
 
         } catch (RestoreFailedException e) {
-            finish(execution, e.getMessage());
+            notify(source, target, finish(execution, e.getMessage()), NotificationEventType.RESTORE_FAILED);
         } catch (RuntimeException e) {
             log.error("Restore {} into target {} failed unexpectedly", restoreId, target.getName(), e);
-            finish(execution, e.toString());
+            notify(source, target, finish(execution, e.toString()), NotificationEventType.RESTORE_FAILED);
         }
     }
 
@@ -194,7 +211,8 @@ public class RestoreBackupService {
                 message += " Staging cleanup failed: " + e.getMessage();
                 log.error("Could not clean staging for interrupted restore {}", execution.getId(), e);
             }
-            finish(execution, message);
+            RestoreExecution failed = finish(execution, message);
+            notifyInterrupted(failed);
         });
         if (!stranded.isEmpty()) {
             log.warn("Marked {} restore(s) left running by a previous process as failed", stranded.size());
@@ -202,8 +220,24 @@ public class RestoreBackupService {
         return stranded.size();
     }
 
-    private void finish(RestoreExecution execution, String message) {
-        restores.save(execution.failed(message, clock.instant()));
+    private RestoreExecution finish(RestoreExecution execution, String message) {
+        return restores.save(execution.failed(message, clock.instant()));
+    }
+
+    private void notifyInterrupted(RestoreExecution execution) {
+        try {
+            BackupExecution backup = backups.findById(execution.getBackupExecutionId()).orElseThrow();
+            DatabaseTarget source = targets.findById(backup.getTargetId()).orElseThrow();
+            DatabaseTarget destination = targets.findById(execution.getTargetId()).orElseThrow();
+            notify(source, destination, execution, NotificationEventType.RESTORE_FAILED);
+        } catch (RuntimeException e) {
+            log.warn("Could not resolve targets for interrupted restore notification {}", execution.getId(), e);
+        }
+    }
+
+    private void notify(DatabaseTarget source, DatabaseTarget destination,
+            RestoreExecution execution, NotificationEventType event) {
+        if (notifications != null) notifications.publishRestore(source, destination, execution, event);
     }
 
     private DatabaseConnection connectionTo(DatabaseTarget target) {
