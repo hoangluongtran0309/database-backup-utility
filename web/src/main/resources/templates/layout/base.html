@@ -3,7 +3,7 @@
   The page shell. Every view calls it as
     th:replace="~{layout/base :: page('Title', 'section', ~{:: #content})}"
   where `section` is the nav entry the page belongs to — 'targets',
-  'schedules', 'retention', 'backups' or 'restores' — and drives the
+  'storage', 'notifications', 'schedules', 'retention', 'backups' or 'restores' — and drives the
   highlighted sidebar item and the breadcrumb.
 
   The error page passes 'error': it belongs to no section, and it shows no
@@ -16,8 +16,8 @@
   same theme, styles and script.
 -->
 <html lang="en" xmlns:th="http://www.thymeleaf.org" th:fragment="page(title, section, content)"
-      th:with="sectionLabel=${section == 'targets' ? 'Targets' : (section == 'storage' ? 'Storage' : (section == 'schedules' ? 'Schedules' : (section == 'retention' ? 'Retention' : (section == 'backups' ? 'Backups' : (section == 'restores' ? 'Restores' : null)))))},
-               sectionUrl=${section == 'storage' ? '/storage' : (section == 'schedules' ? '/schedules' : (section == 'retention' ? '/retention' : (section == 'backups' ? '/executions' : (section == 'restores' ? '/restores' : '/databases'))))},
+      th:with="sectionLabel=${section == 'targets' ? 'Targets' : (section == 'storage' ? 'Storage' : (section == 'notifications' ? 'Notifications' : (section == 'schedules' ? 'Schedules' : (section == 'retention' ? 'Retention' : (section == 'backups' ? 'Backups' : (section == 'restores' ? 'Restores' : null))))))},
+               sectionUrl=${section == 'storage' ? '/storage' : (section == 'notifications' ? '/notifications' : (section == 'schedules' ? '/schedules' : (section == 'retention' ? '/retention' : (section == 'backups' ? '/executions' : (section == 'restores' ? '/restores' : '/databases')))))},
                showFlash=${section != 'error'}">
 <head th:fragment="head(title)">
   <meta charset="utf-8">
@@ -56,6 +56,9 @@
         <a class="nav-item" th:href="@{/storage}"
            th:classappend="${section == 'storage'} ? 'active'"
            th:attr="aria-current=${section == 'storage' ? 'page' : null}"><span aria-hidden="true">▣</span>Storage</a>
+        <a class="nav-item" th:href="@{/notifications}"
+           th:classappend="${section == 'notifications'} ? 'active'"
+           th:attr="aria-current=${section == 'notifications' ? 'page' : null}"><span aria-hidden="true">◇</span>Notifications</a>
         <a class="nav-item" th:href="@{/schedules}"
            th:classappend="${section == 'schedules'} ? 'active'"
            th:attr="aria-current=${section == 'schedules' ? 'page' : null}"><span aria-hidden="true">◷</span>Schedules</a>

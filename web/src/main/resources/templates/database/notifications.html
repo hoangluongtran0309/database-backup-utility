@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout/base :: page('Target notifications', 'targets', ~{:: #content})}">
+<body><div id="content">
+  <div class="page-header"><div><div class="eyebrow">Notifications</div>
+    <h1>Notifications for <span th:text="${target.name}">production</span></h1>
+    <p>Restore events follow the destination target. Delivery failures never change a backup or restore result.</p></div></div>
+
+  <form class="form-panel" method="post" th:object="${form}"
+        th:action="@{/databases/{id}/notifications(id=${target.id})}">
+    <div th:replace="~{fragments/form-errors :: formErrors}"></div>
+    <p class="empty-state" th:if="${channels.isEmpty()}">No channels exist yet. <a th:href="@{/notifications/new}">Create a notification channel</a>.</p>
+    <div class="stack" th:unless="${channels.isEmpty()}">
+      <section class="panel" th:each="row, stat : *{rows}">
+        <input type="hidden" th:field="*{rows[__${stat.index}__].channelId}">
+        <label><input type="checkbox" th:field="*{rows[__${stat.index}__].included}">
+          <strong th:text="${channels[stat.index].name}">Operations</strong>
+          <span class="badge badge-neutral" th:text="${channels[stat.index].type.displayName}">Webhook</span></label>
+        <div class="actions" style="margin-top:.7rem">
+          <label th:each="event : ${events}"><input type="checkbox"
+              th:field="*{rows[__${stat.index}__].events}" th:value="${event}">
+            <span th:text="${#strings.replace(event.name(), '_', ' ')}">BACKUP FAILED</span></label>
+        </div>
+        <p class="field-error" th:if="${#fields.hasErrors('rows[' + stat.index + '].events')}"
+           th:errors="*{rows[__${stat.index}__].events}">Choose at least one event.</p>
+      </section>
+    </div>
+    <div class="form-actions"><button class="button button-primary" type="submit">Save subscriptions</button>
+      <a class="button button-ghost" th:href="@{/databases}">Cancel</a></div>
+  </form>
+</div></body></html>

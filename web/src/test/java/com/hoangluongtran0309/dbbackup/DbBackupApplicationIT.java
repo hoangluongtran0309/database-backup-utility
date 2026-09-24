@@ -40,6 +40,7 @@ import com.hoangluongtran0309.dbbackup.core.model.DatabaseTarget;
 import com.hoangluongtran0309.dbbackup.core.port.ConnectionTestPort;
 import com.hoangluongtran0309.dbbackup.core.port.LogicalBackupPort;
 import com.hoangluongtran0309.dbbackup.core.port.LogicalRestorePort;
+import com.hoangluongtran0309.dbbackup.core.port.NotificationPort;
 import com.hoangluongtran0309.dbbackup.core.port.StoragePort;
 
 /**
@@ -100,6 +101,7 @@ class DbBackupApplicationIT {
         assertThat(context.getBeanNamesForType(LogicalRestorePort.class)).hasSize(5);
         assertThat(context.getBeanNamesForType(ConnectionTestPort.class)).hasSize(5);
         assertThat(context.getBeanNamesForType(StoragePort.class)).hasSize(1);
+        assertThat(context.getBeanNamesForType(NotificationPort.class)).hasSize(4);
         assertThat(context.getBean(RunBackupService.class)).isNotNull();
         assertThat(context.getBean(Executor.class)).isNotNull();
     }

@@ -115,11 +115,13 @@ their design is decided.
 - [x] **25. Azure Blob Storage profiles.** Add native Azure profiles with
       DefaultAzureCredential or an encrypted storage-account key, block-blob
       transfer and custom endpoints for regional or development use. See ADR-027.
+- [x] **26. Target-scoped notifications.** Reusable Telegram, Slack, Email and
+      Webhook channels; per-target backup/restore event subscriptions; encrypted
+      channel secrets and best-effort bounded delivery. See ADR-028.
 
-1. [ ] Notifications.
-2. [ ] Restore verification in a temporary database.
-3. [ ] A CLI inbound adapter.
-4. [ ] CI/CD, security scanning and end-to-end hardening.
+1. [ ] Restore verification in a temporary database.
+2. [ ] A CLI inbound adapter.
+3. [ ] CI/CD, security scanning and end-to-end hardening.
 
 ## Deliberately out of scope
 
