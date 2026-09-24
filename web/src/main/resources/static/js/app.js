@@ -221,12 +221,15 @@
         var sqliteLabel = document.querySelector('[data-sqlite-database-label]');
         var sqliteHelp = document.querySelector('[data-sqlite-database-help]');
         var oracleHelp = document.querySelector('[data-oracle-database-help]');
+        var verificationGroup = document.querySelector('[data-verification-target-field]');
+        var verifyAfterBackup = document.getElementById('verifyAfterBackup');
         if (!engine) return;
 
         function renderEngineFields(changePort) {
             var option = engine.options[engine.selectedIndex];
             var sqlite = engine.value === 'SQLITE';
             var oracle = engine.value === 'ORACLE';
+            var verificationSupported = !option || option.dataset.verificationSupported !== 'false';
             networkGroups.forEach(function (group) {
                 group.hidden = sqlite;
                 group.querySelectorAll('input, select').forEach(function (field) {
@@ -255,6 +258,11 @@
             if (oracleHelp) oracleHelp.hidden = !oracle;
             if (database && changePort) {
                 database.placeholder = sqlite ? 'apps/shop.db' : (oracle ? 'FREEPDB1' : 'shop');
+            }
+            if (verificationGroup && verifyAfterBackup) {
+                verificationGroup.hidden = !verificationSupported;
+                verifyAfterBackup.disabled = !verificationSupported;
+                if (!verificationSupported) verifyAfterBackup.checked = false;
             }
         }
 

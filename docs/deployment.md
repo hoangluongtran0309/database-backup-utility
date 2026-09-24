@@ -127,6 +127,24 @@ application healthy; only Email delivery remains unavailable. All SMTP socket
 timeouts are five seconds. See
 [ADR-028](adr/028-target-scoped-notification-channels.md).
 
+**Restore verification is deliberately opt-in.** Set
+`DBBACKUP_VERIFICATION_ENABLED=true` to expose **Test restore** and the
+per-target automatic checkbox. SQLite uses a private file below `SQLITE_ROOT`.
+MySQL, MariaDB, PostgreSQL and MongoDB need the host Docker socket: uncomment
+the socket volume and `group_add` in `docker-compose.yml`, then set
+`DOCKER_SOCKET_GID` to `stat -c '%g' /var/run/docker.sock` on the host. The
+application image already carries the Docker CLI.
+
+Mounting `/var/run/docker.sock` grants root-equivalent control over the Docker
+host. Keep verification disabled when that trust boundary is unacceptable;
+startup and every other feature remain available. Verification containers
+publish no ports, receive no source-database credentials, use deterministic
+names and are force-removed before an attempt may succeed. Operators can
+override the four images and the pull, startup and cleanup timeouts with the
+`DBBACKUP_VERIFICATION_*` variables documented in the root README. Oracle and
+SQL Server verification remain unsupported. See
+[ADR-029](adr/029-isolated-restore-verification.md).
+
 **Schedules use the application's clock and one explicit zone each.** Cron
 expressions use Quartz syntax, with seconds as the first field. The schedule
 row persists in metadata PostgreSQL and its in-memory Quartz trigger is rebuilt

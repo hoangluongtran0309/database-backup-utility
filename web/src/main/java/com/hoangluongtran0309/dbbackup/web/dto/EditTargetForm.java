@@ -45,6 +45,7 @@ public class EditTargetForm {
     /** Blank keeps the stored password. */
     private String password;
     private UUID storageProfileId;
+    private boolean verifyAfterBackup;
 
     /** Pre-filled from the target, all but the password. */
     public static EditTargetForm of(DatabaseTarget target) {
@@ -56,12 +57,13 @@ public class EditTargetForm {
         form.setAuthenticationDatabase(target.getAuthenticationDatabase());
         form.setDataPumpDirectory(target.getDataPumpDirectory());
         form.setStorageProfileId(target.getStorageProfileId());
+        form.setVerifyAfterBackup(target.isVerifyAfterBackup());
         return form;
     }
 
     public EditTargetCommand toCommand() {
         return new EditTargetCommand(
                 name, host, port, username, password, authenticationDatabase, dataPumpDirectory,
-                storageProfileId);
+                storageProfileId, verifyAfterBackup);
     }
 }

@@ -36,6 +36,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import com.hoangluongtran0309.dbbackup.application.backup.BackupArtifactService;
 import com.hoangluongtran0309.dbbackup.application.target.ManageDatabaseTargetService;
 import com.hoangluongtran0309.dbbackup.application.storage.ManageStorageProfileService;
+import com.hoangluongtran0309.dbbackup.application.verification.RestoreVerificationService;
 import com.hoangluongtran0309.dbbackup.core.model.BackupExecution;
 import com.hoangluongtran0309.dbbackup.core.model.DatabaseTarget;
 import com.hoangluongtran0309.dbbackup.core.port.BackupExecutionRepository;
@@ -70,6 +71,9 @@ class BackupExecutionControllerTest {
 
     @MockitoBean
     private ManageStorageProfileService storageProfiles;
+
+    @MockitoBean
+    private RestoreVerificationService restoreVerification;
 
     @Test
     void showsAnEmptyStateWhenNothingHasBeenBackedUp() throws Exception {
@@ -559,6 +563,20 @@ class BackupExecutionControllerTest {
         mockMvc.perform(post("/executions/{id}/verify", id).with(csrf()))
                 .andExpect(redirectedUrl("/executions/" + id))
                 .andExpect(flash().attribute("message", containsString("matches the checksum")));
+    }
+
+    @Test
+    void testRestoreRequiresCsrfAndStartsASeparateVerification() throws Exception {
+        UUID verificationId = UUID.randomUUID();
+        when(restoreVerification.start(any())).thenReturn(verificationId);
+
+        mockMvc.perform(post("/executions/" + succeeded().getId() + "/test-restore")
+                        .with(csrf().useInvalidToken()))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(post("/executions/" + succeeded().getId() + "/test-restore").with(csrf()))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(flash().attribute("message", "Restore verification started"));
     }
 
     @Test

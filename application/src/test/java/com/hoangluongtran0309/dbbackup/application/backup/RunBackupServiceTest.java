@@ -35,6 +35,7 @@ import com.hoangluongtran0309.dbbackup.application.EngineAdapterRegistry;
 import com.hoangluongtran0309.dbbackup.application.notification.NotificationDispatcher;
 import com.hoangluongtran0309.dbbackup.application.retention.ApplyBackupRetentionService;
 import com.hoangluongtran0309.dbbackup.application.storage.ArtifactStorageService;
+import com.hoangluongtran0309.dbbackup.application.verification.RestoreVerificationService;
 import com.hoangluongtran0309.dbbackup.core.exception.BackupFailedException;
 import com.hoangluongtran0309.dbbackup.core.model.BackupExecution;
 import com.hoangluongtran0309.dbbackup.core.model.DatabaseEngine;
@@ -64,6 +65,7 @@ class RunBackupServiceTest {
     @Mock private EncryptionPort encryption;
     @Mock private ApplyBackupRetentionService retention;
     @Mock private NotificationDispatcher notifications;
+    @Mock private RestoreVerificationService verification;
 
     @Captor private ArgumentCaptor<BackupExecution> saved;
 
@@ -83,6 +85,11 @@ class RunBackupServiceTest {
     private RunBackupService newService(Executor executor) {
         return new RunBackupService(targets, executions, adapters, ArtifactStorageService.localOnly(storage),
                 encryption, executor, Clock.fixed(NOW, ZoneOffset.UTC), retention, notifications);
+    }
+
+    private RunBackupService newServiceWithVerification(Executor executor) {
+        return new RunBackupService(targets, executions, adapters, ArtifactStorageService.localOnly(storage),
+                encryption, executor, Clock.fixed(NOW, ZoneOffset.UTC), retention, notifications, verification);
     }
 
     // --- accepting a backup -------------------------------------------------
@@ -229,6 +236,29 @@ class RunBackupServiceTest {
 
         assertThat(lastSaved().getStatus()).isEqualTo(ExecutionStatus.SUCCEEDED);
         verify(storage, never()).delete(ARTIFACT);
+    }
+
+    @Test
+    void automaticVerificationRunsAfterSuccessNotificationAndRetentionWithoutChangingTheBackup() {
+        DatabaseTarget target = target("shop").toBuilder().verifyAfterBackup(true).build();
+        when(targets.findById(TARGET_ID)).thenReturn(Optional.of(target));
+        givenSaveEchoes();
+        when(encryption.decrypt(any())).thenReturn("s3cr3t");
+        when(storage.locationFor(any())).thenReturn(ARTIFACT);
+        when(backupEngine.dumpTo(any(), any(), any())).thenReturn(1L);
+        when(storage.sha256Of(ARTIFACT)).thenReturn(SHA256);
+        when(verification.verifyAfterBackup(any(), any()))
+                .thenThrow(new IllegalStateException("Docker socket unavailable"));
+        RunBackupService withVerification = newServiceWithVerification(capturingExecutor);
+
+        runQueuedWork(withVerification.start(TARGET_ID));
+
+        BackupExecution recorded = lastSaved();
+        assertThat(recorded.getStatus()).isEqualTo(ExecutionStatus.SUCCEEDED);
+        InOrder order = inOrder(notifications, retention, verification);
+        order.verify(notifications).publishBackup(eq(target), eq(recorded), eq(NotificationEventType.BACKUP_SUCCESS));
+        order.verify(retention).applyAfterSuccessfulBackup(TARGET_ID);
+        order.verify(verification).verifyAfterBackup(target, recorded);
     }
 
     /** Checksummed after the dump, never before: the file is only complete once the engine returns. */

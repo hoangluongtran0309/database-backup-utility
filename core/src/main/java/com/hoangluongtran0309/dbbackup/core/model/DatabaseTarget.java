@@ -41,6 +41,7 @@ public final class DatabaseTarget {
     private final String dataPumpDirectory;
     /** Null selects the built-in local filesystem destination. */
     private final UUID storageProfileId;
+    private final boolean verifyAfterBackup;
 
     /**
      * The target's password, AES-256-GCM encrypted, Base64 encoded.
@@ -76,6 +77,7 @@ public final class DatabaseTarget {
             String authenticationDatabase,
             String dataPumpDirectory,
             UUID storageProfileId,
+            boolean verifyAfterBackup,
             String passwordCiphertext,
             Instant createdAt,
             ConnectionCheck lastConnectionCheck) {
@@ -98,6 +100,12 @@ public final class DatabaseTarget {
         this.authenticationDatabase = authenticationDatabase(engine, authenticationDatabase);
         this.dataPumpDirectory = dataPumpDirectory(engine, dataPumpDirectory);
         this.storageProfileId = storageProfileId;
+        this.verifyAfterBackup = verifyAfterBackup;
+        if (verifyAfterBackup && !engine.supportsRestoreVerification()) {
+            throw new InvalidTargetException(
+                    "verifyAfterBackup", "Automatic restore verification is not supported for "
+                            + engine.displayName());
+        }
         this.passwordCiphertext = engine.isFileBased()
                 ? absent(passwordCiphertext, "passwordCiphertext", "Password is not used by SQLite targets")
                 : require(passwordCiphertext, "passwordCiphertext", "Password is required");
@@ -129,7 +137,8 @@ public final class DatabaseTarget {
             String authenticationDatabase,
             String dataPumpDirectory,
             String newPasswordCiphertext,
-            UUID storageProfileId) {
+            UUID storageProfileId,
+            boolean verifyAfterBackup) {
 
         // Built before comparing, so the comparison sees the values as the
         // constructor normalises them — " db " and "db" are the same host.
@@ -141,6 +150,7 @@ public final class DatabaseTarget {
                 .authenticationDatabase(authenticationDatabase)
                 .dataPumpDirectory(dataPumpDirectory)
                 .storageProfileId(storageProfileId)
+                .verifyAfterBackup(verifyAfterBackup)
                 .passwordCiphertext(newPasswordCiphertext != null ? newPasswordCiphertext : passwordCiphertext)
                 .build();
 
@@ -151,6 +161,19 @@ public final class DatabaseTarget {
                 || !Objects.equals(edited.authenticationDatabase, this.authenticationDatabase)
                 || !Objects.equals(edited.dataPumpDirectory, this.dataPumpDirectory);
         return connectionChanged ? edited.toBuilder().lastConnectionCheck(null).build() : edited;
+    }
+
+    public DatabaseTarget edited(
+            String name,
+            String host,
+            Integer port,
+            String username,
+            String authenticationDatabase,
+            String dataPumpDirectory,
+            String newPasswordCiphertext,
+            UUID storageProfileId) {
+        return edited(name, host, port, username, authenticationDatabase, dataPumpDirectory,
+                newPasswordCiphertext, storageProfileId, verifyAfterBackup);
     }
 
     public DatabaseTarget edited(

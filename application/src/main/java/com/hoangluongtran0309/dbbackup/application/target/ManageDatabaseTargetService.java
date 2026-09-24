@@ -119,6 +119,7 @@ public class ManageDatabaseTargetService {
                 .authenticationDatabase(command.authenticationDatabase())
                 .dataPumpDirectory(command.dataPumpDirectory())
                 .storageProfileId(command.storageProfileId())
+                .verifyAfterBackup(command.verifyAfterBackup())
                 .passwordCiphertext(command.engine().isFileBased() ? null : encryption.encrypt(command.password()))
                 .createdAt(clock.instant())
                 .build();
@@ -177,7 +178,8 @@ public class ManageDatabaseTargetService {
                 command.authenticationDatabase(),
                 command.dataPumpDirectory(),
                 command.changesPassword() ? encryption.encrypt(command.password()) : null,
-                command.storageProfileId());
+                command.storageProfileId(),
+                command.verifyAfterBackup());
 
         return repository.save(edited);
     }

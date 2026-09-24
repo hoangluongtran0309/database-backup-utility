@@ -95,7 +95,7 @@ included — before the next one starts.
 
 ## Deferred after engine coverage
 
-The first three post-engine items are now complete. The remaining items stay ordered,
+The first seven post-engine items are now complete. The remaining items stay ordered,
 but are not numbered as slices until the item before them is complete and
 their design is decided.
 
@@ -118,8 +118,12 @@ their design is decided.
 - [x] **26. Target-scoped notifications.** Reusable Telegram, Slack, Email and
       Webhook channels; per-target backup/restore event subscriptions; encrypted
       channel secrets and best-effort bounded delivery. See ADR-028.
+- [x] **27. Isolated restore verification.** Manually or automatically restore
+      successful MySQL, MariaDB, PostgreSQL, MongoDB and SQLite artifacts into
+      disposable databases, validate their contents, clean them up and retain
+      independent attempt history. See ADR-029.
 
-1. [ ] Restore verification in a temporary database.
+1. [ ] Oracle and SQL Server restore verification.
 2. [ ] A CLI inbound adapter.
 3. [ ] CI/CD, security scanning and end-to-end hardening.
 

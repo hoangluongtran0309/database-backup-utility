@@ -6,7 +6,7 @@
      this block for the new one — see ADR-010. The server renders every state;
      the script only moves markup. -->
 <div id="content" data-live
-     th:attr="data-live-active=${execution.status.name() == 'RUNNING'},
+     th:attr="data-live-active=${execution.status.name() == 'RUNNING' or (latestVerification != null and latestVerification.status.name() == 'RUNNING')},
               data-live-announce=|Backup ${#strings.toLowerCase(execution.status)}|">
 
   <div class="page-header">
@@ -22,7 +22,11 @@
       <a class="button" th:href="@{/executions}">All backups</a>
       <th:block th:if="${execution.status.name() == 'SUCCEEDED' and artifactOnDisk}">
         <form method="post" th:action="@{/executions/{id}/verify(id=${execution.id})}">
-          <button class="button" type="submit" data-busy-label="Verifying…">Verify</button>
+          <button class="button" type="submit" data-busy-label="Verifying…">Verify checksum</button>
+        </form>
+        <form method="post" th:action="@{/executions/{id}/test-restore(id=${execution.id})}"
+              th:if="${restoreVerificationAvailable and (latestVerification == null or latestVerification.status.name() != 'RUNNING')}">
+          <button class="button" type="submit" data-busy-label="Starting…">Test restore</button>
         </form>
         <a class="button" th:href="@{/executions/{id}/download(id=${execution.id})}">Download</a>
         <a class="button button-primary" th:href="@{/restores/new(backup=${execution.id})}">Restore this backup</a>
@@ -95,6 +99,35 @@
     <!-- The engine client's own output, in full. Summarising it here would remove the
          one thing that says which knob to turn. -->
     <pre class="error-output" th:text="${execution.errorMessage}"></pre>
+  </div>
+
+  <div th:if="${execution.status.name() == 'SUCCEEDED'}">
+    <div class="section-heading"><h2>Restore verification</h2></div>
+    <p class="alert alert-info" th:if="${!restoreVerificationEnabled}">
+      Restore verification is disabled for this deployment. Set <code>DBBACKUP_VERIFICATION_ENABLED=true</code> to opt in.
+    </p>
+    <p class="alert alert-info" th:if="${restoreVerificationEnabled and !restoreVerificationSupported}">
+      Restore verification is not yet supported for this database engine.
+    </p>
+    <p class="alert alert-danger" th:if="${restoreVerificationEnabled and restoreVerificationSupported and !restoreVerificationAvailable}">
+      Restore verification is enabled but its adapter is unavailable. Check Docker socket access and the deployment logs.
+    </p>
+    <p class="empty-state panel" th:if="${verificationHistory.isEmpty()}">This backup has not been restore-verified.</p>
+    <div class="table-wrap" th:unless="${verificationHistory.isEmpty()}">
+      <table><thead><tr><th>Started</th><th>Finished</th><th>Status</th><th>Checked</th><th>Result</th></tr></thead>
+        <tbody><tr th:each="verification : ${verificationHistory}">
+          <td class="mono" th:text="${#temporals.format(verification.startedAt.atOffset(T(java.time.ZoneOffset).UTC), 'yyyy-MM-dd HH:mm:ss')} + ' UTC'">…</td>
+          <td class="mono" th:text="${verification.finishedAt == null ? '—' : #temporals.format(verification.finishedAt.atOffset(T(java.time.ZoneOffset).UTC), 'yyyy-MM-dd HH:mm:ss') + ' UTC'}">…</td>
+          <td th:insert="~{fragments/execution-status :: statusBadge(${verification.status})}"></td>
+          <td th:text="${verification.checkedObjects != null ? verification.checkedObjects : '—'}">—</td>
+          <td>
+            <span th:if="${verification.resultSummary != null}" th:text="${verification.resultSummary}">Restored</span>
+            <span th:if="${verification.errorMessage != null}" class="text-danger" th:text="${verification.errorMessage}">Failed</span>
+            <span th:if="${verification.status.name() == 'RUNNING'}">Temporary database is being restored and checked…</span>
+          </td>
+        </tr></tbody>
+      </table>
+    </div>
   </div>
 
 </div>

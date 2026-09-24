@@ -7,8 +7,10 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.zip.GZIPInputStream;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -19,6 +21,7 @@ import com.hoangluongtran0309.dbbackup.adapter.process.ProcessRunner;
 import com.hoangluongtran0309.dbbackup.core.exception.RestoreFailedException;
 import com.hoangluongtran0309.dbbackup.core.model.DatabaseConnection;
 import com.hoangluongtran0309.dbbackup.core.model.DatabaseEngine;
+import com.hoangluongtran0309.dbbackup.core.model.DatabaseTarget;
 
 /** Real sqlite3 CLI against real files, including a cross-target round trip. */
 class SqliteBackupRestoreIT {
@@ -81,6 +84,27 @@ class SqliteBackupRestoreIT {
     }
 
     @Test
+    void verifiesARealBackupInAPrivateSqliteFileAndRemovesIt() throws Exception {
+        Path artifact = root.resolve("source.sql.gz");
+        backup.dumpTo(connection("source.db"), artifact);
+        UUID verificationId = UUID.randomUUID();
+
+        var result = new SqliteRestoreVerificationAdapter(
+                runner, sqlite, root, TIMEOUT, true)
+                .verify(verificationId, sourceTarget(), artifact);
+
+        assertThat(result.checkedObjects()).isEqualTo(2);
+        assertThat(root.resolve(".dbbackup-verify-" + verificationId)).doesNotExist();
+
+        UUID corruptId = UUID.randomUUID();
+        Path corrupt = Files.writeString(root.resolve("corrupt-verification.sql.gz"), "not gzip");
+        assertThatThrownBy(() -> new SqliteRestoreVerificationAdapter(
+                runner, sqlite, root, TIMEOUT, true).verify(corruptId, sourceTarget(), corrupt))
+                .hasMessageContaining("gzip");
+        assertThat(root.resolve(".dbbackup-verify-" + corruptId)).doesNotExist();
+    }
+
+    @Test
     void corruptArtifactLeavesDestinationUntouched() throws Exception {
         Path artifact = root.resolve("broken.sql.gz");
         Files.writeString(artifact, "not gzip");
@@ -93,6 +117,11 @@ class SqliteBackupRestoreIT {
 
     private DatabaseConnection connection(String file) {
         return new DatabaseConnection(DatabaseEngine.SQLITE, null, null, file, null, null);
+    }
+
+    private static DatabaseTarget sourceTarget() {
+        return DatabaseTarget.builder().id(UUID.randomUUID()).name("source").engine(DatabaseEngine.SQLITE)
+                .databaseName("source.db").createdAt(Instant.EPOCH).build();
     }
 
     private void sql(String file, String statement) {

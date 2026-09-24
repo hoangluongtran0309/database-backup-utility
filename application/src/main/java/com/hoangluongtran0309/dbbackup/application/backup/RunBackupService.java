@@ -20,6 +20,7 @@ import com.hoangluongtran0309.dbbackup.application.notification.NotificationDisp
 import com.hoangluongtran0309.dbbackup.application.retention.ApplyBackupRetentionService;
 import com.hoangluongtran0309.dbbackup.application.storage.ArtifactStorageService;
 import com.hoangluongtran0309.dbbackup.application.storage.ArtifactStorageService.PreparedWrite;
+import com.hoangluongtran0309.dbbackup.application.verification.RestoreVerificationService;
 import com.hoangluongtran0309.dbbackup.core.exception.BackupFailedException;
 import com.hoangluongtran0309.dbbackup.core.model.BackupExecution;
 import com.hoangluongtran0309.dbbackup.core.model.DatabaseConnection;
@@ -57,28 +58,38 @@ public class RunBackupService {
     private final Clock clock;
     private final ApplyBackupRetentionService retention;
     private final NotificationDispatcher notifications;
+    private final RestoreVerificationService verification;
 
     @Autowired
     public RunBackupService(DatabaseTargetRepository targets, BackupExecutionRepository executions,
             EngineAdapterRegistry adapters, ArtifactStorageService storage, EncryptionPort encryption,
             Executor jobExecutor, Clock clock, ApplyBackupRetentionService retention,
-            NotificationDispatcher notifications) {
+            NotificationDispatcher notifications, RestoreVerificationService verification) {
         this.targets = targets; this.executions = executions; this.adapters = adapters; this.storage = storage;
         this.encryption = encryption; this.jobExecutor = jobExecutor; this.clock = clock; this.retention = retention;
         this.notifications = notifications;
+        this.verification = verification;
     }
 
     public RunBackupService(DatabaseTargetRepository targets, BackupExecutionRepository executions,
             EngineAdapterRegistry adapters, ArtifactStorageService storage, EncryptionPort encryption,
             Executor jobExecutor, Clock clock, ApplyBackupRetentionService retention) {
-        this(targets, executions, adapters, storage, encryption, jobExecutor, clock, retention, null);
+        this(targets, executions, adapters, storage, encryption, jobExecutor, clock, retention, null, null);
+    }
+
+    public RunBackupService(DatabaseTargetRepository targets, BackupExecutionRepository executions,
+            EngineAdapterRegistry adapters, ArtifactStorageService storage, EncryptionPort encryption,
+            Executor jobExecutor, Clock clock, ApplyBackupRetentionService retention,
+            NotificationDispatcher notifications) {
+        this(targets, executions, adapters, storage, encryption, jobExecutor, clock, retention,
+                notifications, null);
     }
 
     public RunBackupService(DatabaseTargetRepository targets, BackupExecutionRepository executions,
             EngineAdapterRegistry adapters, com.hoangluongtran0309.dbbackup.core.port.StoragePort storage,
             EncryptionPort encryption, Executor jobExecutor, Clock clock, ApplyBackupRetentionService retention) {
         this(targets, executions, adapters, ArtifactStorageService.localOnly(storage), encryption,
-                jobExecutor, clock, retention, null);
+                jobExecutor, clock, retention, null, null);
     }
 
     /**
@@ -117,6 +128,7 @@ public class RunBackupService {
         notify(target, execution, NotificationEventType.BACKUP_STARTED);
         String filename = artifactFileName(target, execution.getStartedAt(), backupEngine.artifactSuffix());
         ArtifactReference published = null;
+        BackupExecution succeeded;
         try (PreparedWrite destination = storage.prepareWrite(
                 execution.getStorageProfileId(), target.getId(), executionId, filename)) {
             // Decrypted here, at the last moment and on the thread that uses
@@ -129,7 +141,7 @@ public class RunBackupService {
             long sizeBytes = storage.size(destination.path(), destination.remote(), reportedSize);
             String sha256 = storage.sha256(destination.path(), destination.remote());
             published = storage.publish(destination);
-            BackupExecution succeeded = executions.save(
+            succeeded = executions.save(
                     execution.succeeded(published.locator(), sizeBytes, sha256, clock.instant()));
             notify(target, succeeded, NotificationEventType.BACKUP_SUCCESS);
             log.info("Backup {} of target {} succeeded: {} ({} bytes, sha256 {})",
@@ -156,6 +168,13 @@ public class RunBackupService {
             retention.applyAfterSuccessfulBackup(target.getId());
         } catch (RuntimeException e) {
             log.error("Could not apply automatic retention after backup {}", executionId, e);
+        }
+        if (verification != null) {
+            try {
+                verification.verifyAfterBackup(target, succeeded);
+            } catch (RuntimeException e) {
+                log.error("Could not start automatic restore verification for backup {}", executionId, e);
+            }
         }
     }
 
