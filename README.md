@@ -253,6 +253,14 @@ would also try to run the parent pom, which has no main class.)
 | `DBBACKUP_SMTP_FROM` | `dbbackup@localhost` | Sender address for Email channels |
 | `DBBACKUP_SMTP_AUTH` | `true` | Enable SMTP authentication |
 | `DBBACKUP_SMTP_STARTTLS` | `true` | Upgrade SMTP connections with STARTTLS |
+| `DBBACKUP_VERIFICATION_ENABLED` | `false` | Enable manual and per-target automatic isolated restore verification |
+| `DBBACKUP_VERIFICATION_MYSQL_IMAGE` | `mysql:8.4` | Disposable MySQL verification image |
+| `DBBACKUP_VERIFICATION_MARIADB_IMAGE` | `mariadb:10.11` | Disposable MariaDB verification image |
+| `DBBACKUP_VERIFICATION_POSTGRESQL_IMAGE` | `postgres:17-alpine` | Disposable PostgreSQL verification image |
+| `DBBACKUP_VERIFICATION_MONGODB_IMAGE` | `mongo:8.0` | Disposable MongoDB verification image |
+| `DBBACKUP_VERIFICATION_PULL_TIMEOUT` | `10m` | Maximum image pull duration |
+| `DBBACKUP_VERIFICATION_STARTUP_TIMEOUT` | `2m` | Maximum disposable database startup duration |
+| `DBBACKUP_VERIFICATION_CLEANUP_TIMEOUT` | `30s` | Maximum disposable database cleanup duration |
 | `MYSQL_CLIENT_PATH` | `/usr/bin/mysql` | The `mysql` client binary; checked for executability at startup |
 | `MYSQLDUMP_PATH` | `/usr/bin/mysqldump` | The `mysqldump` binary; likewise checked at startup |
 | `MARIADB_CLIENT_PATH` | `/usr/bin/mariadb` | MariaDB's command-line client for probes and restores |
@@ -283,6 +291,16 @@ would also try to run the parent pom, which has no main class.)
 | `JOB_QUEUE_CAPACITY` | `20` | Beyond this, a job is refused and recorded as failed |
 | `BACKUP_TIMEOUT` | `30m` | A dump running longer than this is killed |
 | `RESTORE_TIMEOUT` | `60m` | A restore running longer than this is killed |
+
+Restore verification is opt-in. For MySQL, MariaDB, PostgreSQL and MongoDB,
+enable it and give the application container access to the Docker socket by
+uncommenting the socket mount and `group_add` block in `docker-compose.yml`.
+Set `DOCKER_SOCKET_GID` to the host socket's group id. The image already
+contains the Docker CLI; no database ports are published by verification
+containers. SQLite verification needs no socket but uses the same deployment
+switch. Docker-socket access is equivalent to root control of the Docker host,
+so expose it only to a trusted application deployment. See
+[ADR-029](docs/adr/029-isolated-restore-verification.md).
 
 ## Tests
 

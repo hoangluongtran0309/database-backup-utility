@@ -65,6 +65,16 @@ services:
       DBBACKUP_SMTP_FROM: ${DBBACKUP_SMTP_FROM:-dbbackup@localhost}
       DBBACKUP_SMTP_AUTH: ${DBBACKUP_SMTP_AUTH:-true}
       DBBACKUP_SMTP_STARTTLS: ${DBBACKUP_SMTP_STARTTLS:-true}
+      # Restore verification stays off unless the operator deliberately enables
+      # it and grants Docker-socket access below.
+      DBBACKUP_VERIFICATION_ENABLED: ${DBBACKUP_VERIFICATION_ENABLED:-false}
+      DBBACKUP_VERIFICATION_MYSQL_IMAGE: ${DBBACKUP_VERIFICATION_MYSQL_IMAGE:-mysql:8.4}
+      DBBACKUP_VERIFICATION_MARIADB_IMAGE: ${DBBACKUP_VERIFICATION_MARIADB_IMAGE:-mariadb:10.11}
+      DBBACKUP_VERIFICATION_POSTGRESQL_IMAGE: ${DBBACKUP_VERIFICATION_POSTGRESQL_IMAGE:-postgres:17-alpine}
+      DBBACKUP_VERIFICATION_MONGODB_IMAGE: ${DBBACKUP_VERIFICATION_MONGODB_IMAGE:-mongo:8.0}
+      DBBACKUP_VERIFICATION_PULL_TIMEOUT: ${DBBACKUP_VERIFICATION_PULL_TIMEOUT:-10m}
+      DBBACKUP_VERIFICATION_STARTUP_TIMEOUT: ${DBBACKUP_VERIFICATION_STARTUP_TIMEOUT:-2m}
+      DBBACKUP_VERIFICATION_CLEANUP_TIMEOUT: ${DBBACKUP_VERIFICATION_CLEANUP_TIMEOUT:-30s}
     ports:
       - "8080:8080"
     volumes:
@@ -74,6 +84,13 @@ services:
       # Put SQLite files in ./sqlite (or set SQLITE_HOST_DIR). The files stay
       # outside the image and may be shared with the application that owns them.
       - ${SQLITE_HOST_DIR:-./sqlite}:/var/lib/dbbackup/sqlite
+      # Opt-in restore verification for network engines. docker.sock grants
+      # root-equivalent control of the host. Uncomment this and group_add only
+      # after accepting that boundary; set DOCKER_SOCKET_GID to
+      # `stat -c '%g' /var/run/docker.sock` on the host.
+      # - /var/run/docker.sock:/var/run/docker.sock
+    # group_add:
+    #   - "${DOCKER_SOCKET_GID:-999}"
     # A target database running on the host is reachable as
     # host.docker.internal from inside this container. On Linux that name does
     # not exist without this line; on Docker Desktop it is harmless.

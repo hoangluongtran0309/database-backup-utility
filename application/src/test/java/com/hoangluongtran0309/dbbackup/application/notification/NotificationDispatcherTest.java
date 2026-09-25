@@ -25,6 +25,8 @@ import com.hoangluongtran0309.dbbackup.core.model.NotificationChannelSettings;
 import com.hoangluongtran0309.dbbackup.core.model.NotificationChannelType;
 import com.hoangluongtran0309.dbbackup.core.model.NotificationEventType;
 import com.hoangluongtran0309.dbbackup.core.model.NotificationMessage;
+import com.hoangluongtran0309.dbbackup.core.model.RestoreVerificationExecution;
+import com.hoangluongtran0309.dbbackup.core.model.RestoreVerificationResult;
 import com.hoangluongtran0309.dbbackup.core.model.TargetNotificationSubscription;
 import com.hoangluongtran0309.dbbackup.core.port.EncryptionPort;
 import com.hoangluongtran0309.dbbackup.core.port.NotificationChannelRepository;
@@ -76,6 +78,26 @@ class NotificationDispatcherTest {
                 NotificationEventType.BACKUP_FAILED);
         assertThat(port.last.errorMessage()).doesNotContain("hunter2", "secret", "abc.def")
                 .contains("[REDACTED]");
+    }
+
+    @Test void verificationEventIsFilteredAndCarriesBothAttemptAndBackupIds() {
+        RecordingPort port = new RecordingPort(false);
+        UUID channelId = UUID.randomUUID();
+        NotificationDispatcher dispatcher = dispatcher(List.of(port),
+                new InMemorySubscriptions(List.of(new TargetNotificationSubscription(
+                        channelId, Set.of(NotificationEventType.VERIFICATION_SUCCESS)))),
+                new InMemoryChannels(channel(channelId)));
+        UUID backupId = UUID.randomUUID();
+        UUID verificationId = UUID.randomUUID();
+        RestoreVerificationExecution execution = RestoreVerificationExecution
+                .started(verificationId, backupId, NOW)
+                .succeeded(new RestoreVerificationResult(2, "healthy"), NOW.plusSeconds(1));
+
+        dispatcher.publishVerification(target(), execution, NotificationEventType.VERIFICATION_SUCCESS);
+
+        assertThat(port.calls).isOne();
+        assertThat(port.last.backupExecutionId()).isEqualTo(backupId);
+        assertThat(port.last.verificationExecutionId()).isEqualTo(verificationId);
     }
 
     @Test void reportsAMissingAdapterClearly() {

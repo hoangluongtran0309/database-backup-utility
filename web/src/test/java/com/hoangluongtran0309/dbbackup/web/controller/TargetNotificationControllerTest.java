@@ -42,7 +42,7 @@ class TargetNotificationControllerTest {
     @MockitoBean ManageNotificationChannelService channels;
     @MockitoBean ManageDatabaseTargetService targets;
 
-    @Test @WithMockUser void newSubscriptionDefaultsToTheTwoFailureEvents() throws Exception {
+    @Test @WithMockUser void newSubscriptionDefaultsToAllThreeFailureEvents() throws Exception {
         UUID targetId = UUID.randomUUID(); UUID channelId = UUID.randomUUID();
         when(targets.get(targetId)).thenReturn(target(targetId));
         when(targetNotifications.subscriptionsFor(targetId)).thenReturn(List.of());
@@ -51,7 +51,9 @@ class TargetNotificationControllerTest {
                 .andExpect(content().string(matchesPattern(
                         "(?s).*value=\"BACKUP_FAILED\"[^>]*checked=\"checked\".*")))
                 .andExpect(content().string(matchesPattern(
-                        "(?s).*value=\"RESTORE_FAILED\"[^>]*checked=\"checked\".*")));
+                        "(?s).*value=\"RESTORE_FAILED\"[^>]*checked=\"checked\".*")))
+                .andExpect(content().string(matchesPattern(
+                        "(?s).*value=\"VERIFICATION_FAILED\"[^>]*checked=\"checked\".*")));
     }
 
     @Test @WithMockUser void savesSelectedEventsWithCsrf() throws Exception {

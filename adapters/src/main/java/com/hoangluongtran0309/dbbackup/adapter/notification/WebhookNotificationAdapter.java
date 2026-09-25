@@ -34,6 +34,9 @@ public class WebhookNotificationAdapter implements NotificationPort {
                 "engine", message.sourceTargetEngine()));
         body.put("destinationTarget", nested("id", message.destinationTargetId(),
                 "name", message.destinationTargetName(), "engine", message.destinationTargetEngine()));
+        body.put("executionId", message.verificationExecutionId() != null
+                ? message.verificationExecutionId()
+                : message.restoreExecutionId() != null ? message.restoreExecutionId() : message.backupExecutionId());
         body.put("backupExecutionId", message.backupExecutionId());
         body.put("restoreExecutionId", message.restoreExecutionId());
         body.put("status", message.status());

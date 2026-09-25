@@ -20,7 +20,8 @@ public record RegisterTargetCommand(
         String password,
         String authenticationDatabase,
         String dataPumpDirectory,
-        UUID storageProfileId) {
+        UUID storageProfileId,
+        boolean verifyAfterBackup) {
 
     public RegisterTargetCommand(
             String name,
@@ -31,14 +32,14 @@ public record RegisterTargetCommand(
             String username,
             String password,
         String authenticationDatabase) {
-        this(name, engine, host, port, database, username, password, authenticationDatabase, null, null);
+        this(name, engine, host, port, database, username, password, authenticationDatabase, null, null, false);
     }
 
     public RegisterTargetCommand(
             String name, DatabaseEngine engine, String host, Integer port, String database,
             String username, String password, String authenticationDatabase, String dataPumpDirectory) {
         this(name, engine, host, port, database, username, password, authenticationDatabase,
-                dataPumpDirectory, null);
+                dataPumpDirectory, null, false);
     }
 
     public RegisterTargetCommand(
@@ -49,7 +50,7 @@ public record RegisterTargetCommand(
             String database,
             String username,
             String password) {
-        this(name, engine, host, port, database, username, password, null, null, null);
+        this(name, engine, host, port, database, username, password, null, null, null, false);
     }
 
     public RegisterTargetCommand {

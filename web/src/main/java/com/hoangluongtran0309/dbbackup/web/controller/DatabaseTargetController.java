@@ -51,17 +51,18 @@ public class DatabaseTargetController {
      * that is not listed becomes a form-level error rather than being bound to
      * an input that may not exist.
      */
-    private static final Map<String, String> FORM_FIELDS = Map.of(
-            "name", "name",
-            "engine", "engine",
-            "host", "host",
-            "port", "port",
-            "databaseName", "database",
-            "username", "username",
-            "authenticationDatabase", "authenticationDatabase",
-            "dataPumpDirectory", "dataPumpDirectory",
-            "password", "password",
-            "storageProfileId", "storageProfileId");
+    private static final Map<String, String> FORM_FIELDS = Map.ofEntries(
+            Map.entry("name", "name"),
+            Map.entry("engine", "engine"),
+            Map.entry("host", "host"),
+            Map.entry("port", "port"),
+            Map.entry("databaseName", "database"),
+            Map.entry("username", "username"),
+            Map.entry("authenticationDatabase", "authenticationDatabase"),
+            Map.entry("dataPumpDirectory", "dataPumpDirectory"),
+            Map.entry("password", "password"),
+            Map.entry("storageProfileId", "storageProfileId"),
+            Map.entry("verifyAfterBackup", "verifyAfterBackup"));
 
     private final ManageDatabaseTargetService service;
     private final TestTargetConnectionService connectionTest;

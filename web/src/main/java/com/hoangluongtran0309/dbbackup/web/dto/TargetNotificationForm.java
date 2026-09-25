@@ -25,6 +25,7 @@ public class TargetNotificationForm {
         private UUID channelId;
         private boolean included;
         private Set<NotificationEventType> events = EnumSet.of(
-                NotificationEventType.BACKUP_FAILED, NotificationEventType.RESTORE_FAILED);
+                NotificationEventType.BACKUP_FAILED, NotificationEventType.RESTORE_FAILED,
+                NotificationEventType.VERIFICATION_FAILED);
     }
 }

@@ -1,12 +1,15 @@
 package com.hoangluongtran0309.dbbackup.adapter.mysql;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -17,9 +20,11 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.mysql.MySQLContainer;
 
 import com.hoangluongtran0309.dbbackup.adapter.process.ProcessRunner;
+import com.hoangluongtran0309.dbbackup.adapter.verification.DockerVerificationSupport;
 import com.hoangluongtran0309.dbbackup.core.exception.RestoreFailedException;
 import com.hoangluongtran0309.dbbackup.core.model.DatabaseConnection;
 import com.hoangluongtran0309.dbbackup.core.model.DatabaseEngine;
+import com.hoangluongtran0309.dbbackup.core.model.DatabaseTarget;
 import com.hoangluongtran0309.dbbackup.core.port.LogicalBackupPort;
 import com.hoangluongtran0309.dbbackup.core.port.LogicalRestorePort;
 
@@ -94,6 +99,33 @@ class BackupRestoreRoundTripIT {
         assertThat(tables()).containsExactlyInAnyOrder("items", "orders");
         assertThat(query("SELECT COUNT(*) FROM orders")).isEqualTo("3");
         assertThat(query("SELECT COUNT(*) FROM items")).isEqualTo("3");
+    }
+
+    @Test
+    void verifiesARealBackupInADisposableMysqlContainerAndRemovesIt() {
+        Path artifact = artifacts.resolve("shop.sql.gz");
+        backup.dumpTo(connection("s3cr3t"), artifact);
+        UUID verificationId = UUID.randomUUID();
+        DockerVerificationSupport docker = dockerSupport();
+
+        var result = new MysqlRestoreVerificationAdapter(
+                docker, true, "mysql:8.4", Duration.ofMinutes(2))
+                .verify(verificationId, target(), artifact);
+
+        assertThat(result.checkedObjects()).isEqualTo(2);
+        assertThat(docker.success(List.of("docker", "inspect",
+                DockerVerificationSupport.containerName(DatabaseEngine.MYSQL, verificationId)),
+                Duration.ofSeconds(10))).isFalse();
+
+        UUID corruptId = UUID.randomUUID();
+        Path corrupt = artifacts.resolve("corrupt-verification.sql.gz");
+        assertThatCode(() -> Files.writeString(corrupt, "not gzip")).doesNotThrowAnyException();
+        assertThatThrownBy(() -> new MysqlRestoreVerificationAdapter(
+                docker, true, "mysql:8.4", Duration.ofMinutes(2)).verify(corruptId, target(), corrupt))
+                .hasMessageContaining("gzip");
+        assertThat(docker.success(List.of("docker", "inspect",
+                DockerVerificationSupport.containerName(DatabaseEngine.MYSQL, corruptId)),
+                Duration.ofSeconds(10))).isFalse();
     }
 
     /** Values, not just row counts — including the ones that survive quoting badly. */
@@ -275,6 +307,17 @@ class BackupRestoreRoundTripIT {
     private static DatabaseConnection connection(String password) {
         return new DatabaseConnection(DatabaseEngine.MYSQL,
                 SERVER.getHost(), SERVER.getFirstMappedPort(), "shop", "backup", password);
+    }
+
+    private static DatabaseTarget target() {
+        return DatabaseTarget.builder().id(UUID.randomUUID()).name("source").engine(DatabaseEngine.MYSQL)
+                .host("unused").port(3306).databaseName("shop").username("unused")
+                .passwordCiphertext("unused").createdAt(Instant.EPOCH).build();
+    }
+
+    private static DockerVerificationSupport dockerSupport() {
+        return new DockerVerificationSupport(new ProcessRunner(), Duration.ofMinutes(10),
+                Duration.ofMinutes(2), Duration.ofSeconds(30));
     }
 
     private static List<String> tables() {

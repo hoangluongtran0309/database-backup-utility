@@ -52,6 +52,7 @@ public class DatabaseTargetForm {
 
     private String password;
     private UUID storageProfileId;
+    private boolean verifyAfterBackup;
 
     public static DatabaseTargetForm blank() {
         DatabaseTargetForm form = new DatabaseTargetForm();
@@ -63,6 +64,6 @@ public class DatabaseTargetForm {
     public RegisterTargetCommand toCommand() {
         return new RegisterTargetCommand(
                 name, engine, host, port, database, username, password, authenticationDatabase,
-                dataPumpDirectory, storageProfileId);
+                dataPumpDirectory, storageProfileId, verifyAfterBackup);
     }
 }
