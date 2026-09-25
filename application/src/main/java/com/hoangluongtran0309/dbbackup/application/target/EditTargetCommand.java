@@ -22,7 +22,8 @@ public record EditTargetCommand(
         String password,
         String authenticationDatabase,
         String dataPumpDirectory,
-        UUID storageProfileId) {
+        UUID storageProfileId,
+        boolean verifyAfterBackup) {
 
     public EditTargetCommand(
             String name,
@@ -31,17 +32,17 @@ public record EditTargetCommand(
             String username,
             String password,
             String authenticationDatabase) {
-        this(name, host, port, username, password, authenticationDatabase, null, null);
+        this(name, host, port, username, password, authenticationDatabase, null, null, false);
     }
 
     public EditTargetCommand(String name, String host, Integer port, String username, String password) {
-        this(name, host, port, username, password, null, null, null);
+        this(name, host, port, username, password, null, null, null, false);
     }
 
     public EditTargetCommand(
             String name, String host, Integer port, String username, String password,
             String authenticationDatabase, String dataPumpDirectory) {
-        this(name, host, port, username, password, authenticationDatabase, dataPumpDirectory, null);
+        this(name, host, port, username, password, authenticationDatabase, dataPumpDirectory, null, false);
     }
 
     public boolean changesPassword() {

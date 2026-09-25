@@ -18,6 +18,7 @@ import com.hoangluongtran0309.dbbackup.core.model.NotificationChannelType;
 import com.hoangluongtran0309.dbbackup.core.model.NotificationEventType;
 import com.hoangluongtran0309.dbbackup.core.model.NotificationMessage;
 import com.hoangluongtran0309.dbbackup.core.model.RestoreExecution;
+import com.hoangluongtran0309.dbbackup.core.model.RestoreVerificationExecution;
 import com.hoangluongtran0309.dbbackup.core.port.NotificationChannelRepository;
 import com.hoangluongtran0309.dbbackup.core.port.NotificationPort;
 import com.hoangluongtran0309.dbbackup.core.port.TargetNotificationSubscriptionRepository;
@@ -64,6 +65,14 @@ public class NotificationDispatcher {
                 source.getId(), source.getName(), source.getEngine(),
                 destination.getId(), destination.getName(), destination.getEngine(),
                 execution.getBackupExecutionId(), execution.getId(), execution.getStatus().name(),
+                sanitize(execution.getErrorMessage()), null, null));
+    }
+
+    public void publishVerification(DatabaseTarget source, RestoreVerificationExecution execution,
+            NotificationEventType event) {
+        publish(source.getId(), new NotificationMessage(event, clock.instant(),
+                source.getId(), source.getName(), source.getEngine(), null, null, null,
+                execution.getBackupExecutionId(), null, execution.getId(), execution.getStatus().name(),
                 sanitize(execution.getErrorMessage()), null, null));
     }
 

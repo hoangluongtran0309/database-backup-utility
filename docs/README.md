@@ -10,9 +10,8 @@
   the decisions were made.
 
 The current last decision is
-[ADR-028](adr/028-target-scoped-notification-channels.md), which adds reusable
-notification channels and per-target backup/restore event subscriptions with
-best-effort bounded delivery.
+[ADR-029](adr/029-isolated-restore-verification.md), which verifies successful
+backups in disposable databases without changing the backup outcome.
 
 These pages describe the code that exists. When a slice changes the code, it
 changes these files in the same commit.

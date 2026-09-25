@@ -7,6 +7,8 @@ public enum NotificationEventType {
     RESTORE_STARTED,
     RESTORE_SUCCESS,
     RESTORE_FAILED,
+    VERIFICATION_SUCCESS,
+    VERIFICATION_FAILED,
     TEST;
 
     public boolean isSubscribable() { return this != TEST; }

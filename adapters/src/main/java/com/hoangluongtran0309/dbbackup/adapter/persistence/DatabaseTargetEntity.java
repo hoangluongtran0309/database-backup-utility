@@ -59,6 +59,9 @@ class DatabaseTargetEntity {
     @Column(name = "storage_profile_id")
     private UUID storageProfileId;
 
+    @Column(name = "verify_after_backup", nullable = false)
+    private boolean verifyAfterBackup;
+
     @Column(name = "password_enc", columnDefinition = "text")
     private String passwordEnc;
 

@@ -1,6 +1,7 @@
 package com.hoangluongtran0309.dbbackup.adapter.postgresql;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.nio.file.Path;
 import java.sql.Connection;
@@ -8,6 +9,9 @@ import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.Statement;
 import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -20,8 +24,10 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 import com.hoangluongtran0309.dbbackup.adapter.process.ProcessRunner;
+import com.hoangluongtran0309.dbbackup.adapter.verification.DockerVerificationSupport;
 import com.hoangluongtran0309.dbbackup.core.model.DatabaseConnection;
 import com.hoangluongtran0309.dbbackup.core.model.DatabaseEngine;
+import com.hoangluongtran0309.dbbackup.core.model.DatabaseTarget;
 
 /** Real PostgreSQL plus the same host client binaries used in production. */
 @Testcontainers
@@ -91,6 +97,38 @@ class PostgresBackupRestoreIT {
         assertThat(query("shop_source", "SELECT count(*) FROM widgets")).isEqualTo("3");
     }
 
+    @Test
+    void verifiesARealBackupInADisposablePostgresqlContainerAndRemovesIt() {
+        Path artifact = artifacts.resolve("shop.dump");
+        backup.dumpTo(target("shop_source"), artifact);
+        UUID verificationId = UUID.randomUUID();
+        DockerVerificationSupport docker = dockerSupport();
+
+        var result = new PostgresRestoreVerificationAdapter(
+                docker, true, "postgres:17-alpine", Duration.ofMinutes(2))
+                .verify(verificationId, sourceTarget(), artifact);
+
+        assertThat(result.checkedObjects()).isEqualTo(1);
+        assertThat(docker.success(List.of("docker", "inspect",
+                DockerVerificationSupport.containerName(DatabaseEngine.POSTGRESQL, verificationId)),
+                Duration.ofSeconds(10))).isFalse();
+
+        UUID corruptId = UUID.randomUUID();
+        Path corrupt = artifacts.resolve("corrupt-verification.dump");
+        try {
+            java.nio.file.Files.writeString(corrupt, "not a pg_dump archive");
+        } catch (java.io.IOException e) {
+            throw new AssertionError(e);
+        }
+        assertThatThrownBy(() -> new PostgresRestoreVerificationAdapter(
+                docker, true, "postgres:17-alpine", Duration.ofMinutes(2))
+                .verify(corruptId, sourceTarget(), corrupt))
+                .hasMessageContaining("pg_restore failed");
+        assertThat(docker.success(List.of("docker", "inspect",
+                DockerVerificationSupport.containerName(DatabaseEngine.POSTGRESQL, corruptId)),
+                Duration.ofSeconds(10))).isFalse();
+    }
+
     private static DatabaseConnection target(String database) {
         return new DatabaseConnection(
                 DatabaseEngine.POSTGRESQL,
@@ -99,6 +137,17 @@ class PostgresBackupRestoreIT {
                 database,
                 POSTGRES.getUsername(),
                 POSTGRES.getPassword());
+    }
+
+    private static DatabaseTarget sourceTarget() {
+        return DatabaseTarget.builder().id(UUID.randomUUID()).name("source").engine(DatabaseEngine.POSTGRESQL)
+                .host("unused").port(5432).databaseName("shop_source").username("unused")
+                .passwordCiphertext("unused").createdAt(Instant.EPOCH).build();
+    }
+
+    private static DockerVerificationSupport dockerSupport() {
+        return new DockerVerificationSupport(new ProcessRunner(), Duration.ofMinutes(10),
+                Duration.ofMinutes(2), Duration.ofSeconds(30));
     }
 
     private static String clientMajor() {

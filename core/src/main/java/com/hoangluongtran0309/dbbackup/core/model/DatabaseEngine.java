@@ -29,4 +29,8 @@ public enum DatabaseEngine {
     public boolean isFileBased() {
         return this == SQLITE;
     }
+
+    public boolean supportsRestoreVerification() {
+        return this != ORACLE && this != SQLSERVER;
+    }
 }

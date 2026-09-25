@@ -18,8 +18,14 @@ COPY web web
 # real machine is the gate, and CI runs it.
 RUN --mount=type=cache,target=/root/.m2 mvn -B -DskipTests package
 
+FROM docker:27.5.1-cli AS docker-cli
+
 
 FROM eclipse-temurin:21-jre-noble
+
+# The daemon stays on the host. This client is dormant unless restore
+# verification is enabled and the operator explicitly mounts docker.sock.
+COPY --from=docker-cli /usr/local/bin/docker /usr/local/bin/docker
 
 # The application drives these binaries directly and refuses to start without
 # them; installing them here is what makes the image self-contained. Ubuntu's

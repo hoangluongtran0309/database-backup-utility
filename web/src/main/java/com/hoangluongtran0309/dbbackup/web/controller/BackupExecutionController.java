@@ -24,6 +24,7 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 import com.hoangluongtran0309.dbbackup.application.backup.BackupArtifactService;
 import com.hoangluongtran0309.dbbackup.application.target.ManageDatabaseTargetService;
 import com.hoangluongtran0309.dbbackup.application.storage.ManageStorageProfileService;
+import com.hoangluongtran0309.dbbackup.application.verification.RestoreVerificationService;
 import com.hoangluongtran0309.dbbackup.core.model.BackupExecution;
 import com.hoangluongtran0309.dbbackup.core.model.DatabaseTarget;
 import com.hoangluongtran0309.dbbackup.core.port.BackupExecutionRepository;
@@ -44,6 +45,7 @@ public class BackupExecutionController {
     private final ManageDatabaseTargetService targets;
     private final BackupArtifactService artifacts;
     private final ManageStorageProfileService storageProfiles;
+    private final RestoreVerificationService restoreVerification;
 
     @GetMapping
     String list(@RequestParam(name = "page", defaultValue = "1") int page, Model model) {
@@ -67,6 +69,15 @@ public class BackupExecutionController {
         model.addAttribute("targetName", target == null ? null : target.getName());
         model.addAttribute("targetEngine", target == null ? null : target.getEngine());
         model.addAttribute("artifactOnDisk", artifacts.isOnDisk(execution));
+        var verificationHistory = restoreVerification.history(id);
+        var latestVerification = verificationHistory.isEmpty() ? null : verificationHistory.getFirst();
+        model.addAttribute("verificationHistory", verificationHistory);
+        model.addAttribute("latestVerification", latestVerification);
+        model.addAttribute("restoreVerificationEnabled", restoreVerification.isEnabled());
+        model.addAttribute("restoreVerificationSupported",
+                target != null && restoreVerification.supports(target.getEngine()));
+        model.addAttribute("restoreVerificationAvailable",
+                target != null && restoreVerification.isAvailable(target.getEngine()));
         if (execution.getStorageProfileId() == null) {
             model.addAttribute("storageProfileName", "Local filesystem");
         } else {
@@ -96,6 +107,19 @@ public class BackupExecutionController {
             case NOT_RECORDED -> flash.addFlashAttribute("message",
                     "This backup predates checksums, so there is nothing to compare with. Its SHA-256 now is "
                             + result.actual());
+        }
+        return "redirect:/executions/" + id;
+    }
+
+    @PostMapping("/{id}/test-restore")
+    String testRestore(@PathVariable UUID id, RedirectAttributes flash) {
+        try {
+            restoreVerification.start(id);
+            flash.addFlashAttribute("message", "Restore verification started");
+        } catch (NoSuchElementException e) {
+            flash.addFlashAttribute("error", "That backup no longer exists");
+        } catch (IllegalStateException e) {
+            flash.addFlashAttribute("error", e.getMessage());
         }
         return "redirect:/executions/" + id;
     }

@@ -1,6 +1,7 @@
 package com.hoangluongtran0309.dbbackup.adapter.mariadb;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.ByteArrayOutputStream;
@@ -9,7 +10,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 import java.util.zip.GZIPInputStream;
 
 import org.junit.jupiter.api.BeforeAll;
@@ -21,9 +24,11 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.mariadb.MariaDBContainer;
 
 import com.hoangluongtran0309.dbbackup.adapter.process.ProcessRunner;
+import com.hoangluongtran0309.dbbackup.adapter.verification.DockerVerificationSupport;
 import com.hoangluongtran0309.dbbackup.core.exception.RestoreFailedException;
 import com.hoangluongtran0309.dbbackup.core.model.DatabaseConnection;
 import com.hoangluongtran0309.dbbackup.core.model.DatabaseEngine;
+import com.hoangluongtran0309.dbbackup.core.model.DatabaseTarget;
 
 /** Runs MariaDB's own client pair against a real MariaDB server end to end. */
 @Testcontainers
@@ -150,6 +155,33 @@ class MariaDbBackupRestoreIT {
     }
 
     @Test
+    void verifiesARealBackupInADisposableMariaDbContainerAndRemovesIt() {
+        Path artifact = artifacts.resolve("shop.sql.gz");
+        backup.dumpTo(connection("s3cr3t", "shop"), artifact);
+        UUID verificationId = UUID.randomUUID();
+        DockerVerificationSupport docker = dockerSupport();
+
+        var result = new MariaDbRestoreVerificationAdapter(
+                docker, true, "mariadb:10.11", Duration.ofMinutes(2))
+                .verify(verificationId, target(), artifact);
+
+        assertThat(result.checkedObjects()).isEqualTo(2);
+        assertThat(docker.success(List.of("docker", "inspect",
+                DockerVerificationSupport.containerName(DatabaseEngine.MARIADB, verificationId)),
+                Duration.ofSeconds(10))).isFalse();
+
+        UUID corruptId = UUID.randomUUID();
+        Path corrupt = artifacts.resolve("corrupt-verification.sql.gz");
+        assertThatCode(() -> Files.writeString(corrupt, "not gzip")).doesNotThrowAnyException();
+        assertThatThrownBy(() -> new MariaDbRestoreVerificationAdapter(
+                docker, true, "mariadb:10.11", Duration.ofMinutes(2)).verify(corruptId, target(), corrupt))
+                .hasMessageContaining("gzip");
+        assertThat(docker.success(List.of("docker", "inspect",
+                DockerVerificationSupport.containerName(DatabaseEngine.MARIADB, corruptId)),
+                Duration.ofSeconds(10))).isFalse();
+    }
+
+    @Test
     void restoresExactValuesIntoAnotherDatabaseWithoutChangingTheSource() {
         rootSql("""
                 CREATE DATABASE shop_drill;
@@ -260,6 +292,17 @@ class MariaDbBackupRestoreIT {
     private static DatabaseConnection connection(String password, String database) {
         return new DatabaseConnection(DatabaseEngine.MARIADB,
                 SERVER.getHost(), SERVER.getFirstMappedPort(), database, "backup", password);
+    }
+
+    private static DatabaseTarget target() {
+        return DatabaseTarget.builder().id(UUID.randomUUID()).name("source").engine(DatabaseEngine.MARIADB)
+                .host("unused").port(3306).databaseName("shop").username("unused")
+                .passwordCiphertext("unused").createdAt(Instant.EPOCH).build();
+    }
+
+    private static DockerVerificationSupport dockerSupport() {
+        return new DockerVerificationSupport(new ProcessRunner(), Duration.ofMinutes(10),
+                Duration.ofMinutes(2), Duration.ofSeconds(30));
     }
 
     private static List<String> tables(String database) {
