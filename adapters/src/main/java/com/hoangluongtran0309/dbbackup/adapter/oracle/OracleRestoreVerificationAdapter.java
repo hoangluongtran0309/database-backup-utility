@@ -104,6 +104,9 @@ class OracleRestoreVerificationAdapter implements RestoreVerificationPort {
         DockerVerificationSupport.requireSuccess(docker.execAsUser(
                 container, Duration.ofSeconds(30), "root", "mkdir", "-p", DIRECTORY_PATH),
                 "Could not prepare the Oracle verification directory");
+        DockerVerificationSupport.requireSuccess(docker.execAsUser(
+                container, Duration.ofSeconds(30), "root", "chown", "oracle:oinstall", DIRECTORY_PATH),
+                "Could not secure the Oracle verification directory");
         docker.copy(artifact, container, DUMP_PATH, Duration.ofMinutes(2));
         DockerVerificationSupport.requireSuccess(docker.execAsUser(
                 container, Duration.ofSeconds(30), "root", "chown", "oracle:oinstall", DUMP_PATH),

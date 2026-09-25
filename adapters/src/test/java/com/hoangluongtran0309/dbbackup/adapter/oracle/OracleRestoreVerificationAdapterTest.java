@@ -43,6 +43,8 @@ class OracleRestoreVerificationAdapterTest {
 
         assertThat(result.checkedObjects()).isEqualTo(3);
         assertThat(result.summary()).contains("3 Oracle table(s)").contains("no invalid user objects");
+        verify(docker).execAsUser("oracle-container", Duration.ofSeconds(30), "root",
+                "chown", "oracle:oinstall", "/opt/oracle/dbbackup-verify");
         verify(docker).remove(DatabaseEngine.ORACLE, id);
     }
 
