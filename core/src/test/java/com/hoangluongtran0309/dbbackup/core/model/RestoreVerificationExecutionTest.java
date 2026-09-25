@@ -44,12 +44,19 @@ class RestoreVerificationExecutionTest {
     }
 
     @Test
-    void optionalEnginesCannotEnableAutomaticVerification() {
-        assertThatThrownBy(() -> DatabaseTarget.builder()
+    void optionalEnginesCanEnableAutomaticVerification() {
+        DatabaseTarget oracle = DatabaseTarget.builder()
                 .id(UUID.randomUUID()).name("oracle").engine(DatabaseEngine.ORACLE)
                 .host("db").port(1521).databaseName("FREEPDB1").username("APP")
                 .dataPumpDirectory("PUMP").passwordCiphertext("sealed").createdAt(NOW)
-                .verifyAfterBackup(true).build())
-                .hasMessageContaining("not supported");
+                .verifyAfterBackup(true).build();
+        DatabaseTarget sqlServer = DatabaseTarget.builder()
+                .id(UUID.randomUUID()).name("sqlserver").engine(DatabaseEngine.SQLSERVER)
+                .host("db").port(1433).databaseName("shop").username("backup")
+                .passwordCiphertext("sealed").createdAt(NOW)
+                .verifyAfterBackup(true).build();
+
+        assertThat(oracle.isVerifyAfterBackup()).isTrue();
+        assertThat(sqlServer.isVerifyAfterBackup()).isTrue();
     }
 }

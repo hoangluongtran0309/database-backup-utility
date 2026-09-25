@@ -1,0 +1,33 @@
+# syntax=docker/dockerfile:1
+
+# SQL Server's official image contains the database and sqlcmd but not
+# SqlPackage. Build this operator-owned verification image before enabling
+# SQL Server restore verification:
+#
+#   docker build -f Dockerfile.sqlserver-verification.example \
+#     -t dbbackup-verification-sqlserver:2022 .
+#
+# ACCEPT_EULA=Y is supplied only when the disposable container is started.
+
+FROM mcr.microsoft.com/dotnet/sdk:10.0-noble AS sqlpackage
+ARG SQLPACKAGE_VERSION=170.5.96
+RUN dotnet tool install Microsoft.SqlPackage \
+      --tool-path /opt/sqlpackage \
+      --version "${SQLPACKAGE_VERSION}"
+
+FROM mcr.microsoft.com/dotnet/runtime:10.0-noble AS dotnet-runtime
+
+FROM mcr.microsoft.com/mssql/server:2022-latest
+
+USER root
+COPY --from=dotnet-runtime /usr/share/dotnet/ /usr/share/dotnet/
+COPY --from=sqlpackage /opt/sqlpackage/ /opt/sqlpackage/
+
+RUN test "$(dpkg --print-architecture)" = amd64 \
+    && test -x /opt/sqlpackage/sqlpackage \
+    && test -x /opt/mssql-tools18/bin/sqlcmd \
+    && /opt/sqlpackage/sqlpackage /Version \
+    && /opt/mssql-tools18/bin/sqlcmd -? >/dev/null
+
+ENV DOTNET_ROOT=/usr/share/dotnet
+USER mssql

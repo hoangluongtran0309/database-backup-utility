@@ -270,13 +270,15 @@ Manual attempts use the shared bounded executor. An automatic attempt runs on
 the successful backup's existing worker after notification and retention, so
 it cannot deadlock by trying to acquire another worker slot.
 
-The four network-engine adapters create an unexposed container whose name is
-derived from the verification UUID. SQLite creates a private file below its
+The six network-engine adapters create an unexposed container whose name is
+derived from the verification UUID. Oracle uses an isolated remapped schema;
+SQL Server uses an operator-built server image containing SqlPackage. SQLite creates a private file below its
 configured root. Restore is followed by an engine-specific object health
 check, and cleanup must complete before success is persisted. A failed check,
 timeout or cleanup changes only the verification row. The active-verification
 query also protects an artifact from manual deletion and retention. See
-[ADR-029](../adr/029-isolated-restore-verification.md).
+[ADR-029](../adr/029-isolated-restore-verification.md) and
+[ADR-030](../adr/030-oracle-and-sql-server-restore-verification.md).
 
 A restore follows the same two-step shape and shares the same pool, so the bound
 is on total heavy work rather than on each kind separately. What a restore

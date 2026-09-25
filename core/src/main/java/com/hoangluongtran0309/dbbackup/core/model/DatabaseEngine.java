@@ -31,6 +31,6 @@ public enum DatabaseEngine {
     }
 
     public boolean supportsRestoreVerification() {
-        return this != ORACLE && this != SQLSERVER;
+        return true;
     }
 }

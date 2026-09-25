@@ -11,6 +11,10 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.Statement;
 import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -20,9 +24,11 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.mssqlserver.MSSQLServerContainer;
 
 import com.hoangluongtran0309.dbbackup.adapter.process.ProcessRunner;
+import com.hoangluongtran0309.dbbackup.adapter.verification.DockerVerificationSupport;
 import com.hoangluongtran0309.dbbackup.core.exception.RestoreFailedException;
 import com.hoangluongtran0309.dbbackup.core.model.DatabaseConnection;
 import com.hoangluongtran0309.dbbackup.core.model.DatabaseEngine;
+import com.hoangluongtran0309.dbbackup.core.model.DatabaseTarget;
 
 /** Exercises the production SQL Server adapters against real clients and SQL Server 2022. */
 @Testcontainers
@@ -146,6 +152,39 @@ class SqlServerBackupRestoreIT {
                 .hasMessageContaining("SqlPackage import failed");
     }
 
+    @Test
+    void isolatedVerificationAcceptsARealBacpacRejectsCorruptionAndCleansBothContainers() throws Exception {
+        Path artifact = Files.createTempFile("source20-verification-", ".bacpac");
+        Files.delete(artifact);
+        Path corrupt = Files.createTempFile("source20-verification-corrupt-", ".bacpac");
+        Files.writeString(corrupt, "not a BACPAC");
+        new SqlServerBacpacBackupAdapter(
+                runner, sqlpackage, Duration.ofSeconds(15), Duration.ofMinutes(5), true, temporaryFiles)
+                .dumpTo(target(SOURCE, PASSWORD), artifact);
+
+        String image = System.getenv().getOrDefault(
+                "DBBACKUP_VERIFICATION_SQLSERVER_IMAGE", "dbbackup-verification-sqlserver:2022");
+        DockerVerificationSupport docker = new DockerVerificationSupport(
+                runner, Duration.ofMinutes(10), Duration.ofMinutes(2), Duration.ofSeconds(30));
+        SqlServerRestoreVerificationAdapter verification = new SqlServerRestoreVerificationAdapter(
+                docker, true, image, Duration.ofMinutes(5), Duration.ofMinutes(5));
+        assertThat(verification.isAvailable())
+                .withFailMessage("Build %s with Dockerfile.sqlserver-verification.example before mvn verify", image)
+                .isTrue();
+        UUID validId = UUID.randomUUID();
+        UUID corruptId = UUID.randomUUID();
+        try {
+            assertThat(verification.verify(validId, sourceTarget(), artifact).checkedObjects()).isEqualTo(1);
+            assertThatThrownBy(() -> verification.verify(corruptId, sourceTarget(), corrupt))
+                    .hasMessageContaining("SqlPackage verification import failed");
+        } finally {
+            Files.deleteIfExists(artifact);
+            Files.deleteIfExists(corrupt);
+        }
+        assertContainerAbsent(DatabaseEngine.SQLSERVER, validId);
+        assertContainerAbsent(DatabaseEngine.SQLSERVER, corruptId);
+    }
+
     private static DatabaseConnection target(String database, String password) {
         return new DatabaseConnection(
                 DatabaseEngine.SQLSERVER,
@@ -154,6 +193,20 @@ class SqlServerBackupRestoreIT {
                 database,
                 SQL_SERVER.getUsername(),
                 password);
+    }
+
+    private static DatabaseTarget sourceTarget() {
+        return DatabaseTarget.builder().id(UUID.randomUUID()).name("sqlserver source")
+                .engine(DatabaseEngine.SQLSERVER).host("source.invalid").port(1433)
+                .databaseName(SOURCE).username("backup")
+                .passwordCiphertext("not-used-by-verification").createdAt(Instant.EPOCH).build();
+    }
+
+    private void assertContainerAbsent(DatabaseEngine engine, UUID id) {
+        ProcessRunner.Result inspected = runner.run(List.of(
+                "docker", "container", "inspect", DockerVerificationSupport.containerName(engine, id)),
+                Map.of(), Duration.ofSeconds(10));
+        assertThat(inspected.succeeded()).isFalse();
     }
 
     private static Connection adminConnection() throws Exception {

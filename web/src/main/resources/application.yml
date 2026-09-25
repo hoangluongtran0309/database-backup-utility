@@ -183,8 +183,14 @@ dbbackup:
     mariadb-image: ${DBBACKUP_VERIFICATION_MARIADB_IMAGE:mariadb:10.11}
     postgresql-image: ${DBBACKUP_VERIFICATION_POSTGRESQL_IMAGE:postgres:17-alpine}
     mongodb-image: ${DBBACKUP_VERIFICATION_MONGODB_IMAGE:mongo:8.0}
+    oracle-image: ${DBBACKUP_VERIFICATION_ORACLE_IMAGE:gvenzl/oracle-free:23-slim-faststart}
+    sqlserver-image: ${DBBACKUP_VERIFICATION_SQLSERVER_IMAGE:dbbackup-verification-sqlserver:2022}
     pull-timeout: ${DBBACKUP_VERIFICATION_PULL_TIMEOUT:10m}
     startup-timeout: ${DBBACKUP_VERIFICATION_STARTUP_TIMEOUT:2m}
+    # Oracle and SQL Server need longer than the smaller community images to
+    # initialise their first disposable instance.
+    oracle-startup-timeout: ${DBBACKUP_VERIFICATION_ORACLE_STARTUP_TIMEOUT:10m}
+    sqlserver-startup-timeout: ${DBBACKUP_VERIFICATION_SQLSERVER_STARTUP_TIMEOUT:5m}
     cleanup-timeout: ${DBBACKUP_VERIFICATION_CLEANUP_TIMEOUT:30s}
 
   storage:

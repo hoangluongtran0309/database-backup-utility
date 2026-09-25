@@ -13,7 +13,7 @@
 
   <groupId>com.hoangluongtran0309</groupId>
   <artifactId>database-backup-utility</artifactId>
-  <version>0.16.0</version>
+  <version>0.17.0</version>
   <packaging>pom</packaging>
 
   <name>database-backup-utility</name>

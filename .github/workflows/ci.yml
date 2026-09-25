@@ -21,7 +21,7 @@ jobs:
   verify:
     name: mvn verify
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
     env:
       MYSQL_CLIENT_PATH: /opt/mysql/bin/mysql
       MYSQLDUMP_PATH: /opt/mysql/bin/mysqldump
@@ -92,6 +92,15 @@ jobs:
           test -x /usr/bin/sqlite3
           test -x "$SQLCMD_PATH"
           "$SQLCMD_PATH" -? >/dev/null
+
+      - name: Build and smoke-test the SQL Server verification image
+        run: |
+          docker build -f Dockerfile.sqlserver-verification.example \
+            -t dbbackup-verification-sqlserver:2022 .
+          docker run --rm --entrypoint /opt/sqlpackage/sqlpackage \
+            dbbackup-verification-sqlserver:2022 /Version
+          docker run --rm --entrypoint /opt/mssql-tools18/bin/sqlcmd \
+            dbbackup-verification-sqlserver:2022 -?
 
       - name: Verify
         run: mvn --batch-mode --no-transfer-progress verify

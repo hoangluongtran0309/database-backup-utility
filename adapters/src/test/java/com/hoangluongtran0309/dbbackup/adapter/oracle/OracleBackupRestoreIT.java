@@ -14,6 +14,9 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.Statement;
 import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import org.junit.jupiter.api.AfterAll;
@@ -26,9 +29,11 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.oracle.OracleContainer;
 
 import com.hoangluongtran0309.dbbackup.adapter.process.ProcessRunner;
+import com.hoangluongtran0309.dbbackup.adapter.verification.DockerVerificationSupport;
 import com.hoangluongtran0309.dbbackup.core.exception.RestoreFailedException;
 import com.hoangluongtran0309.dbbackup.core.model.DatabaseConnection;
 import com.hoangluongtran0309.dbbackup.core.model.DatabaseEngine;
+import com.hoangluongtran0309.dbbackup.core.model.DatabaseTarget;
 
 /** Exercises the production adapters against the real clients in Oracle Free. */
 @Testcontainers
@@ -181,6 +186,37 @@ class OracleBackupRestoreIT {
     }
 
     @Test
+    void isolatedVerificationAcceptsARealDumpRejectsCorruptionAndCleansBothContainers() throws Exception {
+        ProcessRunner runner = new ProcessRunner();
+        OracleDataPumpFiles files = new OracleDataPumpFiles(STAGING);
+        OracleDataPumpJobs jobs = new OracleDataPumpJobs(runner, expdp, impdp, Duration.ofSeconds(30));
+        OracleDataPumpBackupAdapter backup = new OracleDataPumpBackupAdapter(
+                runner, files, jobs, expdp, Duration.ofMinutes(3));
+        Path artifact = STAGING.resolveSibling("oracle-verification-" + UUID.randomUUID() + ".dmp");
+        Path corrupt = STAGING.resolveSibling("oracle-verification-corrupt-" + UUID.randomUUID() + ".dmp");
+        DockerVerificationSupport docker = new DockerVerificationSupport(
+                runner, Duration.ofMinutes(10), Duration.ofMinutes(2), Duration.ofSeconds(30));
+        OracleRestoreVerificationAdapter verification = new OracleRestoreVerificationAdapter(
+                docker, true, "gvenzl/oracle-free:23-slim-faststart",
+                Duration.ofMinutes(10), Duration.ofMinutes(5));
+        UUID validId = UUID.randomUUID();
+        UUID corruptId = UUID.randomUUID();
+        try {
+            backup.dumpTo(connection(SOURCE, SOURCE_PASSWORD), artifact, UUID.randomUUID());
+            Files.writeString(corrupt, "not an Oracle Data Pump archive");
+
+            assertThat(verification.verify(validId, sourceTarget(), artifact).checkedObjects()).isEqualTo(1);
+            assertThat(catchThrowable(() -> verification.verify(corruptId, sourceTarget(), corrupt)))
+                    .hasMessageContaining("preflight failed");
+        } finally {
+            Files.deleteIfExists(artifact);
+            Files.deleteIfExists(corrupt);
+        }
+        assertContainerAbsent(runner, DatabaseEngine.ORACLE, validId);
+        assertContainerAbsent(runner, DatabaseEngine.ORACLE, corruptId);
+    }
+
+    @Test
     void connectionProbeReportsAMissingDirectoryGrantAndCleansItsProbe() throws Exception {
         try (Connection connection = adminConnection(); Statement statement = connection.createStatement()) {
             statement.executeUpdate("REVOKE WRITE ON DIRECTORY " + DIRECTORY + " FROM " + SOURCE);
@@ -201,6 +237,20 @@ class OracleBackupRestoreIT {
         return new DatabaseConnection(
                 DatabaseEngine.ORACLE, "127.0.0.1", 1521, ORACLE.getDatabaseName(),
                 username, password, null, DIRECTORY);
+    }
+
+    private static DatabaseTarget sourceTarget() {
+        return DatabaseTarget.builder().id(UUID.randomUUID()).name("oracle source")
+                .engine(DatabaseEngine.ORACLE).host("source.invalid").port(1521)
+                .databaseName("SOURCEPDB").username(SOURCE).dataPumpDirectory(DIRECTORY)
+                .passwordCiphertext("not-used-by-verification").createdAt(Instant.EPOCH).build();
+    }
+
+    private static void assertContainerAbsent(ProcessRunner runner, DatabaseEngine engine, UUID id) {
+        ProcessRunner.Result inspected = runner.run(List.of(
+                "docker", "container", "inspect", DockerVerificationSupport.containerName(engine, id)),
+                Map.of(), Duration.ofSeconds(10));
+        assertThat(inspected.succeeded()).isFalse();
     }
 
     private static Connection adminConnection() throws Exception {
