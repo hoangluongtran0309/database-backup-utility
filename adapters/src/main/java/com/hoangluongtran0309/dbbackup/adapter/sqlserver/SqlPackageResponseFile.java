@@ -60,8 +60,8 @@ final class SqlPackageResponseFile {
             if (!Files.getPosixFilePermissions(response).equals(OWNER_ONLY)) {
                 throw new IOException("the temporary file is not owner-only");
             }
-            String argument = "/%s:%s".formatted(passwordParameter, password);
-            Files.writeString(response, quoteArgument(argument) + System.lineSeparator(), StandardCharsets.UTF_8);
+            Files.writeString(response, passwordArgument(passwordParameter, password) + System.lineSeparator(),
+                    StandardCharsets.UTF_8);
             return response;
         } catch (IOException | UnsupportedOperationException e) {
             if (response != null) {
@@ -88,6 +88,16 @@ final class SqlPackageResponseFile {
             }
         }
         return quoted.append('"').toString();
+    }
+
+    static String passwordArgument(String passwordParameter, String password) {
+        if (!passwordParameter.equals("SourcePassword") && !passwordParameter.equals("TargetPassword")) {
+            throw new IllegalArgumentException("Unsupported SqlPackage password parameter: " + passwordParameter);
+        }
+        if (password.indexOf('\r') >= 0 || password.indexOf('\n') >= 0 || password.indexOf('\0') >= 0) {
+            throw new IllegalArgumentException("SQL Server passwords must not contain CR, LF, or NUL");
+        }
+        return quoteArgument("/%s:%s".formatted(passwordParameter, password));
     }
 
     static final class ResponseFileException extends RuntimeException {

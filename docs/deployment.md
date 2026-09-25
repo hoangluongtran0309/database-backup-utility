@@ -130,7 +130,7 @@ timeouts are five seconds. See
 **Restore verification is deliberately opt-in.** Set
 `DBBACKUP_VERIFICATION_ENABLED=true` to expose **Test restore** and the
 per-target automatic checkbox. SQLite uses a private file below `SQLITE_ROOT`.
-MySQL, MariaDB, PostgreSQL and MongoDB need the host Docker socket: uncomment
+Every network engine needs the host Docker socket: uncomment
 the socket volume and `group_add` in `docker-compose.yml`, then set
 `DOCKER_SOCKET_GID` to `stat -c '%g' /var/run/docker.sock` on the host. The
 application image already carries the Docker CLI.
@@ -140,10 +140,23 @@ host. Keep verification disabled when that trust boundary is unacceptable;
 startup and every other feature remain available. Verification containers
 publish no ports, receive no source-database credentials, use deterministic
 names and are force-removed before an attempt may succeed. Operators can
-override the four images and the pull, startup and cleanup timeouts with the
-`DBBACKUP_VERIFICATION_*` variables documented in the root README. Oracle and
-SQL Server verification remain unsupported. See
-[ADR-029](adr/029-isolated-restore-verification.md).
+override all engine images and the pull, startup and cleanup timeouts with the
+`DBBACKUP_VERIFICATION_*` variables documented in the root README.
+
+Oracle verification pulls Oracle Free and needs the image terms accepted by the
+operator. SQL Server verification does not silently invent a client sidecar:
+build the supplied image before enabling it:
+
+```bash
+docker build -f Dockerfile.sqlserver-verification.example \
+  -t dbbackup-verification-sqlserver:2022 .
+```
+
+That image accepts Microsoft's EULA at disposable-container startup and uses
+the Developer edition PID. Neither verification adapter depends on the Oracle
+or SQL Server application client pack, and neither receives source target
+credentials. See [ADR-029](adr/029-isolated-restore-verification.md) and
+[ADR-030](adr/030-oracle-and-sql-server-restore-verification.md).
 
 **Schedules use the application's clock and one explicit zone each.** Cron
 expressions use Quartz syntax, with seconds as the first field. The schedule

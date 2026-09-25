@@ -258,8 +258,12 @@ would also try to run the parent pom, which has no main class.)
 | `DBBACKUP_VERIFICATION_MARIADB_IMAGE` | `mariadb:10.11` | Disposable MariaDB verification image |
 | `DBBACKUP_VERIFICATION_POSTGRESQL_IMAGE` | `postgres:17-alpine` | Disposable PostgreSQL verification image |
 | `DBBACKUP_VERIFICATION_MONGODB_IMAGE` | `mongo:8.0` | Disposable MongoDB verification image |
+| `DBBACKUP_VERIFICATION_ORACLE_IMAGE` | `gvenzl/oracle-free:23-slim-faststart` | Disposable Oracle Free verification image |
+| `DBBACKUP_VERIFICATION_SQLSERVER_IMAGE` | `dbbackup-verification-sqlserver:2022` | Operator-built SQL Server image containing SqlPackage |
 | `DBBACKUP_VERIFICATION_PULL_TIMEOUT` | `10m` | Maximum image pull duration |
 | `DBBACKUP_VERIFICATION_STARTUP_TIMEOUT` | `2m` | Maximum disposable database startup duration |
+| `DBBACKUP_VERIFICATION_ORACLE_STARTUP_TIMEOUT` | `10m` | Oracle Free startup timeout |
+| `DBBACKUP_VERIFICATION_SQLSERVER_STARTUP_TIMEOUT` | `5m` | SQL Server startup timeout |
 | `DBBACKUP_VERIFICATION_CLEANUP_TIMEOUT` | `30s` | Maximum disposable database cleanup duration |
 | `MYSQL_CLIENT_PATH` | `/usr/bin/mysql` | The `mysql` client binary; checked for executability at startup |
 | `MYSQLDUMP_PATH` | `/usr/bin/mysqldump` | The `mysqldump` binary; likewise checked at startup |
@@ -292,15 +296,19 @@ would also try to run the parent pom, which has no main class.)
 | `BACKUP_TIMEOUT` | `30m` | A dump running longer than this is killed |
 | `RESTORE_TIMEOUT` | `60m` | A restore running longer than this is killed |
 
-Restore verification is opt-in. For MySQL, MariaDB, PostgreSQL and MongoDB,
-enable it and give the application container access to the Docker socket by
+Restore verification is opt-in. For every network engine, enable it and give
+the application container access to the Docker socket by
 uncommenting the socket mount and `group_add` block in `docker-compose.yml`.
 Set `DOCKER_SOCKET_GID` to the host socket's group id. The image already
 contains the Docker CLI; no database ports are published by verification
 containers. SQLite verification needs no socket but uses the same deployment
-switch. Docker-socket access is equivalent to root control of the Docker host,
-so expose it only to a trusted application deployment. See
-[ADR-029](docs/adr/029-isolated-restore-verification.md).
+switch. Before SQL Server verification, build its self-contained image with
+`docker build -f Dockerfile.sqlserver-verification.example -t dbbackup-verification-sqlserver:2022 .`.
+Docker-socket access is equivalent to root control of the Docker host, so expose
+it only to a trusted application deployment. Oracle Free image terms and the
+SQL Server EULA remain the operator's responsibility. See
+[ADR-029](docs/adr/029-isolated-restore-verification.md) and
+[ADR-030](docs/adr/030-oracle-and-sql-server-restore-verification.md).
 
 ## Tests
 
@@ -311,9 +319,10 @@ mvn verify   # adds the integration tests, which need Docker
 
 `*Test.java` is a plain JUnit test. `*IT.java` runs against real containers via
 Testcontainers. The SQL Server IT drives the installed `sqlcmd` and SqlPackage
-against SQL Server 2022. The Oracle IT drives `sqlplus`/`expdp`/`impdp` through wrappers
-inside its Oracle Free container, so no Oracle client is installed on the
-runner. Storage integration tests use Adobe S3Mock and fake-gcs-server in
+against SQL Server 2022 and its self-contained verification image. The Oracle
+IT drives `sqlplus`/`expdp`/`impdp` through wrappers inside its Oracle Free
+source and verifies the dump in a second isolated Oracle container, so no
+Oracle client is installed on the runner. Storage integration tests use Adobe S3Mock and fake-gcs-server in
 isolated forks. H2 is not used anywhere, and no test skips itself when
 something it needs is missing.
 

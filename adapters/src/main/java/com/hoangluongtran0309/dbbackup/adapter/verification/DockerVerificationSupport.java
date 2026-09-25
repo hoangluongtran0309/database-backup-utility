@@ -43,6 +43,10 @@ public class DockerVerificationSupport {
         }
     }
 
+    public boolean imagePresent(String image) {
+        return success(List.of("docker", "image", "inspect", image), Duration.ofSeconds(15));
+    }
+
     public void requireImage(String image) {
         if (success(List.of("docker", "image", "inspect", image), Duration.ofSeconds(15))) return;
         requireSuccess(run(List.of("docker", "pull", image), pullTimeout), "Could not pull " + image);
@@ -54,46 +58,68 @@ public class DockerVerificationSupport {
         List<String> command = new ArrayList<>(List.of(
                 "docker", "run", "-d", "--rm", "--name", name,
                 "--label", "dbbackup.restore-verification=" + id));
-        environment.forEach((key, value) -> {
+        environment.keySet().forEach(key -> {
             command.add("-e");
-            command.add(key + "=" + value);
+            command.add(key);
         });
         command.add(image);
-        requireSuccess(run(command, startupTimeout), "Could not start the temporary database");
+        requireSuccess(run(command, environment, startupTimeout), "Could not start the temporary database");
         return name;
     }
 
     public ProcessRunner.Result exec(String container, Duration timeout, String... command) {
+        return execAsUser(container, timeout, null, Map.of(), command);
+    }
+
+    public ProcessRunner.Result execAsUser(
+            String container, Duration timeout, String user, String... command) {
+        return execAsUser(container, timeout, user, Map.of(), command);
+    }
+
+    public ProcessRunner.Result execAsUser(
+            String container, Duration timeout, String user,
+            Map<String, String> environment, String... command) {
         List<String> values = new ArrayList<>(List.of("docker", "exec"));
+        if (user != null && !user.isBlank()) {
+            values.add("--user");
+            values.add(user);
+        }
+        environment.keySet().forEach(key -> {
+            values.add("-e");
+            values.add(key);
+        });
         values.add(container);
         values.addAll(List.of(command));
-        return run(values, timeout);
+        return run(values, environment, timeout);
     }
 
     public ProcessRunner.Result execWithEnvironment(
             String container, Duration timeout, Map<String, String> environment, String... command) {
-        List<String> values = new ArrayList<>(List.of("docker", "exec"));
-        environment.forEach((key, value) -> {
-            values.add("-e");
-            values.add(key + "=" + value);
-        });
-        values.add(container);
-        values.addAll(List.of(command));
-        return run(values, timeout);
+        return execAsUser(container, timeout, null, environment, command);
     }
 
     public ProcessRunner.Result feed(
             String container, Duration timeout, InputStream input,
             Map<String, String> environment, String... command) {
+        return feedAsUser(container, timeout, input, null, environment, command);
+    }
+
+    public ProcessRunner.Result feedAsUser(
+            String container, Duration timeout, InputStream input, String user,
+            Map<String, String> environment, String... command) {
         List<String> values = new ArrayList<>(List.of("docker", "exec", "-i"));
-        environment.forEach((key, value) -> {
+        if (user != null && !user.isBlank()) {
+            values.add("--user");
+            values.add(user);
+        }
+        environment.keySet().forEach(key -> {
             values.add("-e");
-            values.add(key + "=" + value);
+            values.add(key);
         });
         values.add(container);
         values.addAll(List.of(command));
         try {
-            return runner.runFeeding(values, Map.of(), timeout, input);
+            return runner.runFeeding(values, environment, timeout, input);
         } catch (ProcessRunner.ProcessFailedException e) {
             throw new IllegalStateException(e.getMessage(), e);
         }
@@ -121,7 +147,12 @@ public class DockerVerificationSupport {
     }
 
     public void waitUntilReady(String container, Map<String, String> environment, String... command) {
-        long deadline = System.nanoTime() + startupTimeout.toNanos();
+        waitUntilReady(container, startupTimeout, environment, command);
+    }
+
+    public void waitUntilReady(
+            String container, Duration timeout, Map<String, String> environment, String... command) {
+        long deadline = System.nanoTime() + timeout.toNanos();
         long readySince = 0;
         while (System.nanoTime() < deadline) {
             try {
@@ -147,7 +178,7 @@ public class DockerVerificationSupport {
                 readySince = 0;
             }
         }
-        throw new IllegalStateException("Temporary database did not become ready within " + startupTimeout);
+        throw new IllegalStateException("Temporary database did not become ready within " + timeout);
     }
 
     public static void requireSuccess(ProcessRunner.Result result, String prefix) {
@@ -162,8 +193,13 @@ public class DockerVerificationSupport {
     }
 
     private ProcessRunner.Result run(List<String> command, Duration timeout) {
+        return run(command, Map.of(), timeout);
+    }
+
+    private ProcessRunner.Result run(
+            List<String> command, Map<String, String> environment, Duration timeout) {
         try {
-            return runner.run(command, Map.of(), timeout);
+            return runner.run(command, environment, timeout);
         } catch (ProcessRunner.ProcessFailedException e) {
             throw new IllegalStateException(e.getMessage(), e);
         }

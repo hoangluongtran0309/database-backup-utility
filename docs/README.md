@@ -10,8 +10,9 @@
   the decisions were made.
 
 The current last decision is
-[ADR-029](adr/029-isolated-restore-verification.md), which verifies successful
-backups in disposable databases without changing the backup outcome.
+[ADR-030](adr/030-oracle-and-sql-server-restore-verification.md), which extends
+disposable restore verification to Oracle and SQL Server without source
+credentials or optional application client packs.
 
 These pages describe the code that exists. When a slice changes the code, it
 changes these files in the same commit.

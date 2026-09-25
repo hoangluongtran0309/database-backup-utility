@@ -81,18 +81,9 @@ class SqlServerBacpacRestoreAdapter implements LogicalRestorePort {
     }
 
     List<String> command(DatabaseConnection connection, Path artifact, Path responseFile) {
-        return List.of(
-                binary.toString(),
-                "/Action:Import",
-                "/SourceFile:" + artifact,
-                "/TargetServerName:" + SqlServerCliConnectionTestAdapter.server(connection),
-                "/TargetDatabaseName:" + connection.database(),
-                "/TargetUser:" + connection.username(),
-                "/TargetEncryptConnection:True",
-                "/TargetTrustServerCertificate:" + trustServerCertificate,
-                "/TargetTimeout:" + Math.max(1, connectTimeout.toSeconds()),
-                "/p:CommandTimeout=0",
-                "/p:LongRunningCommandTimeout=0",
-                "@" + responseFile);
+        return SqlPackageImportCommand.build(
+                binary, artifact, SqlServerCliConnectionTestAdapter.server(connection),
+                connection.database(), connection.username(), trustServerCertificate,
+                connectTimeout, responseFile);
     }
 }
