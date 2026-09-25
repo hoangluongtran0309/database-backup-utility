@@ -122,10 +122,12 @@ their design is decided.
       successful MySQL, MariaDB, PostgreSQL, MongoDB and SQLite artifacts into
       disposable databases, validate their contents, clean them up and retain
       independent attempt history. See ADR-029.
+- [x] **28. Oracle and SQL Server restore verification.** Restore schema-mode
+      Data Pump dumps and BACPACs into self-contained disposable databases,
+      validate every table and require confirmed cleanup. See ADR-030.
 
-1. [ ] Oracle and SQL Server restore verification.
-2. [ ] A CLI inbound adapter.
-3. [ ] CI/CD, security scanning and end-to-end hardening.
+1. [ ] A CLI inbound adapter.
+2. [ ] CI/CD, security scanning and end-to-end hardening.
 
 ## Deliberately out of scope
 

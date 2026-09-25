@@ -164,7 +164,7 @@
                  th:disabled="${editing != null and !editing.engine.supportsRestoreVerification()}">
           <span>Automatically test restore after successful backups</span>
         </label>
-        <p class="field-hint">Opt-in. Network engines need restore verification enabled and access to the Docker socket.</p>
+        <p class="field-hint">Opt-in. Network engines need restore verification enabled and access to the Docker socket. SQL Server also needs the operator-built verification image.</p>
         <div th:replace="~{fragments/field-error :: fieldError('verifyAfterBackup')}"></div>
       </div>
     </div>

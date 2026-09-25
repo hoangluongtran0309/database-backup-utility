@@ -110,7 +110,7 @@
       Restore verification is not yet supported for this database engine.
     </p>
     <p class="alert alert-danger" th:if="${restoreVerificationEnabled and restoreVerificationSupported and !restoreVerificationAvailable}">
-      Restore verification is enabled but its adapter is unavailable. Check Docker socket access and the deployment logs.
+      Restore verification is enabled but its adapter is unavailable. Check Docker socket access, required images, and the deployment logs.
     </p>
     <p class="empty-state panel" th:if="${verificationHistory.isEmpty()}">This backup has not been restore-verified.</p>
     <div class="table-wrap" th:unless="${verificationHistory.isEmpty()}">

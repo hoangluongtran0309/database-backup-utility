@@ -2,7 +2,6 @@ package com.hoangluongtran0309.dbbackup.adapter.oracle;
 
 import java.nio.file.Path;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -108,10 +107,10 @@ class OracleDataPumpRestoreAdapter implements LogicalRestorePort {
             Path staged,
             Path sqlFile,
             String jobName) {
-        List<String> command = baseCommand(connection, sourceNamespace, staged, jobName);
-        addSchemaRemap(command, connection, sourceNamespace);
-        command.add("SQLFILE=" + sqlFile.getFileName());
-        return List.copyOf(command);
+        return OracleDataPumpImportCommand.preflight(
+                connection.dataPumpDirectory(), staged.getFileName().toString(),
+                sourceNamespace, connection.username(), jobName,
+                sqlFile.getFileName().toString(), false);
     }
 
     List<String> importCommand(
@@ -119,29 +118,9 @@ class OracleDataPumpRestoreAdapter implements LogicalRestorePort {
             String sourceNamespace,
             Path staged,
             String jobName) {
-        List<String> command = baseCommand(connection, sourceNamespace, staged, jobName);
-        command.add("TABLE_EXISTS_ACTION=REPLACE");
-        command.add("TRANSFORM=OID:N");
-        command.add("TRANSFORM=SEGMENT_ATTRIBUTES:N");
-        addSchemaRemap(command, connection, sourceNamespace);
-        return List.copyOf(command);
-    }
-
-    private static void addSchemaRemap(
-            List<String> command, DatabaseConnection connection, String sourceNamespace) {
-        if (!sourceNamespace.equals(connection.username())) {
-            command.add("REMAP_SCHEMA=" + sourceNamespace + ":" + connection.username());
-        }
-    }
-
-    private static List<String> baseCommand(
-            DatabaseConnection connection, String sourceNamespace, Path staged, String jobName) {
-        return new ArrayList<>(List.of(
-                "DIRECTORY=" + connection.dataPumpDirectory(),
-                "DUMPFILE=" + staged.getFileName(),
-                "SCHEMAS=" + sourceNamespace,
-                "JOB_NAME=" + jobName,
-                "NOLOGFILE=YES"));
+        return OracleDataPumpImportCommand.importDump(
+                connection.dataPumpDirectory(), staged.getFileName().toString(),
+                sourceNamespace, connection.username(), jobName, false);
     }
 
     private RestoreFailedException cleanupFailure(

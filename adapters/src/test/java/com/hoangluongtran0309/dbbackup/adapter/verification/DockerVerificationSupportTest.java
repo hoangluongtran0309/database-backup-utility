@@ -41,7 +41,8 @@ class DockerVerificationSupportTest {
                 .filter(command -> command.size() > 1 && command.get(1).equals("run"))
                 .findFirst().orElseThrow();
         assertThat(run).contains("--rm", "--name", name,
-                "--label", "dbbackup.restore-verification=" + id, "PASSWORD=random", "mysql:8.4")
+                "--label", "dbbackup.restore-verification=" + id, "-e", "PASSWORD", "mysql:8.4")
+                .noneMatch(value -> value.contains("random"))
                 .doesNotContain("-p", "--publish");
     }
 
@@ -75,8 +76,32 @@ class DockerVerificationSupportTest {
                 .hasMessageContaining("permission denied");
     }
 
+    @Test
+    void execAsUserPlacesDockerOptionsBeforeTheContainerName() {
+        ProcessRunner runner = mock(ProcessRunner.class);
+        when(runner.run(anyList(), anyMap(), any()))
+                .thenReturn(new ProcessRunner.Result(0, "", ""));
+
+        support(runner).execAsUser("temporary", Duration.ofSeconds(5), "root",
+                Map.of("SECRET", "value"), "chmod", "600", "/tmp/file");
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<String>> command = ArgumentCaptor.forClass(List.class);
+        ArgumentCaptor<Map<String, String>> environment = mapCaptor();
+        verify(runner).run(command.capture(), environment.capture(), any());
+        assertThat(command.getValue()).containsExactly(
+                "docker", "exec", "--user", "root", "-e", "SECRET",
+                "temporary", "chmod", "600", "/tmp/file");
+        assertThat(environment.getValue()).containsEntry("SECRET", "value");
+    }
+
     private static DockerVerificationSupport support(ProcessRunner runner) {
         return new DockerVerificationSupport(runner, Duration.ofMinutes(1),
                 Duration.ofSeconds(1), Duration.ofSeconds(1));
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static ArgumentCaptor<Map<String, String>> mapCaptor() {
+        return (ArgumentCaptor) ArgumentCaptor.forClass(Map.class);
     }
 }

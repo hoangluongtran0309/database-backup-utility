@@ -216,7 +216,8 @@ class DatabaseTargetControllerTest {
                         .param("port", "1433")
                         .param("database", "orders")
                         .param("username", "backup")
-                        .param("password", "Str0ng! password"))
+                        .param("password", "Str0ng! password")
+                        .param("verifyAfterBackup", "true"))
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrl("/databases"));
 
@@ -226,6 +227,7 @@ class DatabaseTargetControllerTest {
         verify(service).register(command.capture());
         assertThat(command.getValue().engine()).isEqualTo(DatabaseEngine.SQLSERVER);
         assertThat(command.getValue().port()).isEqualTo(1433);
+        assertThat(command.getValue().verifyAfterBackup()).isTrue();
     }
 
     @Test

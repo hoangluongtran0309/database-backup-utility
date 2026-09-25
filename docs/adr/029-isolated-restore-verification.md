@@ -74,8 +74,7 @@ decision.
   isolated from backup, retention and ordinary restore outcomes.
 - Existing notification subscriptions do not change. Newly selected channels
   default to backup, restore and verification failure events.
-- Oracle and SQL Server are excluded from this slice. Their optional client
-  packs, image or licensing choices and heavier runtime footprint need a
-  separate decision.
+- Oracle and SQL Server were excluded from this slice; ADR-030 adds them with
+  self-contained disposable images without changing this execution model.
 - There is no long-lived verification database, published container port,
   verification STARTED event or reuse of source database credentials.
