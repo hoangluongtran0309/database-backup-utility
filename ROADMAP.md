@@ -126,8 +126,13 @@ their design is decided.
       Data Pump dumps and BACPACs into self-contained disposable databases,
       validate every table and require confirmed cleanup. See ADR-030.
 
-1. [ ] A CLI inbound adapter.
-2. [ ] CI/CD, security scanning and end-to-end hardening.
+- [x] **29. Operator CLI over a versioned HTTP API.** Expose the existing
+      management and execution use cases through authenticated `/api/v1`, ship
+      a stateless CLI with text/JSON output and safe secret inputs, and keep the
+      web process as the single owner of schedules and background jobs. See
+      ADR-031.
+
+1. [ ] CI/CD, security scanning and end-to-end hardening.
 
 ## Deliberately out of scope
 

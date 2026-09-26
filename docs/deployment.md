@@ -40,6 +40,22 @@ DOWN, nothing more.
 
 ## What an operator has to decide
 
+**How the operator API is reached.** The application exposes `/api/v1` on the
+same listener as the console and authenticates it with HTTP Basic using the
+same single operator account. The bundled CLI defaults to
+`http://localhost:8080`, suitable for `docker compose exec app dbbackup ...`.
+For a CLI on another machine, terminate TLS before the application and set
+`DBBACKUP_API_URL=https://...`; clear-text non-loopback URLs are rejected unless
+the operator explicitly passes `--allow-http`. The API is administrative, not
+public: firewall it exactly like the console.
+
+Do not place the operator password or resource credentials in shell arguments.
+Use `DBBACKUP_API_PASSWORD`, `--password-file` or `--password-stdin` for Basic
+Auth, and `--secret FIELD=ENV_VAR` for target/storage/notification credentials.
+The API is stateless and does not use browser CSRF tokens; JSON 401/403 responses
+never redirect to the sign-in page. See
+[ADR-031](adr/031-cli-over-the-operator-http-api.md).
+
 **The encryption key.** `ENCRYPTION_SECRET_KEY` has no default and the
 application will not start without it. Losing it makes every stored target
 password unrecoverable; there is no rotation mechanism.
@@ -301,8 +317,9 @@ visitor to port 8080 nor a page open in an operator's browser can start a
 restore or delete a backup ([ADR-011](adr/011-one-operator-account-from-the-environment.md)).
 What is still up to the deployment:
 
-**No TLS.** The console speaks plain HTTP, so the password and the session
-cookie cross the network in clear text unless something encrypts them. Put a
+**No TLS.** The console and operator API speak plain HTTP, so passwords, Basic
+credentials and the session cookie cross the network in clear text unless
+something encrypts them. Put a
 TLS-terminating reverse proxy in front, and then set:
 
 - `SESSION_COOKIE_SECURE=true`, so the browser sends the session cookie only

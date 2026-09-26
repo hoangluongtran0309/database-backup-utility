@@ -12,6 +12,7 @@ COPY core core
 COPY adapters adapters
 COPY application application
 COPY web web
+COPY cli cli
 
 # Tests are skipped here on purpose: the integration tests start containers of
 # their own, which is not something a container build can do. `mvn verify` on a
@@ -66,6 +67,9 @@ RUN useradd --system --create-home --uid 10001 dbbackup \
     && chown -R dbbackup:dbbackup /var/lib/dbbackup
 
 COPY --from=build /src/web/target/web-*.jar /app/app.jar
+COPY --from=build /src/cli/target/cli-*.jar /app/cli.jar
+COPY packaging/dbbackup /usr/local/bin/dbbackup
+RUN chmod 0755 /usr/local/bin/dbbackup
 
 # Absolute, and outside the working directory: the default ./backups follows
 # whatever directory the process happens to start in.

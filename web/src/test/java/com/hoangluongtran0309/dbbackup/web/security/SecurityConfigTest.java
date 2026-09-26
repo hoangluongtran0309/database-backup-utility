@@ -5,6 +5,7 @@ import static org.hamcrest.Matchers.not;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestBuilders.formLogin;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestBuilders.logout;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
 import static org.springframework.security.test.web.servlet.response.SecurityMockMvcResultMatchers.authenticated;
 import static org.springframework.security.test.web.servlet.response.SecurityMockMvcResultMatchers.unauthenticated;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -12,6 +13,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.cookie;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -50,6 +52,30 @@ class SecurityConfigTest {
     void anAnonymousVisitorIsSentToSignIn() throws Exception {
         mockMvc.perform(get("/databases"))
                 .andExpect(redirectedUrl("/login"));
+    }
+
+    @Test
+    void anAnonymousApiClientGetsJsonRatherThanAConsoleRedirect() throws Exception {
+        mockMvc.perform(get("/api/v1/targets"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(content().contentTypeCompatibleWith("application/json"))
+                .andExpect(jsonPath("$.ok").value(false))
+                .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"));
+    }
+
+    @Test
+    void validBasicAuthenticationPassesApiRequestsWithoutACsrfToken() throws Exception {
+        // There is no API controller in this focused slice, so 404 proves the
+        // request passed both authentication and CSRF filters.
+        mockMvc.perform(post("/api/v1/no-such-action").with(httpBasic("operator", PASSWORD)))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void invalidBasicAuthenticationNeverRedirectsToTheLoginPage() throws Exception {
+        mockMvc.perform(get("/api/v1/targets").with(httpBasic("operator", "wrong")))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"));
     }
 
     /** Otherwise a 404 against a redirect would say which addresses exist. */
