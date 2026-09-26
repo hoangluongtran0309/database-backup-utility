@@ -1,0 +1,7 @@
+#!/bin/sh
+set -eu
+
+# The application container already has Java and reaches its own API over the
+# loopback interface. Supply the operator password by stdin or environment;
+# it is never accepted as a command-line option where process listings expose it.
+exec java ${DBBACKUP_CLI_JAVA_OPTS:--XX:MaxRAMPercentage=25} -jar /app/cli.jar "$@"

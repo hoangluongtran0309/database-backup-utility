@@ -7,7 +7,7 @@
   <parent>
     <groupId>com.hoangluongtran0309</groupId>
     <artifactId>database-backup-utility</artifactId>
-    <version>0.17.0</version>
+    <version>0.18.0</version>
   </parent>
 
   <artifactId>web</artifactId>

@@ -1,7 +1,7 @@
 # database-backup-utility
 
 MySQL, MariaDB, PostgreSQL, MongoDB, SQLite, optional Oracle and optional SQL
-Server logical backup and restore, driven from a small web console.
+Server logical backup and restore, driven from a small web console or operator CLI.
 
 The scope is deliberately narrow: **full logical dumps and same-engine restores**
 to local disk, S3-compatible storage, Google Cloud Storage or Azure Blob Storage. MySQL, MariaDB, PostgreSQL, MongoDB, SQLite, Oracle and SQL Server
@@ -65,6 +65,13 @@ credentials.
 The console asks you to sign in first. There is one operator account, set from
 the environment with a bcrypt hash, and every form carries a CSRF token. See
 [ADR-011](docs/adr/011-one-operator-account-from-the-environment.md).
+
+The same operator can automate every management and execution flow through the
+versioned `/api/v1` HTTP API and the bundled `dbbackup` CLI. The API owns no
+second scheduler or worker: it calls the same application services as the web
+console, while the CLI remains a stateless client. See
+[ADR-031](docs/adr/031-cli-over-the-operator-http-api.md) and the
+[HTTP API reference](docs/http-api.md).
 
 Backups run in the background: starting one redirects to its detail page, which
 follows it and updates when it finishes — restores likewise. The backup and
@@ -148,6 +155,60 @@ Oracle and SQL Server are deliberately absent from that base image; see
 
 Keep that key. Passwords encrypted under one key cannot be read back under
 another, and there is no recovery path.
+
+### Operator CLI
+
+The image contains a `dbbackup` command. It connects to the application API on
+loopback by default, so no metadata database credential or Docker socket is
+given to the CLI:
+
+```bash
+export DBBACKUP_API_PASSWORD='the same operator password used by the console'
+printf '%s\n' "$DBBACKUP_API_PASSWORD" | docker compose exec -T app \
+  dbbackup target list --password-stdin
+printf '%s\n' "$DBBACKUP_API_PASSWORD" | docker compose exec -T app \
+  dbbackup backup list --password-stdin --output json
+```
+
+For a source build, package and run the standalone client jar:
+
+```bash
+mvn -pl cli package
+DBBACKUP_API_PASSWORD='operator password' \
+  java -jar cli/target/cli-*.jar target list
+```
+
+The CLI accepts `DBBACKUP_API_URL`, `DBBACKUP_API_USERNAME` and
+`DBBACKUP_API_PASSWORD`, or `--server`, `--username`, `--password-file` and
+`--password-stdin`. Plain HTTP is accepted only for loopback unless
+`--allow-http` is explicit. Remote deployments should always use HTTPS.
+
+Commands follow `dbbackup <resource> <action>`, for example:
+
+```bash
+dbbackup backup run --target-id 9f... --output json
+dbbackup backup test-restore --id 2a... --no-wait
+dbbackup restore run --backup-execution-id 2a... --target-id 7b... \
+  --confirmation disaster-recovery
+dbbackup subscription set --target-id 7b... \
+  --subscription 4c...:BACKUP_FAILED,RESTORE_FAILED,VERIFICATION_FAILED
+```
+
+Target, storage and notification credentials are deliberately rejected as
+ordinary options because argv is visible to other processes. Bind a supported
+secret field to an environment variable instead:
+
+```bash
+export TARGET_DATABASE_PASSWORD='database secret'
+dbbackup target add --name production --engine MYSQL --host db.internal \
+  --port 3306 --database shop --username backup \
+  --secret password=TARGET_DATABASE_PASSWORD
+```
+
+Asynchronous backup, restore and restore-verification commands wait for a
+terminal result by default and return exit code `5` on a failed execution.
+`--no-wait` returns as soon as the server accepts the job. Run
+`dbbackup help` for the resource/action matrix.
 
 A MySQL, MariaDB, PostgreSQL, MongoDB or SQL Server instance running on the Docker host is
 reachable from the container as `host.docker.internal` — use that as the
