@@ -175,7 +175,7 @@ For a source build, package and run the standalone client jar:
 ```bash
 mvn -pl cli package
 DBBACKUP_API_PASSWORD='operator password' \
-  java -jar cli/target/cli-0.18.0-SNAPSHOT.jar target list
+  java -jar cli/target/cli-*.jar target list
 ```
 
 The CLI accepts `DBBACKUP_API_URL`, `DBBACKUP_API_USERNAME` and
