@@ -8,6 +8,8 @@
 #     (the printed hash without its leading colon, in single quotes —
 #      unquoted, compose reads every $ in it as the start of a variable)
 #   docker compose up --build
+#   printf '%s\n' "$DBBACKUP_API_PASSWORD" | docker compose exec -T app \
+#     dbbackup target list --password-stdin
 #
 # For local development against a Maven-run application, `docker compose up -d
 # postgres` starts just the metadata store.

@@ -1,6 +1,6 @@
 # Architecture overview
 
-A hexagonal application in four Maven modules. The module boundary is the
+A hexagonal application in five Maven modules. The module boundary is the
 architectural boundary: crossing it wrongly is a compile error, not a review
 comment.
 
@@ -14,6 +14,8 @@ core        no dependencies at all — plain Java and Lombok
   └── application        use cases; depends on core ports only
            ↑     ↑
            └─ web ┘      composition root: Spring MVC + Thymeleaf
+
+cli        standalone HTTP client; depends on no application module
 ```
 
 | Module | Holds | May depend on |
@@ -22,6 +24,7 @@ core        no dependencies at all — plain Java and Lombok
 | `adapters` | Outbound adapters — persistence, encryption, Flyway migrations | `core` |
 | `application` | Use case orchestration | `core` |
 | `web` | HTTP controllers, Quartz runtime adapter, forms, templates, sign-in and CSRF (`web.security`), `main()` | `application`, `adapters` |
+| `cli` | Stateless command parser and authenticated `/api/v1` client | JSON and the JDK HTTP client only |
 
 Two consequences are worth stating plainly, because they are the reason for the
 split rather than side effects of it:
@@ -51,6 +54,16 @@ split rather than side effects of it:
   GCS service-account JSON keys hold ciphertext at every persisted moment;
   SQLite targets have no ciphertext. Plaintext credentials exist only in
   short-lived connection values whose string representation redacts them.
+
+The JSON API is another inbound adapter inside `web`; it invokes the same use
+cases as the Thymeleaf controllers. `web` therefore remains the only process
+that owns Quartz reconciliation, startup repair and the bounded job executor.
+The separate `cli` module cannot see repositories or application services and
+cannot accidentally create competing schedulers or workers. `/api/v1` is
+stateless HTTP Basic authentication using the existing operator account; the
+browser chain remains session based with CSRF. API projections are explicit
+maps that omit every ciphertext. See
+[ADR-031](../adr/031-cli-over-the-operator-http-api.md).
 
 ## Metadata PostgreSQL and PostgreSQL targets are separate
 

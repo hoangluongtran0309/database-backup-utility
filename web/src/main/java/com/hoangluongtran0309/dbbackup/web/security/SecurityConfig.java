@@ -4,8 +4,10 @@ import java.util.LinkedHashMap;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
@@ -31,6 +33,11 @@ import jakarta.servlet.DispatcherType;
 @Configuration
 public class SecurityConfig {
 
+    private static final String UNAUTHORIZED = """
+            {"ok":false,"data":null,"error":{"code":"UNAUTHORIZED","message":"Valid operator credentials are required","field":null}}""";
+    private static final String FORBIDDEN = """
+            {"ok":false,"data":null,"error":{"code":"FORBIDDEN","message":"The operator is not allowed to perform this action","field":null}}""";
+
     /**
      * Everything the console loads is its own: fonts are self-hosted, and no
      * template carries an inline script, style or event handler. Keeping it that
@@ -48,7 +55,42 @@ public class SecurityConfig {
             "base-uri 'none'",
             "object-src 'none'");
 
+    /**
+     * The CLI API uses the same single operator account as the console, but is
+     * deliberately stateless: it never creates a browser session, never
+     * redirects to HTML, and returns the stable API error envelope on refusal.
+     */
     @Bean
+    @Order(1)
+    SecurityFilterChain apiSecurity(HttpSecurity http) throws Exception {
+        http
+                .securityMatcher("/api/**")
+                .authorizeHttpRequests(requests -> requests.anyRequest().authenticated())
+                .httpBasic(basic -> basic.authenticationEntryPoint((request, response, error) ->
+                        writeJson(response, 401, UNAUTHORIZED)))
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .csrf(csrf -> csrf.disable())
+                .requestCache(cache -> cache.disable())
+                .exceptionHandling(exceptions -> exceptions
+                        .authenticationEntryPoint((request, response, error) -> {
+                            writeJson(response, 401, UNAUTHORIZED);
+                        })
+                        .accessDeniedHandler((request, response, error) -> {
+                            writeJson(response, 403, FORBIDDEN);
+                        }));
+        return http.build();
+    }
+
+    private static void writeJson(jakarta.servlet.http.HttpServletResponse response, int status, String body)
+            throws java.io.IOException {
+        response.setStatus(status);
+        response.setContentType("application/json");
+        response.setCharacterEncoding("UTF-8");
+        response.getWriter().write(body);
+    }
+
+    @Bean
+    @Order(2)
     SecurityFilterChain consoleSecurity(HttpSecurity http) throws Exception {
         http
                 .authorizeHttpRequests(requests -> requests

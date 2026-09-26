@@ -17,13 +17,14 @@
   <packaging>pom</packaging>
 
   <name>database-backup-utility</name>
-  <description>Multi-database logical backup and restore, driven from a web console</description>
+  <description>Multi-database logical backup and restore, driven from a web console or operator CLI</description>
 
   <modules>
     <module>core</module>
     <module>adapters</module>
     <module>application</module>
     <module>web</module>
+    <module>cli</module>
   </modules>
 
   <properties>
