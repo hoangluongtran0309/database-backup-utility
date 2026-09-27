@@ -1,5 +1,9 @@
 # database-backup-utility
 
+[![CI](https://github.com/hoangluongtran0309/database-backup-utility/actions/workflows/ci.yml/badge.svg)](https://github.com/hoangluongtran0309/database-backup-utility/actions/workflows/ci.yml)
+[![Security](https://github.com/hoangluongtran0309/database-backup-utility/actions/workflows/security.yml/badge.svg)](https://github.com/hoangluongtran0309/database-backup-utility/actions/workflows/security.yml)
+[![E2E](https://github.com/hoangluongtran0309/database-backup-utility/actions/workflows/e2e.yml/badge.svg)](https://github.com/hoangluongtran0309/database-backup-utility/actions/workflows/e2e.yml)
+
 MySQL, MariaDB, PostgreSQL, MongoDB, SQLite, optional Oracle and optional SQL
 Server logical backup and restore, driven from a small web console or operator CLI.
 
@@ -72,6 +76,13 @@ second scheduler or worker: it calls the same application services as the web
 console, while the CLI remains a stateless client. See
 [ADR-031](docs/adr/031-cli-over-the-operator-http-api.md) and the
 [HTTP API reference](docs/http-api.md).
+
+Published releases include the Linux AMD64 base image on GHCR, executable web
+and CLI JARs, SHA-256 checksums, SPDX SBOMs and GitHub artifact attestations.
+Every protected-branch change must pass Maven, container/security and deployed
+API/CLI checks. See
+[ADR-032](docs/adr/032-required-ci-gates-and-attested-releases.md) and the
+[security policy](SECURITY.md).
 
 Backups run in the background: starting one redirects to its detail page, which
 follows it and updates when it finishes — restores likewise. The backup and
@@ -386,6 +397,11 @@ source and verifies the dump in a second isolated Oracle container, so no
 Oracle client is installed on the runner. Storage integration tests use Adobe S3Mock and fake-gcs-server in
 isolated forks. H2 is not used anywhere, and no test skips itself when
 something it needs is missing.
+
+Pull requests also build the release-shaped image and run a Compose E2E path
+through `/api/v1` and the bundled CLI. It covers authentication, a complete
+SQLite backup/checksum/download/verification/restore cycle and representative
+failure paths without mounting the Docker socket.
 
 ## Working on it
 

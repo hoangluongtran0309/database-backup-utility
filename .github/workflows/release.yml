@@ -1,0 +1,223 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing annotated release tag to rebuild
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish image and release
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    env:
+      IMAGE_NAME: ghcr.io/${{ github.repository }}
+
+    steps:
+      - name: Resolve the release tag
+        id: requested
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          DISPATCH_TAG: ${{ inputs.tag }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if [[ "$EVENT_NAME" == workflow_dispatch ]]; then
+            tag="$DISPATCH_TAG"
+          else
+            tag="$REF_NAME"
+          fi
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Release tag must match vMAJOR.MINOR.PATCH" >&2
+            exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Check out the annotated tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ steps.requested.outputs.tag }}
+          fetch-depth: 0
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Validate tag, version and release notes
+        id: release
+        env:
+          TAG: ${{ steps.requested.outputs.tag }}
+        run: |
+          test "$(git cat-file -t "$TAG")" = tag || {
+            echo "$TAG must be an annotated tag" >&2
+            exit 1
+          }
+          git fetch --no-tags origin main
+          commit="$(git rev-list -n 1 "$TAG")"
+          git merge-base --is-ancestor "$commit" origin/main || {
+            echo "$TAG is not reachable from main" >&2
+            exit 1
+          }
+          version="${TAG#v}"
+          project_version="$(mvn --batch-mode --no-transfer-progress \
+            help:evaluate -Dexpression=project.version -q -DforceStdout)"
+          [[ "$project_version" == "$version" ]] || {
+            echo "Tag $TAG does not match Maven version $project_version" >&2
+            exit 1
+          }
+          notes="docs/releases/${version}.md"
+          test -f "$notes"
+          for heading in \
+            '## What is new' \
+            '## Behaviour changes' \
+            "## Upgrading from" \
+            '## Scope and limitations' \
+            '## Verification'; do
+            grep -qF "$heading" "$notes"
+          done
+          grep -qF '**Full changelog:**' "$notes"
+          {
+            echo "version=$version"
+            echo "notes=$notes"
+            echo "commit=$commit"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Package executable JARs
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          mvn --batch-mode --no-transfer-progress -DskipTests package
+          mkdir -p dist/jars
+          cp "web/target/web-${VERSION}.jar" dist/jars/
+          cp "cli/target/cli-${VERSION}.jar" dist/jars/
+
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Derive image tags and labels
+        id: metadata
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            type=semver,pattern={{version}},value=${{ steps.requested.outputs.tag }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ steps.requested.outputs.tag }}
+            type=raw,value=latest
+          labels: |
+            org.opencontainers.image.title=database-backup-utility
+            org.opencontainers.image.description=Multi-database logical backup and restore
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ steps.release.outputs.commit }}
+
+      - name: Build and publish the Linux AMD64 image
+        id: image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.metadata.outputs.tags }}
+          labels: ${{ steps.metadata.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: false
+          sbom: false
+
+      - name: Generate image SBOM
+        uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
+        with:
+          image: ${{ env.IMAGE_NAME }}@${{ steps.image.outputs.digest }}
+          format: spdx-json
+          output-file: dist/database-backup-utility-${{ steps.release.outputs.version }}-image.spdx.json
+          dependency-snapshot: false
+          upload-artifact: false
+          upload-release-assets: false
+
+      - name: Generate JAR SBOM
+        uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
+        with:
+          path: dist/jars
+          format: spdx-json
+          output-file: dist/database-backup-utility-${{ steps.release.outputs.version }}-jars.spdx.json
+          dependency-snapshot: false
+          upload-artifact: false
+          upload-release-assets: false
+
+      - name: Create release checksums
+        run: |
+          mv dist/jars/*.jar dist/
+          rmdir dist/jars
+          cd dist
+          sha256sum ./*.jar ./*.spdx.json > SHA256SUMS
+
+      - name: Attest image provenance
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.image.outputs.digest }}
+          push-to-registry: true
+
+      - name: Attest image SBOM
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.image.outputs.digest }}
+          sbom-path: dist/database-backup-utility-${{ steps.release.outputs.version }}-image.spdx.json
+          push-to-registry: true
+
+      - name: Attest JAR provenance
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: |
+            dist/web-${{ steps.release.outputs.version }}.jar
+            dist/cli-${{ steps.release.outputs.version }}.jar
+
+      - name: Attest JAR SBOM
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: |
+            dist/web-${{ steps.release.outputs.version }}.jar
+            dist/cli-${{ steps.release.outputs.version }}.jar
+          sbom-path: dist/database-backup-utility-${{ steps.release.outputs.version }}-jars.spdx.json
+
+      - name: Create or refresh the GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.requested.outputs.tag }}
+          VERSION: ${{ steps.release.outputs.version }}
+          NOTES: ${{ steps.release.outputs.notes }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --title "$VERSION" --notes-file "$NOTES" --latest
+          else
+            gh release create "$TAG" --verify-tag --title "$VERSION" \
+              --notes-file "$NOTES" --latest
+          fi
+          gh release upload "$TAG" dist/* --clobber

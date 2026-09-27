@@ -19,7 +19,7 @@ COPY cli cli
 # real machine is the gate, and CI runs it.
 RUN --mount=type=cache,target=/root/.m2 mvn -B -DskipTests package
 
-FROM docker:27.5.1-cli AS docker-cli
+FROM docker:29.8.1-cli AS docker-cli
 
 
 FROM eclipse-temurin:21-jre-noble

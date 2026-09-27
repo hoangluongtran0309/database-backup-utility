@@ -349,6 +349,20 @@ Free test instead creates executable host wrappers that invoke the real
 `sqlplus`, `expdp` and `impdp` inside its Oracle container, keeping Oracle
 client packages off the runner.
 
+The assembled-system boundary is separate from those adapter tests. CI builds
+the release-shaped image, starts it with metadata PostgreSQL, and drives a
+SQLite backup, checksum, artifact download, isolated verification and restore
+through `/api/v1` using the bundled CLI. Representative authentication,
+terminal-job, corruption and atomic-download failures run in the same Compose
+environment. SQLite keeps this gate independent of the root-equivalent Docker
+socket while the adapter ITs retain real coverage for every network engine.
+
+Workflow lint, Maven verification, container build/Trivy scan, CodeQL,
+Dependency Review and this E2E path are independent required checks. An
+annotated release tag then publishes only the already-reviewed base image and
+executable JARs with checksums, SPDX SBOMs and attestations. See
+[ADR-032](../adr/032-required-ci-gates-and-attested-releases.md).
+
 ## Database migrations
 
 Flyway migrations live in `adapters/src/main/resources/db/migration/`, named

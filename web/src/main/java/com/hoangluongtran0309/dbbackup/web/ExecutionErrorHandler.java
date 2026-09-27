@@ -14,7 +14,7 @@ import org.springframework.web.servlet.view.RedirectView;
  * <p>Anything referenced by a URL can be gone by the time that URL is followed —
  * another tab, or another person. That is ordinary, not exceptional.
  */
-@ControllerAdvice
+@ControllerAdvice(basePackages = "com.hoangluongtran0309.dbbackup.web.controller")
 class ExecutionErrorHandler {
 
     @ExceptionHandler(NoSuchElementException.class)

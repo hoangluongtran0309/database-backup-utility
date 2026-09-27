@@ -1,0 +1,32 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: dbbackup
+      POSTGRES_USER: dbbackup
+      POSTGRES_PASSWORD: e2e-metadata-password
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dbbackup -d dbbackup"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  app:
+    image: ${DBBACKUP_E2E_IMAGE:?DBBACKUP_E2E_IMAGE is required}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/dbbackup
+      DB_USERNAME: dbbackup
+      DB_PASSWORD: e2e-metadata-password
+      ENCRYPTION_SECRET_KEY: ${DBBACKUP_E2E_ENCRYPTION_KEY:?DBBACKUP_E2E_ENCRYPTION_KEY is required}
+      OPERATOR_USERNAME: operator
+      OPERATOR_PASSWORD_HASH: ${DBBACKUP_E2E_PASSWORD_HASH:?DBBACKUP_E2E_PASSWORD_HASH is required}
+      DBBACKUP_VERIFICATION_ENABLED: 'true'
+      SQLITE_ROOT: /var/lib/dbbackup/sqlite
+      BACKUP_DIR: /var/lib/dbbackup/backups
+      STORAGE_STAGING_DIR: /var/lib/dbbackup/backups/.staging
+    volumes:
+      - ${DBBACKUP_E2E_WORK_DIR:?DBBACKUP_E2E_WORK_DIR is required}/sqlite:/var/lib/dbbackup/sqlite:z
+      - ${DBBACKUP_E2E_WORK_DIR:?DBBACKUP_E2E_WORK_DIR is required}/backups:/var/lib/dbbackup/backups:z

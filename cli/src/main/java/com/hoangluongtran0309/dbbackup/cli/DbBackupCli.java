@@ -124,8 +124,9 @@ public final class DbBackupCli {
                     + "/notifications", subscriptionBody(args));
             case "schedule list" -> get("api/v1/schedules");
             case "schedule show" -> get("api/v1/schedules/" + required(id, "--id"));
-            case "schedule add" -> body("POST", "api/v1/schedules", body(args, environment));
-            case "schedule update" -> body("PUT", "api/v1/schedules/" + required(id, "--id"), body(args, environment));
+            case "schedule add" -> body("POST", "api/v1/schedules", bodyWithTargetId(args, environment));
+            case "schedule update" -> body("PUT", "api/v1/schedules/" + required(id, "--id"),
+                    bodyWithTargetId(args, environment));
             case "schedule delete" -> body("DELETE", "api/v1/schedules/" + required(id, "--id"), null);
             case "retention list" -> get("api/v1/retention");
             case "retention show" -> get("api/v1/retention/" + required(targetId, "--target-id"));
@@ -145,7 +146,8 @@ public final class DbBackupCli {
             case "restore list" -> get("api/v1/restores?page=" + value(args, "page", "1")
                     + "&pageSize=" + value(args, "pageSize", "20"));
             case "restore show" -> get("api/v1/restores/" + required(id, "--id"));
-            case "restore run" -> async("POST", "api/v1/restores", body(args, environment), "restoreId", "api/v1/restores/%s");
+            case "restore run" -> async("POST", "api/v1/restores", bodyWithTargetId(args, environment),
+                    "restoreId", "api/v1/restores/%s");
             default -> throw new CliException(2, "Unknown command '" + args.group() + " " + args.action() + "'");
         };
     }
@@ -191,6 +193,13 @@ public final class DbBackupCli {
             body.put(parts[0], value);
         }
         return body;
+    }
+
+    /** `--target-id` usually selects a resource path, but these requests also own it as JSON data. */
+    static Map<String, Object> bodyWithTargetId(CliArguments args, Map<String, String> environment) {
+        Map<String, Object> result = new LinkedHashMap<>(body(args, environment));
+        result.put("targetId", required(args.optional("targetId"), "--target-id"));
+        return result;
     }
 
     private static String toKebab(String value) {
