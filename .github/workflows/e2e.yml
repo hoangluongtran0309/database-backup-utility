@@ -2,7 +2,7 @@ name: E2E
 
 on:
   push:
-    branches: [main, develop, 'release/*', 'hotfix/*']
+    branches: [main, develop]
   pull_request:
     branches: [main, develop]
   workflow_dispatch:
