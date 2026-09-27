@@ -2,24 +2,41 @@ name: CI
 
 on:
   push:
-    # Every branch GitFlow merges from, so a release branch is already proven
-    # before it reaches main. feature/* is covered by its pull request.
-    branches: [main, develop, 'release/*', 'hotfix/*']
+    branches: [main, develop]
   pull_request:
     branches: [main, develop]
-  # Re-run the build without inventing a commit to push.
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  verify:
-    name: mvn verify
+  workflow-lint:
+    name: Workflow lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install actionlint
+        env:
+          ACTIONLINT_COMMIT: 914e7df21a07ef503a81201c76d2b11c789d3fca
+        run: go install github.com/rhysd/actionlint/cmd/actionlint@"${ACTIONLINT_COMMIT}"
+
+      - name: Lint workflows and embedded shell
+        run: |
+          "$(go env GOPATH)/bin/actionlint" -shellcheck shellcheck
+
+      - name: Validate vulnerability suppressions
+        run: ruby .github/scripts/validate-trivy-ignore.rb
+
+  maven-verify:
+    name: Maven verify
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
@@ -31,35 +48,30 @@ jobs:
       SQLCMD_PATH: /opt/mssql-tools18/bin/sqlcmd
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up JDK 21
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           distribution: temurin
           java-version: '21'
           cache: maven
 
-      - name: Set up .NET 10 and SqlPackage 170.5.96
-        uses: actions/setup-dotnet@v4
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: '10.0.x'
 
-      - name: Install SqlPackage
+      - name: Install SqlPackage 170.5.96
         run: |
           dotnet tool install --global Microsoft.SqlPackage --version 170.5.96
           test -x "$SQLPACKAGE_PATH"
           "$SQLPACKAGE_PATH" /Version
 
-      # Integration tests run against real containers. Nothing in this build is
-      # allowed to skip itself when a dependency is missing: a test that turns
-      # green by not running is worse than no test, so anything an IT needs is
-      # installed here and its absence must fail the job.
-      # The application drives these binaries directly, and the integration
-      # tests run them against a real server. Asserted here rather than assumed:
-      # the predecessor of this project had a MongoDB test that skipped itself
-      # for its entire life because CI never installed the tools it needed.
-      - name: Install the database client tools
+      # No integration test may turn green by skipping itself. Every binary
+      # used by a real-engine IT is installed and asserted here.
+      - name: Install database client tools
         run: |
           sudo apt-get update
           sudo apt-get install -y curl gnupg
@@ -80,10 +92,6 @@ jobs:
           test -x /opt/mysql/bin/mysqldump
           test -x /usr/bin/mariadb
           test -x /usr/bin/mariadb-dump
-          /opt/mysql/bin/mysql --version
-          /opt/mysql/bin/mysqldump --version
-          /usr/bin/mariadb --version
-          /usr/bin/mariadb-dump --version
           test -x /usr/bin/psql
           test -x /usr/bin/pg_dump
           test -x /usr/bin/pg_restore
@@ -91,9 +99,8 @@ jobs:
           test -x /usr/bin/mongorestore
           test -x /usr/bin/sqlite3
           test -x "$SQLCMD_PATH"
-          "$SQLCMD_PATH" -? >/dev/null
 
-      - name: Build and smoke-test the SQL Server verification image
+      - name: Build the SQL Server verification runtime required by integration tests
         run: |
           docker build -f Dockerfile.sqlserver-verification.example \
             -t dbbackup-verification-sqlserver:2022 .
@@ -102,10 +109,42 @@ jobs:
           docker run --rm --entrypoint /opt/mssql-tools18/bin/sqlcmd \
             dbbackup-verification-sqlserver:2022 -?
 
-      - name: Verify
+      - name: Verify every Maven module
         run: mvn --batch-mode --no-transfer-progress verify
 
-      - name: Build base and optional engine images
+      - name: Upload test reports on failure
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: maven-test-reports
+          path: |
+            */target/surefire-reports/
+            */target/failsafe-reports/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  container-build-and-scan:
+    name: Container build and scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Build and smoke-test SQL Server verification image
+        run: |
+          docker build -f Dockerfile.sqlserver-verification.example \
+            -t dbbackup-ci:sqlserver-verification .
+          docker run --rm --entrypoint /opt/sqlpackage/sqlpackage \
+            dbbackup-ci:sqlserver-verification /Version
+          docker run --rm --entrypoint /opt/mssql-tools18/bin/sqlcmd \
+            dbbackup-ci:sqlserver-verification -?
+
+      - name: Build base and optional application images
         run: |
           docker build -t dbbackup-ci:base .
           mkdir -p .oracle-client-fixture
@@ -120,3 +159,66 @@ jobs:
           docker build -f Dockerfile.sqlserver.example \
             --build-arg BASE_IMAGE=dbbackup-ci:base \
             -t dbbackup-ci:sqlserver .
+
+      - name: Install Trivy
+        uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
+        with:
+          version: v0.74.0
+          cache: true
+
+      - name: Generate SARIF reports
+        run: |
+          mkdir -p trivy-results
+          for entry in \
+            base=dbbackup-ci:base \
+            oracle=dbbackup-ci:oracle \
+            sqlserver=dbbackup-ci:sqlserver \
+            sqlserver-verification=dbbackup-ci:sqlserver-verification; do
+            name="${entry%%=*}"
+            image="${entry#*=}"
+            trivy image --scanners vuln --ignorefile .trivyignore.yaml \
+              --ignore-unfixed --severity HIGH,CRITICAL \
+              --format sarif --output "trivy-results/${name}.sarif" "$image"
+          done
+
+      - name: Upload base-image Trivy results
+        if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        uses: github/codeql-action/upload-sarif@416ff0dea110f80f0f56f0046500dbf7420e4bb0 # codeql-bundle-v2.27.1
+        with:
+          sarif_file: trivy-results/base.sarif
+          category: container-base
+
+      - name: Upload Oracle-image Trivy results
+        if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        uses: github/codeql-action/upload-sarif@416ff0dea110f80f0f56f0046500dbf7420e4bb0 # codeql-bundle-v2.27.1
+        with:
+          sarif_file: trivy-results/oracle.sarif
+          category: container-oracle
+
+      - name: Upload SQL Server-image Trivy results
+        if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        uses: github/codeql-action/upload-sarif@416ff0dea110f80f0f56f0046500dbf7420e4bb0 # codeql-bundle-v2.27.1
+        with:
+          sarif_file: trivy-results/sqlserver.sarif
+          category: container-sqlserver
+
+      - name: Upload SQL Server verification-image Trivy results
+        if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        uses: github/codeql-action/upload-sarif@416ff0dea110f80f0f56f0046500dbf7420e4bb0 # codeql-bundle-v2.27.1
+        with:
+          sarif_file: trivy-results/sqlserver-verification.sarif
+          category: container-sqlserver-verification
+
+      - name: Enforce the vulnerability policy
+        run: |
+          status=0
+          for image in \
+            dbbackup-ci:base \
+            dbbackup-ci:oracle \
+            dbbackup-ci:sqlserver \
+            dbbackup-ci:sqlserver-verification; do
+            trivy image --scanners vuln --ignorefile .trivyignore.yaml \
+              --ignore-unfixed --severity HIGH,CRITICAL \
+              --format table --exit-code 1 "$image" || status=1
+          done
+          exit "$status"

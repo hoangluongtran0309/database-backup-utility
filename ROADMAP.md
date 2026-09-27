@@ -132,7 +132,10 @@ their design is decided.
       web process as the single owner of schedules and background jobs. See
       ADR-031.
 
-1. [ ] CI/CD, security scanning and end-to-end hardening.
+- [x] **30. CI/CD, security scanning and end-to-end hardening.** Require
+      independent Maven, container, CodeQL, dependency and deployed API/CLI
+      checks; publish an attested GHCR image, JARs, checksums and SBOMs from an
+      approved release tag. See ADR-032.
 
 ## Deliberately out of scope
 

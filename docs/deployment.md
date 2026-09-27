@@ -38,6 +38,25 @@ asks `/actuator/health`, so it only reports healthy once the application is up
 and the metadata store answers. That endpoint needs no sign-in and says UP or
 DOWN, nothing more.
 
+## Published releases
+
+An annotated release tag publishes the Linux AMD64 base image as
+`ghcr.io/hoangluongtran0309/database-backup-utility:<version>`, the matching
+`<major>.<minor>` tag and `latest`. Prefer the exact version or immutable digest
+in production. The GitHub Release contains executable web and CLI JARs,
+`SHA256SUMS`, and SPDX JSON SBOMs for both the image and JAR distribution.
+
+GitHub artifact attestations bind build provenance and the SBOMs to the image
+digest and JAR digests. Verify a downloaded artifact with `sha256sum -c` and
+GitHub's attestation tooling before deployment. The tag workflow rejects a
+lightweight tag, a snapshot version, a tag outside `main`, or a release without
+reviewed notes.
+
+Oracle and SQL Server application variants and the SQL Server verification
+image remain operator-built. Their client packs, EULAs and final contents are
+deployment-specific; scan those derived images after adding the real clients.
+See [ADR-032](adr/032-required-ci-gates-and-attested-releases.md).
+
 ## What an operator has to decide
 
 **How the operator API is reached.** The application exposes `/api/v1` on the

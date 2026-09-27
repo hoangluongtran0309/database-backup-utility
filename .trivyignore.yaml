@@ -1,0 +1,88 @@
+vulnerabilities:
+  # These findings originate in Go binaries shipped by Microsoft's current
+  # SQL Server 2022 base image. This project cannot rebuild those binaries and
+  # does not publish the derived verification image. Re-evaluate the upstream
+  # image before this temporary exception expires.
+  - id: CVE-2026-27145
+    paths: &sqlserver_upstream_go_binaries
+      - opt/mssql/bin/launchpadd
+      - opt/mssql/bin/setnetbr
+      - opt/mssql-extensibility/bin/launchpad
+    statement: Microsoft SQL Server 2022 upstream Go binary; monitor the base image for a patched rebuild.
+    expired_at: 2026-12-15
+  - id: CVE-2026-32280
+    paths: *sqlserver_upstream_go_binaries
+    statement: Microsoft SQL Server 2022 upstream Go binary; monitor the base image for a patched rebuild.
+    expired_at: 2026-12-15
+  - id: CVE-2026-32281
+    paths: *sqlserver_upstream_go_binaries
+    statement: Microsoft SQL Server 2022 upstream Go binary; monitor the base image for a patched rebuild.
+    expired_at: 2026-12-15
+  - id: CVE-2026-32283
+    paths: *sqlserver_upstream_go_binaries
+    statement: Microsoft SQL Server 2022 upstream Go binary; monitor the base image for a patched rebuild.
+    expired_at: 2026-12-15
+  - id: CVE-2026-33810
+    paths: *sqlserver_upstream_go_binaries
+    statement: Microsoft SQL Server 2022 upstream Go binary; monitor the base image for a patched rebuild.
+    expired_at: 2026-12-15
+  - id: CVE-2026-33811
+    paths: *sqlserver_upstream_go_binaries
+    statement: Microsoft SQL Server 2022 upstream Go binary; monitor the base image for a patched rebuild.
+    expired_at: 2026-12-15
+  - id: CVE-2026-33814
+    paths: *sqlserver_upstream_go_binaries
+    statement: Microsoft SQL Server 2022 upstream Go binary; monitor the base image for a patched rebuild.
+    expired_at: 2026-12-15
+  - id: CVE-2026-33818
+    paths: *sqlserver_upstream_go_binaries
+    statement: Microsoft SQL Server 2022 upstream Go binary; monitor the base image for a patched rebuild.
+    expired_at: 2026-12-15
+  - id: CVE-2026-39820
+    paths: *sqlserver_upstream_go_binaries
+    statement: Microsoft SQL Server 2022 upstream Go binary; monitor the base image for a patched rebuild.
+    expired_at: 2026-12-15
+  - id: CVE-2026-39821
+    paths: *sqlserver_upstream_go_binaries
+    statement: Microsoft SQL Server 2022 upstream Go binary; monitor the base image for a patched rebuild.
+    expired_at: 2026-12-15
+  - id: CVE-2026-39822
+    paths: *sqlserver_upstream_go_binaries
+    statement: Microsoft SQL Server 2022 upstream Go binary; monitor the base image for a patched rebuild.
+    expired_at: 2026-12-15
+  - id: CVE-2026-39836
+    paths: *sqlserver_upstream_go_binaries
+    statement: Microsoft SQL Server 2022 upstream Go binary; monitor the base image for a patched rebuild.
+    expired_at: 2026-12-15
+  - id: CVE-2026-42499
+    paths: *sqlserver_upstream_go_binaries
+    statement: Microsoft SQL Server 2022 upstream Go binary; monitor the base image for a patched rebuild.
+    expired_at: 2026-12-15
+  - id: CVE-2026-42504
+    paths: *sqlserver_upstream_go_binaries
+    statement: Microsoft SQL Server 2022 upstream Go binary; monitor the base image for a patched rebuild.
+    expired_at: 2026-12-15
+  - id: CVE-2026-46600
+    paths: *sqlserver_upstream_go_binaries
+    statement: Microsoft SQL Server 2022 upstream Go binary; monitor the base image for a patched rebuild.
+    expired_at: 2026-12-15
+  - id: CVE-2026-56853
+    paths: *sqlserver_upstream_go_binaries
+    statement: Microsoft SQL Server 2022 upstream Go binary; monitor the base image for a patched rebuild.
+    expired_at: 2026-12-15
+  - id: CVE-2026-56858
+    paths: *sqlserver_upstream_go_binaries
+    statement: Microsoft SQL Server 2022 upstream Go binary; monitor the base image for a patched rebuild.
+    expired_at: 2026-12-15
+  - id: CVE-2026-56859
+    paths: *sqlserver_upstream_go_binaries
+    statement: Microsoft SQL Server 2022 upstream Go binary; monitor the base image for a patched rebuild.
+    expired_at: 2026-12-15
+  - id: CVE-2026-56860
+    paths: *sqlserver_upstream_go_binaries
+    statement: Microsoft SQL Server 2022 upstream Go binary; monitor the base image for a patched rebuild.
+    expired_at: 2026-12-15
+  - id: CVE-2026-56862
+    paths: *sqlserver_upstream_go_binaries
+    statement: Microsoft SQL Server 2022 upstream Go binary; monitor the base image for a patched rebuild.
+    expired_at: 2026-12-15

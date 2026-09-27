@@ -9,7 +9,8 @@
 
 ## Definition of done
 
-- [ ] Works end to end from the browser — no manual SQL needed to use it
+- [ ] Works end to end through its public browser or API/CLI boundary — no
+      manual SQL needed to use it
 - [ ] `mvn verify` green from a clean checkout, and green because the tests
       **ran**: nothing skips itself when a binary or container is missing
 - [ ] Unit tests are `*Test.java`, container tests are `*IT.java`, no H2
@@ -20,3 +21,4 @@
 - [ ] `README.md` updated if the way to run it or its configuration changed
 - [ ] `docs/` describes the code as it now is
 - [ ] An ADR added only if this made a decision with a real trade-off
+- [ ] Required CI, container, security and E2E checks are green

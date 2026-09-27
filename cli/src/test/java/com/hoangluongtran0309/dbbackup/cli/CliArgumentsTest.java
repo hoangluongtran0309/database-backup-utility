@@ -56,6 +56,31 @@ class CliArgumentsTest {
     }
 
     @Test
+    void includesTargetIdWhenItBelongsToTheRequestBody() {
+        CliArguments args = CliArguments.parse(new String[] {
+                "restore", "run", "--target-id", "9adf8c38-083c-4660-bef1-2680409ad922",
+                "--backup-execution-id", "00139ab6-7994-4913-bdbe-9fc2d29c3194",
+                "--confirmation", "recovery"
+        }, Map.of());
+
+        assertThat(DbBackupCli.bodyWithTargetId(args, Map.of()))
+                .containsEntry("targetId", "9adf8c38-083c-4660-bef1-2680409ad922")
+                .containsEntry("backupExecutionId", "00139ab6-7994-4913-bdbe-9fc2d29c3194")
+                .containsEntry("confirmation", "recovery");
+    }
+
+    @Test
+    void requiresTargetIdForBodiesThatOwnIt() {
+        CliArguments args = CliArguments.parse(new String[] {
+                "schedule", "add", "--name", "nightly"
+        }, Map.of());
+
+        assertThatThrownBy(() -> DbBackupCli.bodyWithTargetId(args, Map.of()))
+                .isInstanceOf(CliException.class)
+                .hasMessage("--target-id is required");
+    }
+
+    @Test
     void rejectsAResourceSecretPlacedDirectlyOnArgv() {
         CliArguments args = CliArguments.parse(new String[] {
                 "target", "add", "--password", "visible-to-ps"
