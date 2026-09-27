@@ -100,6 +100,15 @@ jobs:
           test -x /usr/bin/sqlite3
           test -x "$SQLCMD_PATH"
 
+      - name: Build the SQL Server verification runtime required by integration tests
+        run: |
+          docker build -f Dockerfile.sqlserver-verification.example \
+            -t dbbackup-verification-sqlserver:2022 .
+          docker run --rm --entrypoint /opt/sqlpackage/sqlpackage \
+            dbbackup-verification-sqlserver:2022 /Version
+          docker run --rm --entrypoint /opt/mssql-tools18/bin/sqlcmd \
+            dbbackup-verification-sqlserver:2022 -?
+
       - name: Verify every Maven module
         run: mvn --batch-mode --no-transfer-progress verify
 
@@ -172,12 +181,33 @@ jobs:
               --format sarif --output "trivy-results/${name}.sarif" "$image"
           done
 
-      - name: Upload Trivy results
+      - name: Upload base-image Trivy results
         if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         uses: github/codeql-action/upload-sarif@416ff0dea110f80f0f56f0046500dbf7420e4bb0 # codeql-bundle-v2.27.1
         with:
-          sarif_file: trivy-results
-          category: container-images
+          sarif_file: trivy-results/base.sarif
+          category: container-base
+
+      - name: Upload Oracle-image Trivy results
+        if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        uses: github/codeql-action/upload-sarif@416ff0dea110f80f0f56f0046500dbf7420e4bb0 # codeql-bundle-v2.27.1
+        with:
+          sarif_file: trivy-results/oracle.sarif
+          category: container-oracle
+
+      - name: Upload SQL Server-image Trivy results
+        if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        uses: github/codeql-action/upload-sarif@416ff0dea110f80f0f56f0046500dbf7420e4bb0 # codeql-bundle-v2.27.1
+        with:
+          sarif_file: trivy-results/sqlserver.sarif
+          category: container-sqlserver
+
+      - name: Upload SQL Server verification-image Trivy results
+        if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        uses: github/codeql-action/upload-sarif@416ff0dea110f80f0f56f0046500dbf7420e4bb0 # codeql-bundle-v2.27.1
+        with:
+          sarif_file: trivy-results/sqlserver-verification.sarif
+          category: container-sqlserver-verification
 
       - name: Enforce the vulnerability policy
         run: |
