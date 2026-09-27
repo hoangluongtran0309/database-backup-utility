@@ -238,7 +238,7 @@ public class OperatorApiController {
     }
 
     @GetMapping("/backups/{id}/artifact")
-    ResponseEntity<InputStreamResource> download(@PathVariable UUID id) {
+    ResponseEntity<?> download(@PathVariable UUID id) {
         var download = artifacts.download(id);
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION,

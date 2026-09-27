@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.time.Instant;
 import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
@@ -137,6 +138,18 @@ class OperatorApiControllerTest {
         mvc.perform(get("/api/v1/backups").param("pageSize", "101"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error.code").value("VALIDATION_ERROR"));
+    }
+
+    @Test
+    void missingArtifactDownloadKeepsTheJsonErrorContract() throws Exception {
+        UUID backupId = UUID.randomUUID();
+        when(artifacts.download(backupId)).thenThrow(new NoSuchElementException("No backup execution"));
+
+        mvc.perform(get("/api/v1/backups/{id}/artifact", backupId)
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.ok").value(false))
+                .andExpect(jsonPath("$.error.code").value("RESOURCE_NOT_FOUND"));
     }
 
     private static DatabaseTarget target(String name) {

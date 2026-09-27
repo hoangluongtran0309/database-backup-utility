@@ -90,8 +90,10 @@ class ApiClientTest {
             exchange.close();
         });
         server.createContext("/api/v1/backups/missing/artifact", exchange -> {
-            byte[] response = "{\"ok\":false,\"error\":{\"message\":\"artifact missing\"}}"
+            byte[] response = ("{\"ok\":false,\"data\":null,\"error\":{"
+                    + "\"code\":\"RESOURCE_NOT_FOUND\",\"message\":\"artifact missing\",\"field\":null}}")
                     .getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Content-Type", "application/json");
             exchange.sendResponseHeaders(404, response.length);
             exchange.getResponseBody().write(response);
             exchange.close();
@@ -106,7 +108,11 @@ class ApiClientTest {
         assertThat(Files.readAllBytes(destination)).containsOnly((byte) 0x5a);
 
         assertThatThrownBy(() -> client.download("api/v1/backups/missing/artifact", destination))
-                .isInstanceOf(CliException.class).hasMessage("artifact missing");
+                .isInstanceOfSatisfying(CliException.class, error -> {
+                    assertThat(error.exitCode()).isEqualTo(3);
+                    assertThat(error.envelope().path("error").path("code").asText())
+                            .isEqualTo("RESOURCE_NOT_FOUND");
+                }).hasMessage("artifact missing");
         assertThat(Files.size(destination)).isEqualTo(artifact.length);
     }
 
