@@ -6,6 +6,12 @@ slice in [ROADMAP.md](../../ROADMAP.md#fixes-from-the-0190-walkthrough); its
 status changes to *Fixed in slice N* in the commit that fixes it. The suggested fixes are
 starting points for that review, not decisions.
 
+ISSUE-15 to ISSUE-17 were found on 2026-10-02 by the feature tour behind
+[docs/FEATURES.md](../FEATURES.md), run against `develop` at `5282738` with all
+seven engines, the three remote storage emulators and restore verification
+enabled. They are assigned to the slices under
+[Fixes from the 0.20.0 feature tour](../../ROADMAP.md#fixes-from-the-0200-feature-tour).
+
 Severity scale: **High**: data loss, or a documented feature that cannot work.
 **Medium**: a feature fails in a common setup, or the diagnosis is misleading.
 **Low**: usability, wording or consistency.
@@ -26,6 +32,9 @@ Severity scale: **High**: data loss, or a documented feature that cannot work.
 | [ISSUE-12](#issue-12) | Low | Storage UI | Azure profiles say "bucket" where Azure has a "container" | 35 |
 | [ISSUE-13](#issue-13) | Low | Schedules UI | The cron hint is fixed text, not a description of the entered expression | 35 |
 | [ISSUE-14](#issue-14) | Low | CLI | `--output text` (the default) prints JSON | 34 |
+| [ISSUE-15](#issue-15) | High | Oracle pack | `Dockerfile.oracle.example` cannot build with Instant Client 23.26: its `ldd` check runs without `LD_LIBRARY_PATH` | 37 |
+| [ISSUE-16](#issue-16) | Low | UI layout | Between 1400 px and about 1560 px the targets and storage tables still scroll sideways and hide most action buttons | 38 |
+| [ISSUE-17](#issue-17) | Low | Notifications | Lifecycle webhook payloads send `channel.id` and `channel.name` as `null` | 39 |
 
 ---
 
@@ -429,6 +438,89 @@ document that `text` means "unwrapped JSON".
 
 ---
 
+## ISSUE-15
+
+**`Dockerfile.oracle.example` cannot build with Oracle Instant Client 23.26**
+
+- **Severity:** High (the documented Oracle pack cannot be built)
+- **Area:** `Dockerfile.oracle.example:27-33`
+- **Status:** Open, assigned to slice 37.
+
+**Steps to reproduce:** download the current Linux x64 Instant Client Basic,
+SQL*Plus and Tools archives (23.26.2.0.0), copy `instantclient_23_26/*` into
+`oracle-client/` as the Dockerfile header says, and run
+`docker build -f Dockerfile.oracle.example --build-arg BASE_IMAGE=dbbackup:base .`.
+
+**Actual:** the build stops in the dependency check:
+
+```
+libsqlplus.so => not found
+libclntsh.so.23.1 => not found
+libclntshcore.so.23.1 => not found
+libnnz.so => not found
+```
+
+None of `sqlplus`, `expdp` or `impdp` in this release has an `RPATH` or
+`RUNPATH` (`readelf -d` shows none), so `ldd` resolves the Instant Client
+libraries only through `LD_LIBRARY_PATH`. The image sets that variable with
+`ENV` *after* the `RUN` that calls `ldd`. The CI image `dbbackup-ci:oracle`
+uses stub tools, so CI does not catch it.
+
+**Workaround used in the tour:** a copy of the Dockerfile in which the check
+runs `LD_LIBRARY_PATH=/opt/oracle/instantclient ldd "$path"`. The resulting
+image backed up, restored and verified Oracle Free 23 successfully.
+
+**Suggested fix:** export `LD_LIBRARY_PATH` for the check (or move the `ENV`
+above the `RUN`), and add a CI step that runs the check against a real Instant
+Client layout or an equivalent fixture without RPATH.
+
+---
+
+## ISSUE-16
+
+**The targets and storage tables still scroll sideways between 1400 px and about 1560 px**
+
+- **Severity:** Low
+- **Area:** `web/src/main/resources/static/css/app.css:292` (`@media (max-width: 1399px)`)
+- **Status:** Open, assigned to slice 38.
+
+Slice 35 switches the targets and storage tables to labelled cards below
+1400 px. At a 1440 px wide window the main column is 1090 px wide, but the
+targets table needs 1540 px, so it scrolls sideways again. Only **Test** and
+**Back up now** are visible; **Schedule**, **Retention**, **Notifications**,
+**Edit** and **Remove** sit off-screen behind a horizontal scrollbar
+([screenshot](../tour/images/04-targets-tested.jpg)). The storage table shows the same scrollbar
+([screenshot](../tour/images/14-storage-profiles-passed.jpg)).
+
+**Suggested fix:** base the switch on the table's own width (a container
+query on `.table-wrap`) rather than the viewport, or raise the breakpoint to
+cover the measured table width plus the sidebar.
+
+---
+
+## ISSUE-17
+
+**Lifecycle webhook payloads send `channel.id` and `channel.name` as `null`**
+
+- **Severity:** Low
+- **Area:** `application/.../notification/NotificationDispatcher.java:55-76`
+- **Status:** Open, assigned to slice 39.
+
+ADR-028 promises that the generic webhook body carries the channel identity.
+A **Send test** delivery does carry it. A real `BACKUP_SUCCESS` delivery for
+the same channel arrives as
+`"channel": {"id": null, "name": null}`
+([screenshot](../tour/images/24-webhook-delivery.jpg)). `publishBackup`,
+`publishRestore` and `publishVerification` build one `NotificationMessage`
+with `null, null` for the channel fields and send that same message to every
+subscribed channel.
+
+**Suggested fix:** in `publish`, copy the message with the channel's id and
+name before `send(channel, ...)`, and assert the field in the webhook adapter
+test for a lifecycle event.
+
+---
+
 ## Not counted as issues (environment limits)
 
 - **Slack and Telegram** were not test-sent, because they would contact real
@@ -437,3 +529,8 @@ document that `text` means "unwrapped JSON".
   structure check, but it is why ISSUE-02 went unnoticed.
 - **MinIO** could no longer be pulled from Docker Hub or quay.io without
   credentials, so S3 was tested with `adobe/s3mock`.
+- **SELinux (Fedora, enforcing)** denied the containers access to their bind
+  mounts and the application container access to `/var/run/docker.sock`. The
+  feature tour relabelled its mounts with `:z` and ran the application with
+  `security_opt: [label=disable]`. This is host policy, not an application
+  defect; [deployment](../deployment.md) now describes it.
