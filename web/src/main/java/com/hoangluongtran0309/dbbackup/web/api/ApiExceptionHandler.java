@@ -21,6 +21,7 @@ import com.hoangluongtran0309.dbbackup.core.exception.NotificationChannelInUseEx
 import com.hoangluongtran0309.dbbackup.core.exception.RestoreFailedException;
 import com.hoangluongtran0309.dbbackup.core.exception.StorageProfileInUseException;
 import com.hoangluongtran0309.dbbackup.core.exception.TargetInUseException;
+import com.hoangluongtran0309.dbbackup.web.api.ApiEnvelope.ApiFieldError;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -34,23 +35,33 @@ public class ApiExceptionHandler {
 
     @ExceptionHandler(InvalidTargetException.class)
     ResponseEntity<?> invalidTarget(InvalidTargetException error) {
-        return failure(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", error.getMessage(), error.getField());
+        return validation(error.getField(), error.getMessage());
     }
 
     @ExceptionHandler(InvalidScheduleException.class)
     ResponseEntity<?> invalidSchedule(InvalidScheduleException error) {
-        return failure(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", error.getMessage(), error.getField());
+        return validation(error.getField(), error.getMessage());
     }
 
     @ExceptionHandler(InvalidRetentionPolicyException.class)
     ResponseEntity<?> invalidRetention(InvalidRetentionPolicyException error) {
-        return failure(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", error.getMessage(), error.getField());
+        return validation(error.getField(), error.getMessage());
     }
 
-    @ExceptionHandler({IllegalArgumentException.class, HttpMessageNotReadableException.class,
-            MethodArgumentTypeMismatchException.class, MissingServletRequestParameterException.class})
+    @ExceptionHandler(ApiValidationException.class)
+    ResponseEntity<?> invalidRequest(ApiValidationException error) {
+        return ResponseEntity.badRequest().body(ApiEnvelope.validationFailure(error.errors()));
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    ResponseEntity<?> unreadableBody() {
+        return validation(null, "Request body is not valid JSON");
+    }
+
+    @ExceptionHandler({IllegalArgumentException.class, MethodArgumentTypeMismatchException.class,
+            MissingServletRequestParameterException.class})
     ResponseEntity<?> badRequest(Exception error) {
-        return failure(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", useful(error), null);
+        return validation(null, useful(error));
     }
 
     @ExceptionHandler({IllegalStateException.class, DuplicateTargetNameException.class,
@@ -72,6 +83,11 @@ public class ApiExceptionHandler {
     private static ResponseEntity<ApiEnvelope<Void>> failure(
             HttpStatus status, String code, String message, String field) {
         return ResponseEntity.status(status).body(ApiEnvelope.failure(code, message, field));
+    }
+
+    private static ResponseEntity<ApiEnvelope<Void>> validation(String field, String message) {
+        return ResponseEntity.badRequest().body(
+                ApiEnvelope.validationFailure(java.util.List.of(new ApiFieldError(field, message))));
     }
 
     private static String useful(Exception error) {

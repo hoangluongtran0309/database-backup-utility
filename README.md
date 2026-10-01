@@ -75,7 +75,9 @@ versioned `/api/v1` HTTP API and the bundled `dbbackup` CLI. The API owns no
 second scheduler or worker: it calls the same application services as the web
 console, while the CLI remains a stateless client. See
 [ADR-031](docs/adr/031-cli-over-the-operator-http-api.md) and the
-[HTTP API reference](docs/http-api.md).
+[HTTP API reference](docs/http-api.md). Validation responses retain their
+first `message`/`field` pair and also return every detectable field error; see
+[ADR-036](docs/adr/036-stable-operator-contracts.md).
 
 Published releases include the Linux AMD64 base image on GHCR, executable web
 and CLI JARs, SHA-256 checksums, SPDX SBOMs and GitHub artifact attestations.
@@ -196,6 +198,8 @@ The CLI accepts `DBBACKUP_API_URL`, `DBBACKUP_API_USERNAME` and
 `DBBACKUP_API_PASSWORD`, or `--server`, `--username`, `--password-file` and
 `--password-stdin`. Plain HTTP is accepted only for loopback unless
 `--allow-http` is explicit. Remote deployments should always use HTTPS.
+Default text output uses tables for collections and key/value sections for
+details. Use `--output json` for a stable complete envelope in automation.
 
 Commands follow `dbbackup <resource> <action>`, for example:
 

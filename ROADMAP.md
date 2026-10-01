@@ -153,9 +153,9 @@ Each slice below fixes a group of them and marks them fixed there.
 - [x] **33. A current PostgreSQL client.** Back up PostgreSQL 17 with the
       shipped image, and make the connection test catch a client/server
       mismatch. ISSUE-03. See ADR-035.
-- [ ] **34. API, CLI and webhook contracts.** Optional `verifyAfterBackup`,
+- [x] **34. API, CLI and webhook contracts.** Optional `verifyAfterBackup`,
       every validation error at once, ISO-8601 webhook timestamps, readable CLI
-      text output. ISSUE-09, ISSUE-10, ISSUE-11, ISSUE-14.
+      text output. ISSUE-09, ISSUE-10, ISSUE-11, ISSUE-14. See ADR-036.
 - [ ] **35. Console layout and wording.** Table and header layout at laptop
       widths, target form autofill, Azure wording and the cron hint. ISSUE-06,
       ISSUE-07, ISSUE-08, ISSUE-12, ISSUE-13.
