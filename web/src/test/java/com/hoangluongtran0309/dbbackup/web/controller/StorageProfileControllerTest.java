@@ -130,6 +130,8 @@ class StorageProfileControllerTest {
     void azureFormUsesAzureDefaultCredentialsAndAzureFields() throws Exception {
         mvc.perform(get("/storage/new").param("provider", "AZURE_BLOB"))
                 .andExpect(status().isOk())
+                .andExpect(content().string(containsString("The container must already exist")))
+                .andExpect(content().string(not(containsString("The bucket must already exist"))))
                 .andExpect(content().string(containsString("Storage account name")))
                 .andExpect(content().string(containsString("Azure Default Credential")))
                 .andExpect(content().string(containsString("name=\"accountKey\"")))
@@ -171,6 +173,11 @@ class StorageProfileControllerTest {
     void listsTheBuiltInDestinationAndProfiles() throws Exception {
         when(service.listAll()).thenReturn(List.of(profile(UUID.randomUUID())));
         mvc.perform(get("/storage")).andExpect(status().isOk())
+                .andExpect(content().string(containsString("page-header page-header-laptop-stack")))
+                .andExpect(content().string(containsString(
+                        "table-wrap responsive-cards responsive-cards-laptop")))
+                .andExpect(content().string(containsString("Bucket / container")))
+                .andExpect(content().string(containsString("data-label=\"Bucket\"")))
                 .andExpect(content().string(containsString("Local filesystem")))
                 .andExpect(content().string(containsString("archive")));
     }
@@ -181,6 +188,7 @@ class StorageProfileControllerTest {
 
         mvc.perform(get("/storage")).andExpect(status().isOk())
                 .andExpect(content().string(containsString("Azure Blob Storage")))
+                .andExpect(content().string(containsString("data-label=\"Container\"")))
                 .andExpect(content().string(containsString(
                         "https://backupaccount.blob.core.windows.net")))
                 .andExpect(content().string(containsString("Storage account key")))

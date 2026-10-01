@@ -72,7 +72,11 @@ class BackupScheduleControllerTest {
                 .andExpect(view().name("schedule/form"))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString(
                         "value=\"" + TARGET_ID + "\" selected")))
-                .andExpect(content().string(org.hamcrest.Matchers.containsString("value=\"0 0 2 * * ?\"")));
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("value=\"0 0 2 * * ?\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("For example,")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("runs every day at 02:00:00")))
+                .andExpect(content().string(org.hamcrest.Matchers.not(
+                        org.hamcrest.Matchers.containsString("means every day"))));
     }
 
     @Test

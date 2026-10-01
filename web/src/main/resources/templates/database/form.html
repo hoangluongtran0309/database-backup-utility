@@ -19,7 +19,7 @@
     </div>
   </div>
 
-  <form class="form-panel" method="post" th:object="${form}"
+  <form class="form-panel" method="post" th:object="${form}" autocomplete="off"
         th:action="@{${editing == null ? '/databases' : '/databases/' + editing.id}}">
 
     <div th:replace="~{fragments/form-errors :: formErrors}"></div>
@@ -101,10 +101,11 @@
 
       <div class="form-group" th:if="${editing == null or editing.engine.name() != 'SQLITE'}"
            data-network-target-field>
-        <label for="username">Username</label>
-        <input id="username" type="text" th:field="*{username}" autocomplete="off" maxlength="128"
-               th:attr="aria-invalid=${#fields.hasErrors('username')} ? 'true' : null">
-        <div th:replace="~{fragments/field-error :: fieldError('username')}"></div>
+        <label for="databaseUsername">Username</label>
+        <input id="databaseUsername" type="text" th:field="*{databaseUsername}"
+               autocomplete="off" maxlength="128"
+               th:attr="aria-invalid=${#fields.hasErrors('databaseUsername')} ? 'true' : null">
+        <div th:replace="~{fragments/field-error :: fieldError('databaseUsername')}"></div>
       </div>
 
       <div class="form-group"
@@ -138,13 +139,13 @@
       <div class="form-group form-group-full"
            th:if="${editing == null or editing.engine.name() != 'SQLITE'}"
            data-network-target-field>
-        <label for="password">Password</label>
-        <input id="password" type="password" th:field="*{password}"
-               autocomplete="new-password" aria-describedby="password-help"
-               th:attr="aria-invalid=${#fields.hasErrors('password')} ? 'true' : null">
+        <label for="databasePassword">Password</label>
+        <input id="databasePassword" type="password" th:field="*{databasePassword}"
+               autocomplete="off" aria-describedby="password-help"
+               th:attr="aria-invalid=${#fields.hasErrors('databasePassword')} ? 'true' : null">
         <p class="field-hint" id="password-help" th:if="${editing == null}">Encrypted before it is stored, and never shown again.</p>
         <p class="field-hint" id="password-help" th:unless="${editing == null}">Leave empty to keep the current password. A new one is encrypted before it is stored.</p>
-        <div th:replace="~{fragments/field-error :: fieldError('password')}"></div>
+        <div th:replace="~{fragments/field-error :: fieldError('databasePassword')}"></div>
       </div>
 
       <div class="form-group form-group-full">

@@ -19,14 +19,14 @@
     No targets yet. <a th:href="@{/databases/new}">Add one</a> to get started.
   </p>
 
-  <div class="table-wrap responsive-cards" th:unless="${targets.isEmpty()}">
+  <div class="table-wrap responsive-cards responsive-cards-laptop" th:unless="${targets.isEmpty()}">
     <table>
       <thead>
         <tr>
           <th scope="col">Name</th>
           <th scope="col">Engine</th>
-          <th scope="col">Location</th>
           <th scope="col">Destination</th>
+          <th scope="col">Address</th>
           <th scope="col">Last check</th>
           <th scope="col">Last backup</th>
           <th scope="col"><span class="visually-hidden">Actions</span></th>

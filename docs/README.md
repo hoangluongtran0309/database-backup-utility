@@ -16,9 +16,9 @@
   the decisions were made.
 
 The current last decision is
-[ADR-036](adr/036-stable-operator-contracts.md), which aggregates operator API
-validation, gives the CLI real text output and makes webhook timestamps
-lossless ISO-8601 strings.
+[ADR-037](adr/037-console-layout-and-credential-autofill.md), which keeps wide
+console resources usable at laptop widths and separates database credential
+fields from the operator sign-in form.
 
 These pages describe the code that exists. When a slice changes the code, it
 changes these files in the same commit.

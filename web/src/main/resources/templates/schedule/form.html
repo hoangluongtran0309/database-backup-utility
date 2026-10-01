@@ -39,7 +39,7 @@
         <input id="cronExpression" class="mono" type="text" th:field="*{cronExpression}" maxlength="120"
                aria-describedby="cron-help"
                th:classappend="${#fields.hasErrors('cronExpression')} ? 'input-error'">
-        <p class="field-hint" id="cron-help"><span class="mono">0 0 2 * * ?</span> means every day at 02:00:00.</p>
+        <p class="field-hint" id="cron-help">For example, <span class="mono">0 0 2 * * ?</span> runs every day at 02:00:00.</p>
         <div th:replace="~{fragments/field-error :: fieldError('cronExpression')}"></div>
       </div>
 
