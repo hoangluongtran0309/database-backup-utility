@@ -6,6 +6,8 @@ import java.nio.file.CopyOption;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -16,6 +18,16 @@ import org.springframework.stereotype.Component;
 @Component
 @ConditionalOnProperty(name = "dbbackup.oracle.enabled", havingValue = "true")
 class OracleDataPumpFiles {
+
+    /**
+     * Data Pump creates its files readable only by the Oracle server's user and
+     * group, and Oracle must read the files the application stages for import.
+     * See ADR-034.
+     */
+    static final String SHARED_GROUP_HINT = "Configure ORACLE_DATAPUMP_ROOT with a group shared by the "
+            + "application and the Oracle server, add the application to that numeric group, and make the "
+            + "directory setgid so application-staged files inherit it (or configure equivalent ACLs; "
+            + "see docs/deployment.md).";
 
     private final Path root;
 
@@ -48,13 +60,23 @@ class OracleDataPumpFiles {
         return file("dbbackup-probe-", operationId, ".tmp");
     }
 
+    void writeProbe(Path path) {
+        requireOwnedPath(path);
+        try {
+            Files.writeString(path, "dbbackup probe\n", StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
+        } catch (IOException e) {
+            throw new UncheckedIOException("Could not create the application-side Oracle staging probe '"
+                    + path + "'", e);
+        }
+    }
+
     void copyFromDataPump(Path staged, Path destination) {
-        requireRegular(staged, "Oracle Data Pump did not produce a readable dump file");
+        requireReadableRegularFile(staged, "Oracle Data Pump did not produce a readable dump file");
         copy(staged, destination);
     }
 
     void stageForImport(Path artifact, Path staged) {
-        requireRegular(artifact, "The Oracle backup artifact is missing or unreadable");
+        requireReadableRegularFile(artifact, "The Oracle backup artifact is missing or unreadable");
         copy(artifact, staged);
         try {
             if (Files.mismatch(artifact, staged) != -1) {
@@ -100,9 +122,30 @@ class OracleDataPumpFiles {
         }
     }
 
-    private static void requireRegular(Path path, String message) {
-        if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS) || !Files.isReadable(path)) {
+    void requireReadableRegularFile(Path path, String message) {
+        if (Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS) && !Files.isReadable(path)) {
+            throw new IllegalStateException("%s: %s exists but the application cannot read it (%s). %s"
+                    .formatted(message, path, ownership(path), SHARED_GROUP_HINT));
+        }
+        if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
             throw new IllegalStateException(message + ": " + path);
+        }
+    }
+
+    String oracleReadFailure(Path path, String oracleError) {
+        return "Oracle cannot read the file staged by the application at %s (%s). %s Oracle reported: %s"
+                .formatted(path, ownership(path), SHARED_GROUP_HINT, oracleError);
+    }
+
+    /** Owner, group and mode of a file, or why they could not be read. */
+    static String ownership(Path path) {
+        try {
+            return "owner uid %s, gid %s, mode %s".formatted(
+                    Files.getAttribute(path, "unix:uid", LinkOption.NOFOLLOW_LINKS),
+                    Files.getAttribute(path, "unix:gid", LinkOption.NOFOLLOW_LINKS),
+                    PosixFilePermissions.toString(Files.getPosixFilePermissions(path, LinkOption.NOFOLLOW_LINKS)));
+        } catch (IOException | UnsupportedOperationException e) {
+            return "ownership unavailable: " + e.getMessage();
         }
     }
 

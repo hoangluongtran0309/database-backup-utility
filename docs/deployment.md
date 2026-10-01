@@ -245,8 +245,39 @@ GRANT READ, WRITE ON DIRECTORY DBBACKUP_PUMP_DIR TO APP_OWNER;
 Mount that same bind/NFS/shared storage into the Oracle-pack application image
 at `ORACLE_DATAPUMP_ROOT` (the example image uses
 `/var/lib/dbbackup/oracle-datapump`). The two path strings need not match, but
-they must be views of the same files. The connection test proves both the
-Oracle grant and that shared visibility by creating and removing a probe.
+they must be views of the same files.
+
+Both processes must also be able to read files created by the other. Use the
+Oracle server's Data Pump group as a supplemental group for the application,
+identified by its numeric GID rather than a container-local group name. For an
+Oracle image whose `oinstall` GID is `54321`, prepare the host directory and
+application service like this:
+
+```bash
+sudo chgrp 54321 /srv/dbbackup/oracle-datapump
+sudo chmod 2770 /srv/dbbackup/oracle-datapump
+```
+
+```yaml
+services:
+  app:
+    group_add:
+      - "54321"
+    volumes:
+      - /srv/dbbackup/oracle-datapump:/var/lib/dbbackup/oracle-datapump
+```
+
+Use the actual group from the Oracle server; `54321` is only the common
+`oinstall` default. Mode `2770` gives both members access and makes new files
+inherit the shared group. On storage where numeric groups are unsuitable, an
+access ACL plus a matching default ACL may provide the same bidirectional
+rights. Do not solve this by making Data Pump files world-readable.
+
+The connection test first has Oracle create a probe that the application
+reads, then has the application create one that Oracle reads. A failure reports
+the path and, where supported, numeric owner, group and POSIX mode. Data Pump
+itself can create a stricter mode than `UTL_FILE`, so backup validates the
+finished dump and reports the same ownership details if it remains unreadable.
 Oracle local storage that the application cannot mount, including ASM-only
 staging, is not supported.
 
@@ -254,8 +285,11 @@ Build `Dockerfile.oracle.example` only after extracting operator-supplied
 Instant Client Basic, SQL*Plus and Tools archives and consolidating their
 `instantclient_*` contents under `oracle-client/`. Build the ordinary image as
 `dbbackup:base`, then pass it as `BASE_IMAGE`. The variant enables Oracle and
-sets all four Oracle paths; override them for a different layout. The base
-image remains unchanged.
+sets all four Oracle paths; override them for a different layout. Ubuntu 24.04
+renames the asynchronous-I/O library to `libaio.so.1t64`; the variant supplies
+Oracle's required `libaio.so.1` compatibility name and rejects unresolved
+SQL\*Plus or Data Pump dependencies during its build. The base image remains
+unchanged.
 
 The Oracle login user is also the schema being backed up and must already
 exist. Restore may remap a dump from another source schema into that login,

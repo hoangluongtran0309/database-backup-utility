@@ -158,14 +158,18 @@ replace the destination. See
 [ADR-019](../adr/019-sqlite-files-below-one-root.md).
 
 Oracle is an optional, all-or-nothing adapter pack. SQL*Plus probes the login,
-directory grant and shared mount with `UTL_FILE`. Data Pump exports the login
-schema to shared staging and copies a completed `.dmp` into artifact storage.
+directory grant and shared mount in both directions: the application reads an
+Oracle-created `UTL_FILE`, then Oracle reads an application-created file. Data
+Pump exports the login schema to shared staging and copies a completed `.dmp`
+into artifact storage.
 Restore stages and byte-compares the artifact, uses `impdp SQLFILE` as a
 non-mutating preflight, then imports with replacement, portable transforms and
 schema remapping. Stable job names derived from execution UUIDs let timeout
 handling and startup repair attach and issue `KILL_JOB`; staging is retained
 when termination cannot be confirmed. See
 [ADR-020](../adr/020-oracle-data-pump-shared-staging-and-optional-client-pack.md).
+The optional image runtime and staging ownership contract are refined by
+[ADR-034](../adr/034-oracle-pack-runtime-and-shared-staging-permissions.md).
 
 SQL Server is another optional, all-or-nothing pack. `sqlcmd` runs `SELECT 1`
 over an encrypted connection. SqlPackage exports a validated `.bacpac` and

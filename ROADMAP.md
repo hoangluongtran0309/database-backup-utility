@@ -147,9 +147,9 @@ Each slice below fixes a group of them and marks them fixed there.
       `<targetId>/<executionId>/<file>`, like remote keys, so two backups can
       never share a file, and refuse to overwrite one that exists. ISSUE-01,
       ISSUE-05. See ADR-033.
-- [ ] **32. A working Oracle pack.** Provide `libaio.so.1` in the Oracle image
+- [x] **32. A working Oracle pack.** Provide `libaio.so.1` in the Oracle image
       and document the Data Pump staging ownership, with a precise error
-      message. ISSUE-02, ISSUE-04.
+      message. ISSUE-02, ISSUE-04. See ADR-034.
 - [ ] **33. A current PostgreSQL client.** Back up PostgreSQL 17 with the
       shipped image, and make the connection test catch a client/server
       mismatch. ISSUE-03.
