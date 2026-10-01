@@ -4,150 +4,97 @@
 [![Security](https://github.com/hoangluongtran0309/database-backup-utility/actions/workflows/security.yml/badge.svg)](https://github.com/hoangluongtran0309/database-backup-utility/actions/workflows/security.yml)
 [![E2E](https://github.com/hoangluongtran0309/database-backup-utility/actions/workflows/e2e.yml/badge.svg)](https://github.com/hoangluongtran0309/database-backup-utility/actions/workflows/e2e.yml)
 
-MySQL, MariaDB, PostgreSQL, MongoDB, SQLite, optional Oracle and optional SQL
-Server logical backup and restore, driven from a small web console or operator CLI.
+Logical backup and restore for **MySQL, MariaDB, PostgreSQL, MongoDB and
+SQLite**, plus **Oracle** and **SQL Server** through optional client packs.
+You drive it from a small web console, a versioned HTTP API or the `dbbackup`
+CLI. Artifacts go to local disk, S3-compatible storage, Google Cloud Storage or
+Azure Blob Storage.
 
-The scope is deliberately narrow: **full logical dumps and same-engine restores**
-to local disk, S3-compatible storage, Google Cloud Storage or Azure Blob Storage. MySQL, MariaDB, PostgreSQL, MongoDB, SQLite, Oracle and SQL Server
-are implemented. There is no physical
-backup, incremental chain or point-in-time recovery.
-Each capability arrives as one complete vertical slice, code and documentation
-together. See [ROADMAP.md](ROADMAP.md) for what exists and what is next.
+![Running a backup with automatic restore verification](docs/tour/gifs/run-backup.gif)
 
-## What works today
+The scope is deliberately narrow: **full logical dumps and same-engine
+restores**. There are no physical backups, no incremental chains and no
+point-in-time recovery. Each capability arrives as one complete vertical slice,
+code and documentation together; [ROADMAP.md](ROADMAP.md) shows what exists
+and what comes next.
 
-Registering a MySQL, MariaDB, PostgreSQL, MongoDB or SQLite target — plus
-Oracle or SQL Server when its optional client pack is enabled — testing it, running a full
-logical backup of it, restoring one of those backups into a target of the
-same engine, downloading or deleting its artifact, and reading the history of
-all of it. The target's password is encrypted with AES-256-GCM before it is
-stored.
+**→ [Feature guide with screenshots](docs/FEATURES.md)**
 
-The built-in local filesystem remains the default destination. The Storage
-page can add S3-compatible profiles with static credentials or the AWS default
-credential chain, and GCS profiles with Application Default Credentials (ADC)
-or an encrypted service-account JSON key. Azure profiles use Azure Default
-Credential or an encrypted storage-account key. Each profile is tested with a
-create/metadata-read/content-read/delete probe and can be selected per target.
-Existing backups keep their original destination when a target is changed.
-Remote artifacts are staged locally only for dump/restore and the staging copy
-is removed afterwards. See
-[ADR-025](docs/adr/025-s3-storage-profiles-and-local-staging.md) and
-[ADR-026](docs/adr/026-google-cloud-storage-profiles.md), and
-[ADR-027](docs/adr/027-azure-blob-storage-profiles.md).
+## Contents
 
-Named Quartz schedules can run the same full backup path on a recurring cron
-expression in an explicit IANA time zone. They can be created, edited, paused
-and deleted from the console, and show their next run. Schedule definitions
-survive restarts; a fire missed while the application is stopped is not
-replayed. See
-[ADR-023](docs/adr/023-quartz-triggers-are-derived-from-backup-schedules.md).
+- [Highlights](#highlights)
+- [Screenshots](#screenshots)
+- [Supported engines](#supported-engines)
+- [Quick start with Docker](#quick-start-with-docker)
+- [Operator CLI](#operator-cli)
+- [Optional Oracle pack](#optional-oracle-pack)
+- [Optional SQL Server pack](#optional-sql-server-pack)
+- [Restore verification](#restore-verification)
+- [Configuration](#configuration)
+- [Building from source](#building-from-source)
+- [Tests](#tests)
+- [Releases and CI](#releases-and-ci)
+- [Contributing](#contributing)
+- [Documentation](#documentation)
 
-Automatic retention is optional per target. After a successful backup it can
-keep the newest configured number of successful copies and remove older
-artifacts. Backups with any restore history are always protected in addition to
-that number, and the console shows the latest cleanup outcome. See
-[ADR-024](docs/adr/024-retention-keeps-new-unrestored-backups-per-target.md).
+## Highlights
 
-Reusable Telegram, Slack, Email and generic Webhook channels can notify the
-owners of each target about selected backup and restore lifecycle events.
-Restore notifications follow the destination target and identify both source
-and destination. Delivery is best-effort with finite timeouts: a notification
-failure never changes a backup or restore result. Channel secrets are encrypted
-and never shown again; Email uses optional deployment-wide SMTP settings. See
-[ADR-028](docs/adr/028-target-scoped-notification-channels.md).
+- **Seven engines, each with its own client tools.** `mysqldump`,
+  `mariadb-dump`, `pg_dump` 17, `mongodump`, `sqlite3`, Oracle Data Pump and
+  SqlPackage. Every artifact stays in the engine's normal format.
+- **Restore anywhere of the same engine.** You can restore into the source or
+  into a scratch database for a drill. You confirm by typing the destination's
+  name.
+- **Four destinations.** Local filesystem, S3-compatible, Google Cloud Storage
+  and Azure Blob, each with a built-in connection probe and selectable per
+  target.
+- **Integrity first.** Every artifact gets a SHA-256 that is checked before
+  every restore, and can be re-checked on demand.
+- **Isolated restore verification.** It restores into a disposable database
+  and health-checks it, either on demand or automatically after each backup.
+- **Automation.** Quartz cron schedules in any IANA time zone, and per-target
+  retention that never prunes backups with restore history.
+- **Notifications.** Telegram, Slack, Email and generic Webhook channels,
+  subscribed per target and per event.
+- **Operator API and CLI.** `/api/v1` and `dbbackup` use the same services as
+  the console. Secrets never travel on the command line.
+- **Secure by default.** One bcrypt-hashed operator account, CSRF on every
+  form, and AES-256-GCM for every stored credential.
 
-A network target's connection details — name, host, port, user, password and, for
-MongoDB, its authentication database — can be edited without touching its
-backups, so a rotated password is an edit rather
-than a new target. Its engine and database are fixed once registered: changing
-either means registering another target. See
-[ADR-012](docs/adr/012-editing-a-target-keeps-its-schema.md). A SQLite target
-instead names an immutable relative file below `SQLITE_ROOT` and has no
-credentials.
+## Screenshots
 
-The console asks you to sign in first. There is one operator account, set from
-the environment with a bcrypt hash, and every form carries a CSRF token. See
-[ADR-011](docs/adr/011-one-operator-account-from-the-environment.md).
-Database credential fields use a separate browser form identity from that
-operator login. At laptop widths, the wide target and storage tables become
-labelled cards and action-heavy headers stack without hiding controls; see
-[ADR-037](docs/adr/037-console-layout-and-credential-autofill.md).
+| Targets across engines | Restore with typed confirmation |
+| --- | --- |
+| ![Targets](docs/tour/images/04-targets-tested.jpg) | ![Restore confirmation](docs/tour/images/09-restore-confirm.jpg) |
+| **Remote storage profiles** | **Restore verification (SQL Server)** |
+| ![Storage profiles](docs/tour/images/14-storage-profiles-passed.jpg) | ![Verification](docs/tour/images/36-restore-verification-sqlserver.jpg) |
 
-The same operator can automate every management and execution flow through the
-versioned `/api/v1` HTTP API and the bundled `dbbackup` CLI. The API owns no
-second scheduler or worker: it calls the same application services as the web
-console, while the CLI remains a stateless client. See
-[ADR-031](docs/adr/031-cli-over-the-operator-http-api.md) and the
-[HTTP API reference](docs/http-api.md). Validation responses retain their
-first `message`/`field` pair and also return every detectable field error; see
-[ADR-036](docs/adr/036-stable-operator-contracts.md).
+More in the [feature guide](docs/FEATURES.md); all media is in
+[docs/tour/](docs/tour/).
 
-Published releases include the Linux AMD64 base image on GHCR, executable web
-and CLI JARs, SHA-256 checksums, SPDX SBOMs and GitHub artifact attestations.
-Every protected-branch change must pass Maven, container/security and deployed
-API/CLI checks. See
-[ADR-032](docs/adr/032-required-ci-gates-and-attested-releases.md) and the
-[security policy](SECURITY.md).
+## Supported engines
 
-Backups run in the background: starting one redirects to its detail page, which
-follows it and updates when it finishes — restores likewise. The backup and
-restore lists show fifty at a time, newest first, with links to newer and older
-pages. See
-[ADR-010](docs/adr/010-the-detail-page-follows-a-running-job.md). The target
-list shows each target's newest good backup, and flags a newer attempt that
-failed. MySQL and MariaDB artifacts are gzipped SQL named
-`<database>_<timestamp>.sql.gz`; each is produced and consumed by that
-engine's own client tools. PostgreSQL artifacts are custom-format
-archives named `<database>_<timestamp>.dump` and can be inspected with
-`pg_restore --list`; MongoDB artifacts are compressed archives named
-`<database>_<timestamp>.archive.gz`; SQLite artifacts are gzipped SQL named
-`<file>_<timestamp>.sql.gz`; Oracle artifacts are schema-mode Data Pump files
-named `<service>_<timestamp>.dmp`; SQL Server artifacts are BACPAC files named
-`<database>_<timestamp>.bacpac`. On the local filesystem each one is stored in
-a directory of its own, `<target-id>/<execution-id>/`, the same shape as a
-remote object key, so two backups never share a file. See
-[ADR-033](docs/adr/033-local-artifacts-live-per-target-and-execution.md).
+| Engine | Availability | Client tools | Artifact |
+| --- | --- | --- | --- |
+| MySQL | Base image | `mysql`, `mysqldump` | `<database>_<timestamp>.sql.gz` |
+| MariaDB | Base image | `mariadb`, `mariadb-dump` | `<database>_<timestamp>.sql.gz` |
+| PostgreSQL (servers up to 17) | Base image | `psql`, `pg_dump`, `pg_restore` 17 | `<database>_<timestamp>.dump` (custom format) |
+| MongoDB | Base image | `mongodump`, `mongorestore` | `<database>_<timestamp>.archive.gz` |
+| SQLite | Base image | `sqlite3` | `<file>_<timestamp>.sql.gz` |
+| Oracle 19c+ | [Optional pack](#optional-oracle-pack) | SQL\*Plus, `expdp`, `impdp` | `<service>_<timestamp>.dmp` (schema-mode Data Pump) |
+| SQL Server | [Optional pack](#optional-sql-server-pack) | `sqlcmd`, SqlPackage 170.5.96 | `<database>_<timestamp>.bacpac` |
 
-Each backup records the SHA-256 of its artifact — the same value `sha256sum`
-prints for the download. The backup's page can verify the file against it, and
-every restore checks it first: an artifact that has changed in storage is not
-applied. Backups made before 0.2.0 show "Not recorded". See
-[ADR-013](docs/adr/013-a-checksum-for-every-artifact.md).
+On the local filesystem every artifact lives in its own
+`<target-id>/<execution-id>/` directory, the same shape as a remote object key,
+so two backups never share a file
+([ADR-033](docs/adr/033-local-artifacts-live-per-target-and-execution.md)).
+Restore behaviour differs by engine; see the
+[feature guide](docs/FEATURES.md#at-a-glance).
 
-Restoring overwrites live data, so it asks: the confirmation page names the
-database and you type the target's name to proceed. Network-engine restores
-apply the dump rather than recreating the database, so objects the backup does
-not contain are left alone. SQLite instead replaces the complete destination
-after rebuilding and validating a temporary database. SQL Server is the
-exception: SqlPackage import accepts only a database that is missing or has no
-user-defined objects. This application refuses a non-empty destination and
-never drops or clears it. See
-[ADR-007](docs/adr/007-restore-applies-a-dump-and-asks-first.md) and
-[ADR-022](docs/adr/022-sql-server-bacpac-and-optional-client-pack.md).
+## Quick start with Docker
 
-A backup can be restored into any registered target of the same engine, not
-only the one it was taken from — so a restore drill can go into a scratch
-database and leave production alone. Cross-engine conversion is not supported.
-MongoDB restores rewrite `<source>.*` namespaces to `<destination>.*`, replace
-the collections present in the archive, and leave unrelated collections alone.
-The name to type is the destination's. Removing a target removes the records of
-restores into it. See
-[ADR-014](docs/adr/014-restore-into-any-registered-target.md).
-
-Deleting a backup removes its file, its row and any restore records that refer
-to it — the confirmation page counts them first. Several can be ticked on the
-backup list and deleted together. A target can be removed with all its backups
-by typing its name. Optional per-target retention can prune older successful
-backups after a new successful copy exists; failed attempts and backups with
-restore history remain until manually removed. See
-[ADR-008](docs/adr/008-deleting-a-backup-takes-its-history-with-it.md),
-[ADR-015](docs/adr/015-deleting-many-backups-and-a-target-with-them.md), and
-[ADR-024](docs/adr/024-retention-keeps-new-unrestored-backups-per-target.md).
-
-## Running it
-
-### With Docker — nothing else needed
+The host needs only Docker. Create an encryption key and a bcrypt hash of the
+console password:
 
 ```bash
 echo "ENCRYPTION_SECRET_KEY=$(openssl rand -base64 32)" > .env
@@ -162,25 +109,42 @@ without the leading colon and **in single quotes**, or compose will read each
 OPERATOR_PASSWORD_HASH='$2y$12$…'
 ```
 
+Then start the application and its PostgreSQL metadata store:
+
 ```bash
 docker compose up --build
 ```
 
-Then open <http://localhost:8080> and sign in as `admin` with that password
-(`OPERATOR_USERNAME` changes the name). The image carries the MySQL, MariaDB,
-PostgreSQL 17, MongoDB and SQLite client tools, so the host needs only Docker.
-Oracle and SQL Server are deliberately absent from that base image; see
-[Optional Oracle pack](#optional-oracle-pack) and
-[Optional SQL Server pack](#optional-sql-server-pack).
+Open <http://localhost:8080> and sign in as `admin` with that password
+(`OPERATOR_USERNAME` changes the name).
 
-Keep that key. Passwords encrypted under one key cannot be read back under
-another, and there is no recovery path.
+> **Keep the encryption key.** Credentials encrypted under one key cannot be
+> read back under another, and there is no recovery path.
 
-### Operator CLI
+Things to know:
 
-The image contains a `dbbackup` command. It connects to the application API on
-loopback by default, so no metadata database credential or Docker socket is
-given to the CLI:
+- **Databases on the Docker host.** A MySQL, MariaDB, PostgreSQL, MongoDB or
+  SQL Server instance running on the host is reachable from the container as
+  `host.docker.internal`. Use that as the target's host, not `localhost`.
+- **SQLite files.** They are mounted from `${SQLITE_HOST_DIR:-./sqlite}`.
+  Register each path relative to that directory, and make sure uid 10001 can
+  read the source and write the destination for restores.
+- **Where backups go.** Backups live in the named volume `backups`, so they
+  outlive the container.
+- **When it won't start.** `docker compose logs app` says why. With
+  `restart: unless-stopped`, a bad configuration shows as a restart loop while
+  `docker compose ps` still reports `Up`.
+- **Oracle and SQL Server.** Neither is in the base image; see the optional
+  packs below.
+
+Production concerns (TLS, cookie security, backups of the metadata store) are
+covered in [docs/deployment.md](docs/deployment.md).
+
+## Operator CLI
+
+The image contains a `dbbackup` command. By default it talks to the
+application API on loopback, so the CLI never needs a metadata database
+credential or the Docker socket:
 
 ```bash
 export DBBACKUP_API_PASSWORD='the same operator password used by the console'
@@ -198,14 +162,7 @@ DBBACKUP_API_PASSWORD='operator password' \
   java -jar cli/target/cli-*.jar target list
 ```
 
-The CLI accepts `DBBACKUP_API_URL`, `DBBACKUP_API_USERNAME` and
-`DBBACKUP_API_PASSWORD`, or `--server`, `--username`, `--password-file` and
-`--password-stdin`. Plain HTTP is accepted only for loopback unless
-`--allow-http` is explicit. Remote deployments should always use HTTPS.
-Default text output uses tables for collections and key/value sections for
-details. Use `--output json` for a stable complete envelope in automation.
-
-Commands follow `dbbackup <resource> <action>`, for example:
+Commands follow `dbbackup <resource> <action>`:
 
 ```bash
 dbbackup backup run --target-id 9f... --output json
@@ -216,44 +173,54 @@ dbbackup subscription set --target-id 7b... \
   --subscription 4c...:BACKUP_FAILED,RESTORE_FAILED,VERIFICATION_FAILED
 ```
 
-Target, storage and notification credentials are deliberately rejected as
-ordinary options because argv is visible to other processes. Bind a supported
-secret field to an environment variable instead:
+Credentials never go on the command line:
 
-```bash
-export TARGET_DATABASE_PASSWORD='database secret'
-dbbackup target add --name production --engine MYSQL --host db.internal \
-  --port 3306 --database shop --username backup \
-  --secret password=TARGET_DATABASE_PASSWORD
-```
+- **Operator login.** The CLI reads `DBBACKUP_API_URL`, `DBBACKUP_API_USERNAME`
+  and `DBBACKUP_API_PASSWORD`, or `--server`, `--username`, `--password-file`
+  and `--password-stdin`.
+- **Resource credentials.** Target, storage and notification credentials are
+  rejected as ordinary options, because argv is visible to other processes.
+  Bind them to an environment variable instead:
 
-Asynchronous backup, restore and restore-verification commands wait for a
-terminal result by default and return exit code `5` on a failed execution.
-`--no-wait` returns as soon as the server accepts the job. Run
-`dbbackup help` for the resource/action matrix.
+  ```bash
+  export TARGET_DATABASE_PASSWORD='database secret'
+  dbbackup target add --name production --engine MYSQL --host db.internal \
+    --port 3306 --database shop --username backup \
+    --secret password=TARGET_DATABASE_PASSWORD
+  ```
 
-A MySQL, MariaDB, PostgreSQL, MongoDB or SQL Server instance running on the Docker host is
-reachable from the container as `host.docker.internal` — use that as the
-target's host, not `localhost`.
+Other behaviour:
 
-SQLite files are mounted from `${SQLITE_HOST_DIR:-./sqlite}` into the image.
-Register their path relative to that directory and ensure uid 10001 can read
-the source and write the destination for restores.
+- **HTTP vs HTTPS.** Plain HTTP is accepted only for loopback unless
+  `--allow-http` is given. Remote deployments should always use HTTPS.
+- **Output.** Default text output prints tables for collections and key/value
+  sections for details. `--output json` prints the complete, stable envelope
+  for automation.
+- **Waiting.** Backup, restore and restore-verification commands wait for a
+  final result and return exit code `5` on a failed execution. `--no-wait`
+  returns as soon as the server accepts the job.
 
-### Optional Oracle pack
+Run `dbbackup help` for the full matrix, and see the
+[HTTP API reference](docs/http-api.md) and
+[ADR-031](docs/adr/031-cli-over-the-operator-http-api.md).
 
-Oracle 19c+ support uses server-side Data Pump and is disabled by default. Give
-the target schema `READ, WRITE` on a directory object whose filesystem path is
-shared with the application container, for example:
+## Optional Oracle pack
+
+Oracle 19c+ support uses server-side Data Pump and is disabled by default.
+
+**1. Grant a directory object.** Give the target schema `READ, WRITE` on a
+directory object whose filesystem path is shared with the application
+container:
 
 ```sql
 CREATE DIRECTORY DBBACKUP_PUMP_DIR AS '/srv/dbbackup/oracle-datapump';
 GRANT READ, WRITE ON DIRECTORY DBBACKUP_PUMP_DIR TO APP_OWNER;
 ```
 
-Extract operator-supplied Oracle Instant Client Basic, SQL*Plus and Tools and
-copy the contents of their common `instantclient_*` directory into
-`oracle-client/`. Then build the base image and the example variant:
+**2. Build the image.** Extract operator-supplied Oracle Instant Client Basic,
+SQL\*Plus and Tools, and copy the contents of their common `instantclient_*`
+directory into `oracle-client/`. Then build the base image and the example
+variant:
 
 ```bash
 docker build -t dbbackup:base .
@@ -261,24 +228,33 @@ docker build -f Dockerfile.oracle.example \
   --build-arg BASE_IMAGE=dbbackup:base -t dbbackup:oracle .
 ```
 
-Run that image with the shared bind/NFS directory mounted at
-`/var/lib/dbbackup/oracle-datapump`. Set `ORACLE_ENABLED=true` (already set by
-the example image) and register the service name, schema/login user and
-directory object. The path referenced by Oracle may differ from the container
-mount path, but both must resolve to the same storage. Give the directory one
-numeric group shared by the Oracle server and application containers, add the
-application to it with Compose `group_add` (or `docker run --group-add`), and
-make the directory group-owned and setgid with mode `2770`; equivalent ACLs
-are also supported. **Test** verifies access in both directions. Full
-deployment details and restore limitations are in
+> Instant Client 23.26 currently fails the example's library check; see
+> [ISSUE-15](docs/walkthrough/ISSUES.md#issue-15) for the cause and workaround.
+
+**3. Share the staging directory.**
+
+- Mount the shared bind or NFS directory at
+  `/var/lib/dbbackup/oracle-datapump`.
+- `ORACLE_ENABLED=true` is already set by the example image.
+- Register the service name, the schema/login user and the directory object.
+- The path Oracle sees may differ from the container mount path, but both must
+  resolve to the same storage.
+- Give the directory one numeric group shared by the Oracle server and the
+  application containers, and add the application to it with Compose
+  `group_add` (or `docker run --group-add`).
+- Make the directory group-owned and setgid with mode `2770`; equivalent ACLs
+  also work.
+
+**Test** checks access in both directions. Full deployment details and restore
+limitations are in
 [ADR-020](docs/adr/020-oracle-data-pump-shared-staging-and-optional-client-pack.md)
 and [ADR-034](docs/adr/034-oracle-pack-runtime-and-shared-staging-permissions.md).
 
-### Optional SQL Server pack
+## Optional SQL Server pack
 
 SQL Server support uses `sqlcmd` for probes and SqlPackage 170.5.96 for BACPAC
-export/import. It is disabled by default. Build the base image and the supplied
-Linux x86-64 variant:
+export and import. It is disabled by default. Build the base image and the
+supplied Linux x86-64 variant:
 
 ```bash
 docker build -t dbbackup:base .
@@ -286,31 +262,178 @@ docker build -f Dockerfile.sqlserver.example \
   --build-arg BASE_IMAGE=dbbackup:base -t dbbackup:sqlserver .
 ```
 
-The variant supplies .NET 10, SqlPackage and `mssql-tools18`, and enables the
-complete SQL Server adapter set. Connections are encrypted and validate the
-server certificate and hostname by default. For a deliberately self-signed
-development server only, set `SQLSERVER_TRUST_SERVER_CERTIFICATE=true`.
-SqlPackage [stages table data during export/import](https://learn.microsoft.com/en-us/sql/tools/sqlpackage/troubleshooting-issues-and-performance-with-sqlpackage?view=sql-server-ver17),
-so provision additional free space under `SQLSERVER_TEMP_DIR` comparable to the database being processed.
-BACPAC is intended here for databases below roughly 200 GB; use SQL Server's
-native physical backup tooling for larger databases.
+- **What it adds.** The variant supplies .NET 10, SqlPackage and
+  `mssql-tools18`, and enables the complete SQL Server adapter set.
+- **Certificates.** Connections are encrypted and validate the server
+  certificate and hostname by default. Only for a deliberately self-signed
+  development server, set `SQLSERVER_TRUST_SERVER_CERTIFICATE=true`.
+- **Disk space.** SqlPackage
+  [stages table data during export and import](https://learn.microsoft.com/en-us/sql/tools/sqlpackage/troubleshooting-issues-and-performance-with-sqlpackage?view=sql-server-ver17),
+  so provision free space under `SQLSERVER_TEMP_DIR` comparable to the
+  database being processed.
+- **Database size.** BACPAC is intended here for databases below roughly
+  200 GB; use SQL Server's native physical backups for larger ones.
+- **Restore rule.** Restores accept only a destination that is missing or has
+  no user-defined objects. A non-empty destination is refused and never
+  dropped or cleared
+  ([ADR-022](docs/adr/022-sql-server-bacpac-and-optional-client-pack.md)).
 
-Backups live in a named volume, `backups`, so they survive the container. If the
-application will not start, `docker compose logs app` says why; note that with
-`restart: unless-stopped` a bad configuration shows as a restart loop while
-`docker compose ps` still reports `Up`.
+## Restore verification
 
-### From source
+Restore verification is opt-in. When it is on:
 
-Requires JDK 21, Maven, Docker, the MySQL client binaries (`mysql` and
-`mysqldump`), the MariaDB client binaries (`mariadb` and `mariadb-dump`), the
-PostgreSQL 17 client binaries (`psql`, `pg_dump` and `pg_restore`), MongoDB
-Database Tools (`mongodump` and `mongorestore`), and `sqlite3` on the host. If
-SQL Server is enabled, SqlPackage 170.5.96 and `sqlcmd` from `mssql-tools18`
-are also required. The
-application drives those directly and refuses to start if it cannot find them; see
-[ADR-003](docs/adr/003-shelling-out-to-the-mysql-client.md) and
-[ADR-017](docs/adr/017-route-logical-backups-by-database-engine.md).
+- **Test restore** restores a backup into a disposable database of the same
+  engine.
+- That database is health-checked and then removed.
+- Each target can also verify automatically after every successful backup.
+
+Setup:
+
+- **Turn it on.** Set `DBBACKUP_VERIFICATION_ENABLED=true`.
+- **Network engines.** Uncomment the socket mount and the `group_add` block in
+  `docker-compose.yml`, and set `DOCKER_SOCKET_GID` to the host socket's group
+  id. The image already contains the Docker CLI, and verification containers
+  publish no database ports. On SELinux hosts, also see
+  [deployment](docs/deployment.md).
+- **SQLite.** Needs no socket, but uses the same switch.
+- **SQL Server.** First build its self-contained verification image:
+  `docker build -f Dockerfile.sqlserver-verification.example -t dbbackup-verification-sqlserver:2022 .`
+
+> **Docker-socket access is equivalent to root control of the Docker host.**
+> Expose it only to a trusted application deployment.
+
+The Oracle Free image terms and the SQL Server EULA remain the operator's
+responsibility. See
+[ADR-029](docs/adr/029-isolated-restore-verification.md) and
+[ADR-030](docs/adr/030-oracle-and-sql-server-restore-verification.md).
+
+## Configuration
+
+All settings are environment variables.
+
+### Core
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `ENCRYPTION_SECRET_KEY` | *none, required* | Base64 of 32 random bytes; the AES-256-GCM key for stored credentials |
+| `OPERATOR_PASSWORD_HASH` | *none, required* | bcrypt hash (cost ≥ 10) of the console password; anything else stops startup |
+| `OPERATOR_USERNAME` | `admin` | The one account that can sign in |
+| `SESSION_TIMEOUT` | `30m` | A signed-in console left idle this long signs out |
+| `SESSION_COOKIE_SECURE` | `false` | Send the session cookie over HTTPS only; set `true` behind a TLS proxy, see [deployment](docs/deployment.md) |
+
+### Metadata store
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `DB_URL` | `jdbc:postgresql://localhost:5432/dbbackup` | PostgreSQL metadata store |
+| `DB_USERNAME` | `dbbackup` | Metadata store user |
+| `DB_PASSWORD` | `dbbackup` | Metadata store password |
+
+### Storage and jobs
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `BACKUP_DIR` | `./backups` | Local artifacts, one `<target-id>/<execution-id>/` directory per backup; created at startup. Relative paths follow the working directory, so `mvn -pl web spring-boot:run` puts it under `web/`. The image sets `/var/lib/dbbackup/backups`. |
+| `STORAGE_STAGING_DIR` | `<BACKUP_DIR>/.staging` | Per-job staging for remote storage; needs room for one artifact per concurrent job and is cleaned after each operation |
+| `JOB_CONCURRENCY` | `2` | How many backups and restores may run at once, together |
+| `JOB_QUEUE_CAPACITY` | `20` | Beyond this, a job is refused and recorded as failed |
+| `BACKUP_TIMEOUT` | `30m` | A dump running longer than this is killed |
+| `RESTORE_TIMEOUT` | `60m` | A restore running longer than this is killed |
+
+### Email notifications
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `DBBACKUP_SMTP_HOST` | empty | Deployment-wide SMTP host; empty disables Email delivery without blocking startup |
+| `DBBACKUP_SMTP_PORT` | `587` | SMTP port |
+| `DBBACKUP_SMTP_USERNAME` | empty | Optional SMTP username |
+| `DBBACKUP_SMTP_PASSWORD` | empty | Optional SMTP password |
+| `DBBACKUP_SMTP_FROM` | `dbbackup@localhost` | Sender address for Email channels |
+| `DBBACKUP_SMTP_AUTH` | `true` | Enable SMTP authentication |
+| `DBBACKUP_SMTP_STARTTLS` | `true` | Upgrade SMTP connections with STARTTLS |
+
+### Restore verification
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `DBBACKUP_VERIFICATION_ENABLED` | `false` | Enable manual and per-target automatic isolated restore verification |
+| `DBBACKUP_VERIFICATION_MYSQL_IMAGE` | `mysql:8.4` | Disposable MySQL image |
+| `DBBACKUP_VERIFICATION_MARIADB_IMAGE` | `mariadb:10.11` | Disposable MariaDB image |
+| `DBBACKUP_VERIFICATION_POSTGRESQL_IMAGE` | `postgres:17-alpine` | Disposable PostgreSQL image |
+| `DBBACKUP_VERIFICATION_MONGODB_IMAGE` | `mongo:8.0` | Disposable MongoDB image |
+| `DBBACKUP_VERIFICATION_ORACLE_IMAGE` | `gvenzl/oracle-free:23-slim-faststart` | Disposable Oracle Free image |
+| `DBBACKUP_VERIFICATION_SQLSERVER_IMAGE` | `dbbackup-verification-sqlserver:2022` | Operator-built SQL Server image containing SqlPackage |
+| `DBBACKUP_VERIFICATION_PULL_TIMEOUT` | `10m` | Maximum image pull duration |
+| `DBBACKUP_VERIFICATION_STARTUP_TIMEOUT` | `2m` | Maximum disposable database startup duration |
+| `DBBACKUP_VERIFICATION_ORACLE_STARTUP_TIMEOUT` | `10m` | Oracle Free startup timeout |
+| `DBBACKUP_VERIFICATION_SQLSERVER_STARTUP_TIMEOUT` | `5m` | SQL Server startup timeout |
+| `DBBACKUP_VERIFICATION_CLEANUP_TIMEOUT` | `30s` | Maximum disposable database cleanup duration |
+
+### Engine client paths
+
+Each binary is checked for executability at startup; the application refuses
+to start if one is missing.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `MYSQL_CLIENT_PATH` | `/usr/bin/mysql` | MySQL client for probes and restores |
+| `MYSQLDUMP_PATH` | `/usr/bin/mysqldump` | MySQL dump client |
+| `MARIADB_CLIENT_PATH` | `/usr/bin/mariadb` | MariaDB client for probes and restores |
+| `MARIADB_DUMP_PATH` | `/usr/bin/mariadb-dump` | MariaDB dump client |
+| `PSQL_PATH` | `/usr/bin/psql` | Tests PostgreSQL targets and reads their server version |
+| `PG_DUMP_PATH` | `/usr/bin/pg_dump` | Custom-format dump client; **Test** also checks its major version against the server |
+| `PG_RESTORE_PATH` | `/usr/bin/pg_restore` | PostgreSQL custom-archive restore client |
+| `MONGODUMP_PATH` | `/usr/bin/mongodump` | MongoDB connection test and compressed-archive client |
+| `MONGORESTORE_PATH` | `/usr/bin/mongorestore` | MongoDB archive restore client |
+| `SQLITE_PATH` | `/usr/bin/sqlite3` | SQLite CLI for checks, dumps and restores |
+| `SQLITE_ROOT` | `./sqlite` | Every registered SQLite file must resolve below this; the image uses `/var/lib/dbbackup/sqlite` |
+| `SQLITE_HOST_DIR` | `./sqlite` | Compose only: host directory bind-mounted at `SQLITE_ROOT` |
+
+The base image overrides the three PostgreSQL paths with the versioned
+`/usr/lib/postgresql/17/bin` binaries and can back up servers up to major 17.
+A custom deployment should point all three at one compatible client set.
+`PG_DUMP_PATH` must not be older than the source server, and restoring into a
+server older than the client is not guaranteed
+([ADR-035](docs/adr/035-postgresql-17-client-and-version-preflight.md)).
+
+### Oracle pack
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `ORACLE_ENABLED` | `false` | Enable the Oracle adapter set and offer Oracle in registration |
+| `ORACLE_SQLPLUS_PATH` | `/opt/oracle/instantclient/sqlplus` | SQL\*Plus for login and shared-directory probes |
+| `ORACLE_EXPDP_PATH` | `/opt/oracle/instantclient/expdp` | Data Pump export client |
+| `ORACLE_IMPDP_PATH` | `/opt/oracle/instantclient/impdp` | Data Pump import client |
+| `ORACLE_DATAPUMP_ROOT` | `./oracle-datapump` | Application view of the storage shared with each Oracle directory object |
+| `ORACLE_CONNECT_TIMEOUT` | `30s` | Timeout for probes and Data Pump attach/kill control calls |
+
+### SQL Server pack
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `SQLSERVER_ENABLED` | `false` | Enable the SQL Server adapter set and offer SQL Server in registration |
+| `SQLPACKAGE_PATH` | `/opt/sqlpackage/sqlpackage` | SqlPackage for BACPAC export and import |
+| `SQLCMD_PATH` | `/opt/mssql-tools18/bin/sqlcmd` | `sqlcmd` for encrypted connection probes |
+| `SQLSERVER_CONNECT_TIMEOUT` | `10s` | Login/connect timeout |
+| `SQLSERVER_TRUST_SERVER_CERTIFICATE` | `false` | Keep encryption but skip CA/hostname verification; only for a deliberately untrusted certificate |
+| `SQLSERVER_TEMP_DIR` | `./sqlserver-temp` | Per-job SqlPackage staging root; needs free space comparable to the database and is cleaned after each job |
+
+## Building from source
+
+**Requirements:**
+
+- JDK 21, Maven and Docker.
+- The MySQL client binaries (`mysql`, `mysqldump`).
+- The MariaDB client binaries (`mariadb`, `mariadb-dump`).
+- The PostgreSQL 17 client binaries (`psql`, `pg_dump`, `pg_restore`).
+- MongoDB Database Tools (`mongodump`, `mongorestore`).
+- `sqlite3`.
+- If SQL Server is enabled: SqlPackage 170.5.96 and `sqlcmd` from
+  `mssql-tools18`.
+
+The application drives those tools directly
+([ADR-003](docs/adr/003-shelling-out-to-the-mysql-client.md),
+[ADR-017](docs/adr/017-route-logical-backups-by-database-engine.md)).
 
 ```bash
 docker compose up -d postgres
@@ -320,91 +443,8 @@ mvn -DskipTests install
 mvn -pl web spring-boot:run
 ```
 
-(`spring-boot:run` has to be aimed at `web` alone: pointed at the reactor it
-would also try to run the parent pom, which has no main class.)
-
-### Configuration
-
-| Environment variable | Default | Purpose |
-| --- | --- | --- |
-| `ENCRYPTION_SECRET_KEY` | *none — required* | Base64 of 32 random bytes, the AES-256-GCM key for stored passwords |
-| `OPERATOR_PASSWORD_HASH` | *none — required* | bcrypt hash (cost ≥ 10) of the console password; anything else stops startup |
-| `OPERATOR_USERNAME` | `admin` | The one account that can sign in to the console |
-| `SESSION_TIMEOUT` | `30m` | A signed-in console left idle this long signs out |
-| `SESSION_COOKIE_SECURE` | `false` | Send the session cookie over HTTPS only; set `true` behind a TLS proxy, see [deployment](docs/deployment.md) |
-| `DB_URL` | `jdbc:postgresql://localhost:5432/dbbackup` | Metadata store |
-| `DB_USERNAME` | `dbbackup` | Metadata store user |
-| `DB_PASSWORD` | `dbbackup` | Metadata store password |
-| `DBBACKUP_SMTP_HOST` | empty | Optional deployment-wide SMTP host; an empty value disables Email delivery without blocking startup |
-| `DBBACKUP_SMTP_PORT` | `587` | SMTP port |
-| `DBBACKUP_SMTP_USERNAME` | empty | Optional SMTP username |
-| `DBBACKUP_SMTP_PASSWORD` | empty | Optional SMTP password |
-| `DBBACKUP_SMTP_FROM` | `dbbackup@localhost` | Sender address for Email channels |
-| `DBBACKUP_SMTP_AUTH` | `true` | Enable SMTP authentication |
-| `DBBACKUP_SMTP_STARTTLS` | `true` | Upgrade SMTP connections with STARTTLS |
-| `DBBACKUP_VERIFICATION_ENABLED` | `false` | Enable manual and per-target automatic isolated restore verification |
-| `DBBACKUP_VERIFICATION_MYSQL_IMAGE` | `mysql:8.4` | Disposable MySQL verification image |
-| `DBBACKUP_VERIFICATION_MARIADB_IMAGE` | `mariadb:10.11` | Disposable MariaDB verification image |
-| `DBBACKUP_VERIFICATION_POSTGRESQL_IMAGE` | `postgres:17-alpine` | Disposable PostgreSQL verification image |
-| `DBBACKUP_VERIFICATION_MONGODB_IMAGE` | `mongo:8.0` | Disposable MongoDB verification image |
-| `DBBACKUP_VERIFICATION_ORACLE_IMAGE` | `gvenzl/oracle-free:23-slim-faststart` | Disposable Oracle Free verification image |
-| `DBBACKUP_VERIFICATION_SQLSERVER_IMAGE` | `dbbackup-verification-sqlserver:2022` | Operator-built SQL Server image containing SqlPackage |
-| `DBBACKUP_VERIFICATION_PULL_TIMEOUT` | `10m` | Maximum image pull duration |
-| `DBBACKUP_VERIFICATION_STARTUP_TIMEOUT` | `2m` | Maximum disposable database startup duration |
-| `DBBACKUP_VERIFICATION_ORACLE_STARTUP_TIMEOUT` | `10m` | Oracle Free startup timeout |
-| `DBBACKUP_VERIFICATION_SQLSERVER_STARTUP_TIMEOUT` | `5m` | SQL Server startup timeout |
-| `DBBACKUP_VERIFICATION_CLEANUP_TIMEOUT` | `30s` | Maximum disposable database cleanup duration |
-| `MYSQL_CLIENT_PATH` | `/usr/bin/mysql` | The `mysql` client binary; checked for executability at startup |
-| `MYSQLDUMP_PATH` | `/usr/bin/mysqldump` | The `mysqldump` binary; likewise checked at startup |
-| `MARIADB_CLIENT_PATH` | `/usr/bin/mariadb` | MariaDB's command-line client for probes and restores |
-| `MARIADB_DUMP_PATH` | `/usr/bin/mariadb-dump` | MariaDB's logical dump client |
-| `PSQL_PATH` | `/usr/bin/psql` | The `psql` client used to test PostgreSQL targets and read their server version |
-| `PG_DUMP_PATH` | `/usr/bin/pg_dump` | The custom-format dump client; **Test** also checks its major against the server |
-| `PG_RESTORE_PATH` | `/usr/bin/pg_restore` | The PostgreSQL custom-archive restore client |
-| `MONGODUMP_PATH` | `/usr/bin/mongodump` | The MongoDB connection-test and compressed-archive client |
-| `MONGORESTORE_PATH` | `/usr/bin/mongorestore` | The MongoDB archive restore client |
-| `SQLITE_PATH` | `/usr/bin/sqlite3` | The SQLite CLI used for checks, dumps and restores |
-| `SQLITE_ROOT` | `./sqlite` | Root below which every registered SQLite file must resolve; the image uses `/var/lib/dbbackup/sqlite` |
-| `SQLITE_HOST_DIR` | `./sqlite` | Compose-only host directory bind-mounted at `SQLITE_ROOT` |
-| `ORACLE_ENABLED` | `false` | Enable the optional Oracle adapter set and expose Oracle in registration |
-| `ORACLE_SQLPLUS_PATH` | `/opt/oracle/instantclient/sqlplus` | SQL*Plus used for login and shared-directory probes |
-| `ORACLE_EXPDP_PATH` | `/opt/oracle/instantclient/expdp` | Oracle Data Pump export client |
-| `ORACLE_IMPDP_PATH` | `/opt/oracle/instantclient/impdp` | Oracle Data Pump import client |
-| `ORACLE_DATAPUMP_ROOT` | `./oracle-datapump` | Application view of storage shared with each Oracle directory object |
-| `ORACLE_CONNECT_TIMEOUT` | `30s` | Timeout for probes and Data Pump attach/kill control calls |
-| `SQLSERVER_ENABLED` | `false` | Enable the optional SQL Server adapter set and expose SQL Server in registration |
-| `SQLPACKAGE_PATH` | `/opt/sqlpackage/sqlpackage` | SqlPackage used for BACPAC export and import |
-| `SQLCMD_PATH` | `/opt/mssql-tools18/bin/sqlcmd` | `sqlcmd` used for encrypted connection probes |
-| `SQLSERVER_CONNECT_TIMEOUT` | `10s` | SQL Server login/connect timeout |
-| `SQLSERVER_TRUST_SERVER_CERTIFICATE` | `false` | Keep encryption but skip CA/hostname verification; opt in only for a deliberately untrusted certificate |
-| `SQLSERVER_TEMP_DIR` | `./sqlserver-temp` | Per-job SqlPackage staging root; needs free space comparable to the database and is cleaned after each job |
-| `BACKUP_DIR` | `./backups` | Where dumps are written, one `<target-id>/<execution-id>/` directory per backup; created at startup. Relative, so it follows the working directory — `mvn -pl web spring-boot:run` puts it under `web/`. The image sets it to `/var/lib/dbbackup/backups`. |
-| `STORAGE_STAGING_DIR` | `<BACKUP_DIR>/.staging` | Per-job remote-storage staging; needs room for one artifact per concurrent job and is cleaned after each operation |
-| `JOB_CONCURRENCY` | `2` | How many backups and restores may run at once, together |
-| `JOB_QUEUE_CAPACITY` | `20` | Beyond this, a job is refused and recorded as failed |
-| `BACKUP_TIMEOUT` | `30m` | A dump running longer than this is killed |
-| `RESTORE_TIMEOUT` | `60m` | A restore running longer than this is killed |
-
-The base image overrides the three PostgreSQL defaults with the versioned
-`/usr/lib/postgresql/17/bin` paths. It can back up supported servers through
-major 17. A custom deployment should override all three paths with one
-compatible client set; `PG_DUMP_PATH` must not be older than the source server,
-and restore into a server older than the client is not guaranteed. See
-[ADR-035](docs/adr/035-postgresql-17-client-and-version-preflight.md).
-
-Restore verification is opt-in. For every network engine, enable it and give
-the application container access to the Docker socket by
-uncommenting the socket mount and `group_add` block in `docker-compose.yml`.
-Set `DOCKER_SOCKET_GID` to the host socket's group id. The image already
-contains the Docker CLI; no database ports are published by verification
-containers. SQLite verification needs no socket but uses the same deployment
-switch. Before SQL Server verification, build its self-contained image with
-`docker build -f Dockerfile.sqlserver-verification.example -t dbbackup-verification-sqlserver:2022 .`.
-Docker-socket access is equivalent to root control of the Docker host, so expose
-it only to a trusted application deployment. Oracle Free image terms and the
-SQL Server EULA remain the operator's responsibility. See
-[ADR-029](docs/adr/029-isolated-restore-verification.md) and
-[ADR-030](docs/adr/030-oracle-and-sql-server-restore-verification.md).
+`spring-boot:run` has to be aimed at `web` alone: pointed at the reactor, it
+would also try to run the parent pom, which has no main class.
 
 ## Tests
 
@@ -413,29 +453,58 @@ mvn test     # unit tests only, no Docker needed
 mvn verify   # adds the integration tests, which need Docker
 ```
 
-`*Test.java` is a plain JUnit test. `*IT.java` runs against real containers via
-Testcontainers. The SQL Server IT drives the installed `sqlcmd` and SqlPackage
-against SQL Server 2022 and its self-contained verification image. The Oracle
-IT drives `sqlplus`/`expdp`/`impdp` through wrappers inside its Oracle Free
-source and verifies the dump in a second isolated Oracle container, so no
-Oracle client is installed on the runner. Storage integration tests use Adobe S3Mock and fake-gcs-server in
-isolated forks. H2 is not used anywhere, and no test skips itself when
-something it needs is missing.
+- **Unit tests.** `*Test.java` is a plain JUnit test.
+- **Integration tests.** `*IT.java` runs against real containers through
+  Testcontainers.
+- **SQL Server IT.** Drives the installed `sqlcmd` and SqlPackage against SQL
+  Server 2022 and its self-contained verification image.
+- **Oracle IT.** Drives `sqlplus`/`expdp`/`impdp` through wrappers inside its
+  Oracle Free source, and verifies the dump in a second isolated Oracle
+  container, so no Oracle client is installed on the runner.
+- **Storage tests.** Use Adobe S3Mock and fake-gcs-server in isolated forks.
+- **No shortcuts.** H2 is not used anywhere, and no test skips itself when
+  something it needs is missing.
 
 Pull requests also build the release-shaped image and run a Compose E2E path
 through `/api/v1` and the bundled CLI. It covers authentication, a complete
-SQLite backup/checksum/download/verification/restore cycle and representative
-failure paths without mounting the Docker socket.
+SQLite backup, checksum, download, verification and restore cycle, and
+representative failure paths, without mounting the Docker socket.
 
-## Working on it
+## Releases and CI
 
-The repository follows GitFlow: `develop` integrates, `main` holds only tagged
-releases, and neither is committed to directly. See
-[docs/branching.md](docs/branching.md) for the branch names and the release and
-hotfix procedures.
+Published releases include:
+
+- the Linux AMD64 base image on GHCR;
+- executable web and CLI JARs;
+- SHA-256 checksums;
+- SPDX SBOMs;
+- GitHub artifact attestations.
+
+Every protected-branch change must pass Maven, container/security and deployed
+API/CLI checks. See
+[ADR-032](docs/adr/032-required-ci-gates-and-attested-releases.md) and the
+[security policy](SECURITY.md).
+
+## Contributing
+
+The repository follows GitFlow:
+
+- `develop` integrates;
+- `main` holds only tagged releases;
+- neither is committed to directly.
+
+Work happens on `feature/<slice>-<summary>` branches merged into `develop`
+through pull requests. See [docs/branching.md](docs/branching.md) for branch
+names and the release and hotfix procedures, and [ROADMAP.md](ROADMAP.md) for
+the slice list.
 
 ## Documentation
 
-- [docs/architecture/overview.md](docs/architecture/overview.md) — modules and dependency direction
-- [docs/branching.md](docs/branching.md) — branching model
-- [docs/adr/](docs/adr/) — decisions and what they cost
+- [docs/FEATURES.md](docs/FEATURES.md): every feature, with screenshots and animations
+- [docs/deployment.md](docs/deployment.md): the image, the compose file and what an operator has to decide
+- [docs/http-api.md](docs/http-api.md): `/api/v1` resources, authentication, envelopes and CLI mapping
+- [docs/architecture/overview.md](docs/architecture/overview.md): modules and dependency direction
+- [docs/adr/](docs/adr/): architecture decisions and what they cost
+- [docs/walkthrough/ISSUES.md](docs/walkthrough/ISSUES.md): problems found by the browser walkthroughs
+- [docs/branching.md](docs/branching.md): branching model
+- [SECURITY.md](SECURITY.md): vulnerability reporting and supply-chain policy
