@@ -35,7 +35,7 @@ Severity scale: **High**: data loss, or a documented feature that cannot work.
 
 - **Severity:** High (silent loss of a backup that the UI shows as *Succeeded*)
 - **Area:** backups on the local filesystem destination
-- **Status:** Open – awaiting review
+- **Status:** Fixed in slice 31. Local artifacts now live in `<target-id>/<execution-id>/`, and an existing file is never overwritten. See [ADR-033](../adr/033-local-artifacts-live-per-target-and-execution.md).
 
 **Steps to reproduce** (both seen in this walkthrough)
 
@@ -208,7 +208,7 @@ mode 0640".
 
 - **Severity:** Medium (it makes ISSUE-01 much more likely for Oracle)
 - **Area:** Oracle artifact naming
-- **Status:** Open – awaiting review
+- **Status:** Fixed in slice 31. The shared prefix can no longer cause a collision, because each execution has its own directory ([ADR-033](../adr/033-local-artifacts-live-per-target-and-execution.md)). The documented `<service>_<timestamp>.dmp` name is unchanged.
 
 The backup of schema `SHOP` was named `FREEPDB1_20261001_035300.dmp`
 ([screenshot](images/66-backup-oracle-succeeded.jpg)).

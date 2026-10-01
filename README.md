@@ -98,7 +98,10 @@ archives named `<database>_<timestamp>.dump` and can be inspected with
 `<database>_<timestamp>.archive.gz`; SQLite artifacts are gzipped SQL named
 `<file>_<timestamp>.sql.gz`; Oracle artifacts are schema-mode Data Pump files
 named `<service>_<timestamp>.dmp`; SQL Server artifacts are BACPAC files named
-`<database>_<timestamp>.bacpac`.
+`<database>_<timestamp>.bacpac`. On the local filesystem each one is stored in
+a directory of its own, `<target-id>/<execution-id>/`, the same shape as a
+remote object key, so two backups never share a file. See
+[ADR-033](docs/adr/033-local-artifacts-live-per-target-and-execution.md).
 
 Each backup records the SHA-256 of its artifact — the same value `sha256sum`
 prints for the download. The backup's page can verify the file against it, and
@@ -361,7 +364,7 @@ would also try to run the parent pom, which has no main class.)
 | `SQLSERVER_CONNECT_TIMEOUT` | `10s` | SQL Server login/connect timeout |
 | `SQLSERVER_TRUST_SERVER_CERTIFICATE` | `false` | Keep encryption but skip CA/hostname verification; opt in only for a deliberately untrusted certificate |
 | `SQLSERVER_TEMP_DIR` | `./sqlserver-temp` | Per-job SqlPackage staging root; needs free space comparable to the database and is cleaned after each job |
-| `BACKUP_DIR` | `./backups` | Where dumps are written; created at startup. Relative, so it follows the working directory — `mvn -pl web spring-boot:run` puts it under `web/`. The image sets it to `/var/lib/dbbackup/backups`. |
+| `BACKUP_DIR` | `./backups` | Where dumps are written, one `<target-id>/<execution-id>/` directory per backup; created at startup. Relative, so it follows the working directory — `mvn -pl web spring-boot:run` puts it under `web/`. The image sets it to `/var/lib/dbbackup/backups`. |
 | `STORAGE_STAGING_DIR` | `<BACKUP_DIR>/.staging` | Per-job remote-storage staging; needs room for one artifact per concurrent job and is cleaned after each operation |
 | `JOB_CONCURRENCY` | `2` | How many backups and restores may run at once, together |
 | `JOB_QUEUE_CAPACITY` | `20` | Beyond this, a job is refused and recorded as failed |

@@ -16,9 +16,9 @@
   the decisions were made.
 
 The current last decision is
-[ADR-032](adr/032-required-ci-gates-and-attested-releases.md), which makes
-independent CI/security/E2E checks mandatory and binds releases to their
-source, checksums and SBOMs.
+[ADR-033](adr/033-local-artifacts-live-per-target-and-execution.md), which
+gives every local artifact its own `<target-id>/<execution-id>/` directory so
+two backups can never share a file.
 
 These pages describe the code that exists. When a slice changes the code, it
 changes these files in the same commit.

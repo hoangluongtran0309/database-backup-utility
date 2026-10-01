@@ -143,9 +143,10 @@ A browser walkthrough of every console feature on 0.20.0-SNAPSHOT found the
 problems listed in [docs/walkthrough/ISSUES.md](docs/walkthrough/ISSUES.md).
 Each slice below fixes a group of them and marks them fixed there.
 
-- [ ] **31. Unique local artifact paths.** Store local artifacts as
+- [x] **31. Unique local artifact paths.** Store local artifacts as
       `<targetId>/<executionId>/<file>`, like remote keys, so two backups can
-      never share a file. ISSUE-01, ISSUE-05.
+      never share a file, and refuse to overwrite one that exists. ISSUE-01,
+      ISSUE-05. See ADR-033.
 - [ ] **32. A working Oracle pack.** Provide `libaio.so.1` in the Oracle image
       and document the Data Pump staging ownership, with a precise error
       message. ISSUE-02, ISSUE-04.

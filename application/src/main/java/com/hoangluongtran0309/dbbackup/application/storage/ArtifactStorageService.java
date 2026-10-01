@@ -44,7 +44,9 @@ public class ArtifactStorageService {
     /** Keeps local-only use-case tests and embedders source-compatible. */
     public static ArtifactStorageService localOnly(StoragePort local) {
         StagingStoragePort noStaging = new StagingStoragePort() {
-            @Override public Path locationFor(UUID operationId, String filename) { return local.locationFor(filename); }
+            @Override public Path locationFor(UUID operationId, String filename) {
+                throw new UnsupportedOperationException("Staging unavailable");
+            }
             @Override public long sizeOf(Path path) {
                 try { return java.nio.file.Files.size(path); }
                 catch (IOException e) { throw new UncheckedIOException(e); }
@@ -97,13 +99,22 @@ public class ArtifactStorageService {
     public PreparedWrite prepareWrite(
             UUID storageProfileId, UUID targetId, UUID executionId, String filename) {
         if (storageProfileId == null) {
-            Path path = local.locationFor(filename);
+            Path path = local.locationFor(targetId, executionId, filename);
             return new PreparedWrite(executionId, path, new ArtifactReference(null, path.toString()), false);
         }
         StorageProfile profile = requireProfile(storageProfileId);
         String key = objectKey(profile.getKeyPrefix(), targetId, executionId, filename);
         return new PreparedWrite(executionId, staging.locationFor(executionId, filename),
                 new ArtifactReference(storageProfileId, key), true);
+    }
+
+    /**
+     * Whether a local write would land on a file that is already there. Each
+     * execution has its own directory, so this means something has gone wrong,
+     * and the backup must fail rather than truncate another artifact.
+     */
+    public boolean occupied(PreparedWrite write) {
+        return !write.remote() && local.exists(write.path());
     }
 
     public ArtifactReference publish(PreparedWrite write) {

@@ -46,9 +46,11 @@ class ArtifactStorageServiceTest {
 
     @Test
     void localWritesKeepTheAbsolutePathAsLocator() {
-        Path path = Path.of("/backups/shop.sql.gz");
-        when(local.locationFor("shop.sql.gz")).thenReturn(path);
-        var prepared = service.prepareWrite(null, UUID.randomUUID(), UUID.randomUUID(), "shop.sql.gz");
+        UUID targetId = UUID.randomUUID();
+        UUID executionId = UUID.randomUUID();
+        Path path = Path.of("/backups/" + targetId + "/" + executionId + "/shop.sql.gz");
+        when(local.locationFor(targetId, executionId, "shop.sql.gz")).thenReturn(path);
+        var prepared = service.prepareWrite(null, targetId, executionId, "shop.sql.gz");
         assertThat(prepared.path()).isEqualTo(path);
         assertThat(service.publish(prepared)).isEqualTo(new ArtifactReference(null, path.toString()));
     }
