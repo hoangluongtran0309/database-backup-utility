@@ -23,7 +23,12 @@ USER root
 COPY --from=dotnet-runtime /usr/share/dotnet/ /usr/share/dotnet/
 COPY --from=sqlpackage /opt/sqlpackage/ /opt/sqlpackage/
 
-RUN test "$(dpkg --print-architecture)" = amd64 \
+# The upgrade picks up Ubuntu security fixes (such as libssl3) that
+# Microsoft's 2022-latest tag has not yet rebuilt in.
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/* \
+    && test "$(dpkg --print-architecture)" = amd64 \
     && test -x /opt/sqlpackage/sqlpackage \
     && test -x /opt/mssql-tools18/bin/sqlcmd \
     && /opt/sqlpackage/sqlpackage /Version \
