@@ -162,7 +162,7 @@ docker compose up --build
 
 Then open <http://localhost:8080> and sign in as `admin` with that password
 (`OPERATOR_USERNAME` changes the name). The image carries the MySQL, MariaDB,
-PostgreSQL, MongoDB and SQLite client tools, so the host needs only Docker.
+PostgreSQL 17, MongoDB and SQLite client tools, so the host needs only Docker.
 Oracle and SQL Server are deliberately absent from that base image; see
 [Optional Oracle pack](#optional-oracle-pack) and
 [Optional SQL Server pack](#optional-sql-server-pack).
@@ -296,7 +296,7 @@ application will not start, `docker compose logs app` says why; note that with
 
 Requires JDK 21, Maven, Docker, the MySQL client binaries (`mysql` and
 `mysqldump`), the MariaDB client binaries (`mariadb` and `mariadb-dump`), the
-PostgreSQL client binaries (`psql`, `pg_dump` and `pg_restore`), MongoDB
+PostgreSQL 17 client binaries (`psql`, `pg_dump` and `pg_restore`), MongoDB
 Database Tools (`mongodump` and `mongorestore`), and `sqlite3` on the host. If
 SQL Server is enabled, SqlPackage 170.5.96 and `sqlcmd` from `mssql-tools18`
 are also required. The
@@ -350,8 +350,8 @@ would also try to run the parent pom, which has no main class.)
 | `MYSQLDUMP_PATH` | `/usr/bin/mysqldump` | The `mysqldump` binary; likewise checked at startup |
 | `MARIADB_CLIENT_PATH` | `/usr/bin/mariadb` | MariaDB's command-line client for probes and restores |
 | `MARIADB_DUMP_PATH` | `/usr/bin/mariadb-dump` | MariaDB's logical dump client |
-| `PSQL_PATH` | `/usr/bin/psql` | The `psql` client used to test PostgreSQL targets |
-| `PG_DUMP_PATH` | `/usr/bin/pg_dump` | The PostgreSQL custom-format dump client |
+| `PSQL_PATH` | `/usr/bin/psql` | The `psql` client used to test PostgreSQL targets and read their server version |
+| `PG_DUMP_PATH` | `/usr/bin/pg_dump` | The custom-format dump client; **Test** also checks its major against the server |
 | `PG_RESTORE_PATH` | `/usr/bin/pg_restore` | The PostgreSQL custom-archive restore client |
 | `MONGODUMP_PATH` | `/usr/bin/mongodump` | The MongoDB connection-test and compressed-archive client |
 | `MONGORESTORE_PATH` | `/usr/bin/mongorestore` | The MongoDB archive restore client |
@@ -376,6 +376,13 @@ would also try to run the parent pom, which has no main class.)
 | `JOB_QUEUE_CAPACITY` | `20` | Beyond this, a job is refused and recorded as failed |
 | `BACKUP_TIMEOUT` | `30m` | A dump running longer than this is killed |
 | `RESTORE_TIMEOUT` | `60m` | A restore running longer than this is killed |
+
+The base image overrides the three PostgreSQL defaults with the versioned
+`/usr/lib/postgresql/17/bin` paths. It can back up supported servers through
+major 17. A custom deployment should override all three paths with one
+compatible client set; `PG_DUMP_PATH` must not be older than the source server,
+and restore into a server older than the client is not guaranteed. See
+[ADR-035](docs/adr/035-postgresql-17-client-and-version-preflight.md).
 
 Restore verification is opt-in. For every network engine, enable it and give
 the application container access to the Docker socket by

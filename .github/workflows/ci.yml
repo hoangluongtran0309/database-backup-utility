@@ -44,6 +44,9 @@ jobs:
       MYSQLDUMP_PATH: /opt/mysql/bin/mysqldump
       MARIADB_CLIENT_PATH: /usr/bin/mariadb
       MARIADB_DUMP_PATH: /usr/bin/mariadb-dump
+      PSQL_PATH: /usr/lib/postgresql/17/bin/psql
+      PG_DUMP_PATH: /usr/lib/postgresql/17/bin/pg_dump
+      PG_RESTORE_PATH: /usr/lib/postgresql/17/bin/pg_restore
       SQLPACKAGE_PATH: /home/runner/.dotnet/tools/sqlpackage
       SQLCMD_PATH: /opt/mssql-tools18/bin/sqlcmd
 
@@ -82,9 +85,14 @@ jobs:
             | sudo gpg --dearmor --yes -o /usr/share/keyrings/mongodb-server-8.0.gpg
           echo "deb [arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-8.0.gpg] https://repo.mongodb.org/apt/ubuntu noble/mongodb-org/8.0 multiverse" \
             | sudo tee /etc/apt/sources.list.d/mongodb-org-8.0.list >/dev/null
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+            -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt noble-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
           sudo apt-get update
           sudo env ACCEPT_EULA=Y apt-get install -y \
-            mongodb-database-tools mysql-client postgresql-client sqlite3 mssql-tools18
+            mongodb-database-tools mysql-client postgresql-client-17 sqlite3 mssql-tools18
           sudo install -D -m 0755 /usr/bin/mysql /opt/mysql/bin/mysql
           sudo install -D -m 0755 /usr/bin/mysqldump /opt/mysql/bin/mysqldump
           sudo apt-get install -y mariadb-client
@@ -92,9 +100,12 @@ jobs:
           test -x /opt/mysql/bin/mysqldump
           test -x /usr/bin/mariadb
           test -x /usr/bin/mariadb-dump
-          test -x /usr/bin/psql
-          test -x /usr/bin/pg_dump
-          test -x /usr/bin/pg_restore
+          test -x "$PSQL_PATH"
+          test -x "$PG_DUMP_PATH"
+          test -x "$PG_RESTORE_PATH"
+          "$PSQL_PATH" --version | grep -E '^psql \(PostgreSQL\) 17\.'
+          "$PG_DUMP_PATH" --version | grep -E '^pg_dump \(PostgreSQL\) 17\.'
+          "$PG_RESTORE_PATH" --version | grep -E '^pg_restore \(PostgreSQL\) 17\.'
           test -x /usr/bin/mongodump
           test -x /usr/bin/mongorestore
           test -x /usr/bin/sqlite3
@@ -147,6 +158,10 @@ jobs:
       - name: Build base and optional application images
         run: |
           docker build -t dbbackup-ci:base .
+          for client in psql pg_dump pg_restore; do
+            docker run --rm --entrypoint "/usr/lib/postgresql/17/bin/$client" \
+              dbbackup-ci:base --version | grep -E "^$client \\(PostgreSQL\\) 17\\."
+          done
           mkdir -p .oracle-client-fixture
           fixture_container="$(docker create dbbackup-ci:base)"
           for client in sqlplus expdp impdp; do

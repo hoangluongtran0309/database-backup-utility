@@ -141,7 +141,10 @@ The PostgreSQL adapters pass the host, port, user and database explicitly and
 set `PGCONNECT_TIMEOUT`. `PostgresDumpBackupAdapter` writes a custom-format
 archive directly to its destination; `PostgresRestoreAdapter` lists that
 archive before starting a destructive restore. Each configured binary is
-checked for executability when its adapter is constructed.
+checked for executability when its adapter is constructed. The connection
+adapter also reads `server_version_num` and the configured `pg_dump --version`;
+it rejects a server newer than the dump client before a backup can start. See
+[ADR-035](../adr/035-postgresql-17-client-and-version-preflight.md).
 
 The MongoDB adapters pass an explicit authentication database separately from
 the database being backed up. `mongodump` writes a gzip-compressed archive;

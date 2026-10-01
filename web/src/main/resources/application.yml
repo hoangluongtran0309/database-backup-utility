@@ -110,7 +110,8 @@ dbbackup:
 
   postgresql:
     # PostgreSQL is also the metadata store, but these binaries are only for
-    # PostgreSQL targets explicitly registered in the console.
+    # PostgreSQL targets explicitly registered in the console. Test also reads
+    # dump-path's major and rejects a server newer than that pg_dump.
     psql-path: ${PSQL_PATH:/usr/bin/psql}
     dump-path: ${PG_DUMP_PATH:/usr/bin/pg_dump}
     restore-path: ${PG_RESTORE_PATH:/usr/bin/pg_restore}

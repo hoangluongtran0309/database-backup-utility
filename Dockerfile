@@ -47,11 +47,16 @@ RUN apt-get update \
         | gpg --dearmor --yes -o /usr/share/keyrings/mongodb-server-8.0.gpg \
     && echo "deb [arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-8.0.gpg] https://repo.mongodb.org/apt/ubuntu noble/mongodb-org/8.0 multiverse" \
         > /etc/apt/sources.list.d/mongodb-org-8.0.list \
+    && install -d /usr/share/postgresql-common/pgdg \
+    && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+        -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+    && echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt noble-pgdg main" \
+        > /etc/apt/sources.list.d/pgdg.list \
     && apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         mongodb-database-tools \
         mysql-client \
-        postgresql-client \
+        postgresql-client-17 \
         sqlite3 \
     && mkdir -p /opt/mysql/bin \
     && cp /usr/bin/mysql /opt/mysql/bin/mysql \
@@ -62,6 +67,9 @@ RUN apt-get update \
     && /opt/mysql/bin/mysqldump --version \
     && /usr/bin/mariadb --version \
     && /usr/bin/mariadb-dump --version \
+    && /usr/lib/postgresql/17/bin/psql --version | grep -E '^psql \(PostgreSQL\) 17\.' \
+    && /usr/lib/postgresql/17/bin/pg_dump --version | grep -E '^pg_dump \(PostgreSQL\) 17\.' \
+    && /usr/lib/postgresql/17/bin/pg_restore --version | grep -E '^pg_restore \(PostgreSQL\) 17\.' \
     && rm -rf /var/lib/apt/lists/*
 
 RUN useradd --system --create-home --uid 10001 dbbackup \
@@ -80,9 +88,9 @@ ENV BACKUP_DIR=/var/lib/dbbackup/backups \
     MYSQLDUMP_PATH=/opt/mysql/bin/mysqldump \
     MARIADB_CLIENT_PATH=/usr/bin/mariadb \
     MARIADB_DUMP_PATH=/usr/bin/mariadb-dump \
-    PSQL_PATH=/usr/bin/psql \
-    PG_DUMP_PATH=/usr/bin/pg_dump \
-    PG_RESTORE_PATH=/usr/bin/pg_restore \
+    PSQL_PATH=/usr/lib/postgresql/17/bin/psql \
+    PG_DUMP_PATH=/usr/lib/postgresql/17/bin/pg_dump \
+    PG_RESTORE_PATH=/usr/lib/postgresql/17/bin/pg_restore \
     MONGODUMP_PATH=/usr/bin/mongodump \
     MONGORESTORE_PATH=/usr/bin/mongorestore \
     SQLITE_PATH=/usr/bin/sqlite3 \

@@ -2,8 +2,10 @@
 
 One base image and one compose file, plus operator-built Oracle and SQL Server variants. See
 [ADR-009](adr/009-one-image-that-carries-the-mysql-client.md) for the original
-packaging decision and [ADR-017](adr/017-route-logical-backups-by-database-engine.md)
-for the PostgreSQL client added to it. MongoDB packaging is recorded in
+packaging decision, [ADR-017](adr/017-route-logical-backups-by-database-engine.md)
+for the PostgreSQL client added to it, and
+[ADR-035](adr/035-postgresql-17-client-and-version-preflight.md) for its pinned
+major and version preflight. MongoDB packaging is recorded in
 [ADR-018](adr/018-mongodb-archives-and-explicit-authentication-database.md).
 SQLite file mounting is recorded in
 [ADR-019](adr/019-sqlite-files-below-one-root.md). The optional Oracle pack and
@@ -17,7 +19,7 @@ pack is recorded in
 ## What the image contains
 
 A JRE, the application jar, Oracle's MySQL client, MariaDB's `mariadb-client`,
-`postgresql-client`, MongoDB's `mongodb-database-tools`, and `sqlite3`. The
+PGDG's `postgresql-client-17`, MongoDB's `mongodb-database-tools`, and `sqlite3`. The
 MySQL/MariaDB distinction is load-bearing: MariaDB's dump client rejects the
 MySQL-only `--set-gtid-purged`, and the two artifact producers must not be
 silently substituted for each other.
@@ -26,8 +28,9 @@ Ubuntu's MySQL and MariaDB client packages conflict over the legacy
 `mysql`/`mysqldump` names. The image installs MySQL first and preserves its real
 executables below `/opt/mysql/bin`, then installs MariaDB and uses its canonical
 `mariadb`/`mariadb-dump` names from `/usr/bin`. The build runs `--version` on
-all four paths. The PostgreSQL package supplies `psql`, `pg_dump` and
-`pg_restore`; the MongoDB package supplies `mongodump` and `mongorestore`.
+all four paths. The PostgreSQL package supplies versioned `psql`, `pg_dump` and
+`pg_restore` paths below `/usr/lib/postgresql/17/bin`; the build rejects a
+different major. The MongoDB package supplies `mongodump` and `mongorestore`.
 
 Oracle Instant Client, SqlPackage and `sqlcmd` are intentionally not among
 them. The base image and default compose deployment keep `ORACLE_ENABLED=false`
@@ -328,8 +331,9 @@ target automatically. Backing it up requires registering a PostgreSQL target
 explicitly, with credentials that have the required access.
 
 **Client paths.** The image sets `MYSQL_CLIENT_PATH` and `MYSQLDUMP_PATH` below
-`/opt/mysql/bin`; `MARIADB_CLIENT_PATH`, `MARIADB_DUMP_PATH`, `PSQL_PATH`,
-`PG_DUMP_PATH`, `PG_RESTORE_PATH`, `MONGODUMP_PATH`, `MONGORESTORE_PATH` and
+`/opt/mysql/bin`; `MARIADB_CLIENT_PATH` and `MARIADB_DUMP_PATH` point below
+`/usr/bin`; `PSQL_PATH`, `PG_DUMP_PATH` and `PG_RESTORE_PATH` point below
+`/usr/lib/postgresql/17/bin`; and `MONGODUMP_PATH`, `MONGORESTORE_PATH` and
 `SQLITE_PATH` point below `/usr/bin`. `SQLITE_ROOT` is
 `/var/lib/dbbackup/sqlite`. A source or custom-image deployment may override
 them, but every configured file must be executable or startup fails.
@@ -344,13 +348,15 @@ up. The registration form therefore asks for an authentication database and
 defaults it to `admin`. Passwords are handed to each tool through a temporary
 owner-only config file, never through its visible command line.
 
-PostgreSQL's dump tools have major-version compatibility rules: a client that
-can read a source is not necessarily able to produce an archive loadable by an
-older destination. The first PostgreSQL slice does not install or select among
-several client majors. Use `pg_dump --version` and provide `PSQL_PATH`,
-`PG_DUMP_PATH` and `PG_RESTORE_PATH` from a client release compatible with both
-the source and destination; the integration test proves a matching client and
-server major end to end.
+PostgreSQL's dump tools have major-version compatibility rules. The image pins
+major 17 from PGDG and supports backups from servers no newer than 17. **Test**
+reads `server_version_num`, compares it with the configured `pg_dump --version`
+and rejects a newer server with the exact majors and path. A newer client can
+dump a supported older source, but its output is not guaranteed to load into a
+server older than that client. A source or custom-image deployment must provide
+`PSQL_PATH`, `PG_DUMP_PATH` and `PG_RESTORE_PATH` from a set compatible with
+both source and restore destination; there is no automatic multi-major
+selection.
 
 MariaDB likewise uses one configured client pair rather than a version matrix.
 The base image carries Ubuntu Noble's MariaDB 10.11 client and the integration

@@ -150,9 +150,9 @@ Each slice below fixes a group of them and marks them fixed there.
 - [x] **32. A working Oracle pack.** Provide `libaio.so.1` in the Oracle image
       and document the Data Pump staging ownership, with a precise error
       message. ISSUE-02, ISSUE-04. See ADR-034.
-- [ ] **33. A current PostgreSQL client.** Back up PostgreSQL 17 with the
+- [x] **33. A current PostgreSQL client.** Back up PostgreSQL 17 with the
       shipped image, and make the connection test catch a client/server
-      mismatch. ISSUE-03.
+      mismatch. ISSUE-03. See ADR-035.
 - [ ] **34. API, CLI and webhook contracts.** Optional `verifyAfterBackup`,
       every validation error at once, ISO-8601 webhook timestamps, readable CLI
       text output. ISSUE-09, ISSUE-10, ISSUE-11, ISSUE-14.
