@@ -173,6 +173,13 @@ the socket volume and `group_add` in `docker-compose.yml`, then set
 `DOCKER_SOCKET_GID` to `stat -c '%g' /var/run/docker.sock` on the host. The
 application image already carries the Docker CLI.
 
+On a host with SELinux enforcing (Fedora, RHEL and derivatives) the group is
+not enough: the container is still denied the socket, and **Test restore**
+reports that the verification adapter is unavailable. Add
+`security_opt: ["label=disable"]` to the `app` service, which turns off SELinux
+separation for that container only. Bind mounts such as `./sqlite` likewise
+need the `:z` suffix there, or the container cannot read them.
+
 Mounting `/var/run/docker.sock` grants root-equivalent control over the Docker
 host. Keep verification disabled when that trust boundary is unacceptable;
 startup and every other feature remain available. Verification containers

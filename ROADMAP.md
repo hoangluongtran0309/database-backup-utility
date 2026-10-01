@@ -160,6 +160,23 @@ Each slice below fixes a group of them and marks them fixed there.
       widths, target form autofill, Azure wording and the cron hint. ISSUE-06,
       ISSUE-07, ISSUE-08, ISSUE-12, ISSUE-13. See ADR-037.
 
+## Fixes from the 0.20.0 feature tour
+
+A second browser run recorded every feature on all seven engines for
+[docs/FEATURES.md](docs/FEATURES.md) and found three more problems, listed in
+[docs/walkthrough/ISSUES.md](docs/walkthrough/ISSUES.md).
+
+- [x] **36. Feature tour documentation.** Screenshots and GIFs of every
+      console flow in `docs/tour/`, a feature guide in `docs/FEATURES.md`, a
+      restructured README and the SELinux note in deployment.
+- [ ] **37. A buildable Oracle pack with current Instant Client.** Run the
+      dependency check with the Instant Client library path. ISSUE-15.
+- [ ] **38. Card layout by table width.** Switch the targets and storage
+      tables to cards whenever they do not fit, not below a fixed viewport
+      width. ISSUE-16.
+- [ ] **39. Channel identity in lifecycle webhooks.** Fill `channel.id` and
+      `channel.name` per delivered channel. ISSUE-17.
+
 ## Deliberately out of scope
 
 Not "later" — absent, and not to be reintroduced without a decision that
