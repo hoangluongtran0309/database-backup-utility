@@ -35,8 +35,10 @@ COPY --from=docker-cli /usr/local/bin/docker /usr/local/bin/docker
 # before installing MariaDB, then address both client families by explicit
 # paths. The version checks below prove that all four preserved executables
 # still load after the conflicting MySQL package is removed.
-# curl is only here for the HEALTHCHECK below.
+# curl is only here for the HEALTHCHECK below. The upgrade picks up Ubuntu
+# security fixes (such as libssl3t64) that the base tag has not yet rebuilt in.
 RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y --no-install-recommends \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         ca-certificates \
         curl \
