@@ -137,6 +137,28 @@ their design is decided.
       checks; publish an attested GHCR image, JARs, checksums and SBOMs from an
       approved release tag. See ADR-032.
 
+## Fixes from the 0.19.0 walkthrough
+
+A browser walkthrough of every console feature on 0.20.0-SNAPSHOT found the
+problems listed in [docs/walkthrough/ISSUES.md](docs/walkthrough/ISSUES.md).
+Each slice below fixes a group of them and marks them fixed there.
+
+- [ ] **31. Unique local artifact paths.** Store local artifacts as
+      `<targetId>/<executionId>/<file>`, like remote keys, so two backups can
+      never share a file. ISSUE-01, ISSUE-05.
+- [ ] **32. A working Oracle pack.** Provide `libaio.so.1` in the Oracle image
+      and document the Data Pump staging ownership, with a precise error
+      message. ISSUE-02, ISSUE-04.
+- [ ] **33. A current PostgreSQL client.** Back up PostgreSQL 17 with the
+      shipped image, and make the connection test catch a client/server
+      mismatch. ISSUE-03.
+- [ ] **34. API, CLI and webhook contracts.** Optional `verifyAfterBackup`,
+      every validation error at once, ISO-8601 webhook timestamps, readable CLI
+      text output. ISSUE-09, ISSUE-10, ISSUE-11, ISSUE-14.
+- [ ] **35. Console layout and wording.** Table and header layout at laptop
+      widths, target form autofill, Azure wording and the cron hint. ISSUE-06,
+      ISSUE-07, ISSUE-08, ISSUE-12, ISSUE-13.
+
 ## Deliberately out of scope
 
 Not "later" — absent, and not to be reintroduced without a decision that
