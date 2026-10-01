@@ -37,7 +37,23 @@ class NotificationAdaptersTest {
         HttpRequest request = capturedRequest(client);
         assertThat(request.uri().toString()).isEqualTo("https://hooks.example.test/notify");
         assertThat(body(request)).contains("\"event\":\"TEST\"", "\"isTest\":true",
-                "\"name\":\"automation\"", "\"sourceTarget\"");
+                "\"name\":\"automation\"", "\"sourceTarget\"",
+                "\"occurredAt\":\"2026-09-24T01:00:00Z\"")
+                .doesNotContain("\"occurredAt\":179");
+    }
+
+    @Test void genericWebhookPreservesNanosecondsInIsoUtcTimestamp() throws Exception {
+        HttpClient client = successfulClient("{}");
+        Instant occurredAt = Instant.parse("2026-10-01T03:35:25.003285481Z");
+
+        new WebhookNotificationAdapter(new HttpNotificationSupport(client)).send(
+                new WebhookNotificationSettings("https://hooks.example.test/notify"),
+                NotificationMessage.test(UUID.randomUUID(), "automation", occurredAt));
+
+        com.fasterxml.jackson.databind.JsonNode payload = new com.fasterxml.jackson.databind.ObjectMapper()
+                .readTree(body(capturedRequest(client)));
+        assertThat(payload.path("occurredAt").isTextual()).isTrue();
+        assertThat(payload.path("occurredAt").asText()).isEqualTo(occurredAt.toString());
     }
 
     @Test void verificationWebhookUsesVerificationAsExecutionIdAndKeepsBackupIdentity() throws Exception {

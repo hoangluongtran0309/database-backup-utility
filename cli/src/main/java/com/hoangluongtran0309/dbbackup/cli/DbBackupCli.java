@@ -38,7 +38,7 @@ public final class DbBackupCli {
 
     private static void printError(String[] source, Map<String, String> environment, CliException error) {
         if (!jsonRequested(source, environment)) {
-            System.err.println(error.getMessage());
+            System.err.println(TextOutputRenderer.renderError(error.envelope(), error.getMessage()));
             return;
         }
         try {
@@ -228,8 +228,11 @@ public final class DbBackupCli {
 
     private static void print(CliArguments args, ObjectMapper json, JsonNode envelope, JsonNode data) {
         try {
-            System.out.println(json.writerWithDefaultPrettyPrinter()
-                    .writeValueAsString(args.output().equals("json") ? envelope : data));
+            if (args.output().equals("json")) {
+                System.out.println(json.writerWithDefaultPrettyPrinter().writeValueAsString(envelope));
+            } else {
+                System.out.println(TextOutputRenderer.render(data));
+            }
         } catch (java.io.IOException e) {
             throw new CliException(70, "Could not render output: " + e.getMessage());
         }

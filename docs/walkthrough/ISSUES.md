@@ -306,7 +306,9 @@ secondary actions together.
 
 - **Severity:** Low
 - **Area:** `POST /api/v1/targets`
-- **Status:** Open – awaiting review
+- **Status:** Fixed in slice 34. Omitted and JSON `null` values now default to
+  `false`, and malformed JSON receives a stable public message. See
+  [ADR-036](../adr/036-stable-operator-contracts.md).
 
 ```console
 $ curl -u admin:*** -X POST http://localhost:8080/api/v1/targets \
@@ -328,7 +330,9 @@ internals. **Suggested fix:** default it to `false` (use `Boolean` and map
 
 - **Severity:** Low
 - **Area:** HTTP API validation
-- **Status:** Open – awaiting review
+- **Status:** Fixed in slice 34. Validation responses add an ordered `errors`
+  array while retaining the first `message` and `field` for compatibility. See
+  [ADR-036](../adr/036-stable-operator-contracts.md).
 
 With `{"name":"","engine":"MYSQL","verifyAfterBackup":false}`, the response is
 `"Password is required"` with `"field":"password"`, although `name`, `host`,
@@ -345,7 +349,9 @@ for example as an `errors` array, or at least the first one in field order.
 
 - **Severity:** Low
 - **Area:** `adapters/.../notification/WebhookNotificationAdapter.java:31`
-- **Status:** Open – awaiting review
+- **Status:** Fixed in slice 34. Generic webhooks now encode `occurredAt` as a
+  lossless UTC ISO-8601 string. See
+  [ADR-036](../adr/036-stable-operator-contracts.md).
 
 The received body contained `"occurredAt":1790825725.003285481`. The adapter's
 `ObjectMapper` keeps Jackson's default `WRITE_DATES_AS_TIMESTAMPS`, while the
@@ -399,7 +405,10 @@ the entered value. **Suggested fix:** label it as an example ("For example,
 
 - **Severity:** Low
 - **Area:** `cli/.../DbBackupCli.java:232`
-- **Status:** Open – awaiting review
+- **Status:** Fixed in slice 34. Text mode now renders collections as tables,
+  details as key/value sections and aggregate validation errors as field lines.
+  JSON mode remains the automation format. See
+  [ADR-036](../adr/036-stable-operator-contracts.md).
 
 `dbbackup --help` lists `--output text|json` with `text` as the default, but
 text mode prints the pretty-printed JSON of `data` (for example

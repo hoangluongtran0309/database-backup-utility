@@ -1,6 +1,9 @@
 package com.hoangluongtran0309.dbbackup.web.api;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -14,6 +17,7 @@ import java.util.NoSuchElementException;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
@@ -31,6 +35,7 @@ import com.hoangluongtran0309.dbbackup.application.retention.ManageBackupRetenti
 import com.hoangluongtran0309.dbbackup.application.schedule.ManageBackupScheduleService;
 import com.hoangluongtran0309.dbbackup.application.storage.ManageStorageProfileService;
 import com.hoangluongtran0309.dbbackup.application.target.ManageDatabaseTargetService;
+import com.hoangluongtran0309.dbbackup.application.target.RegisterTargetCommand;
 import com.hoangluongtran0309.dbbackup.application.target.TestTargetConnectionService;
 import com.hoangluongtran0309.dbbackup.application.verification.RestoreVerificationService;
 import com.hoangluongtran0309.dbbackup.core.model.DatabaseEngine;
@@ -141,6 +146,86 @@ class OperatorApiControllerTest {
     }
 
     @Test
+    void omittedAndNullVerifyAfterBackupBothDefaultToFalse() throws Exception {
+        when(targets.register(any())).thenReturn(target("production"));
+
+        mvc.perform(post("/api/v1/targets")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"production","engine":"MYSQL","host":"db.internal","port":3306,
+                                 "database":"shop","username":"backup","password":"secret"}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.verifyAfterBackup").value(false));
+        mvc.perform(post("/api/v1/targets")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"production","engine":"MYSQL","host":"db.internal","port":3306,
+                                 "database":"shop","username":"backup","password":"secret",
+                                 "verifyAfterBackup":null}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.verifyAfterBackup").value(false));
+
+        ArgumentCaptor<RegisterTargetCommand> commands = ArgumentCaptor.forClass(RegisterTargetCommand.class);
+        verify(targets, times(2)).register(commands.capture());
+        assertThat(commands.getAllValues()).allMatch(command -> !command.verifyAfterBackup());
+    }
+
+    @Test
+    void targetValidationReturnsEveryErrorInFieldOrderAndKeepsLegacyFields() throws Exception {
+        mvc.perform(post("/api/v1/targets")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"","engine":"MYSQL"}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.error.message").value("Name is required"))
+                .andExpect(jsonPath("$.error.field").value("name"))
+                .andExpect(jsonPath("$.error.errors.length()").value(6))
+                .andExpect(jsonPath("$.error.errors[0].field").value("name"))
+                .andExpect(jsonPath("$.error.errors[1].field").value("host"))
+                .andExpect(jsonPath("$.error.errors[2].field").value("port"))
+                .andExpect(jsonPath("$.error.errors[3].field").value("database"))
+                .andExpect(jsonPath("$.error.errors[4].field").value("username"))
+                .andExpect(jsonPath("$.error.errors[5].field").value("password"));
+
+        verify(targets, never()).register(any());
+    }
+
+    @Test
+    void malformedJsonDoesNotExposeJacksonInternals() throws Exception {
+        mvc.perform(post("/api/v1/targets")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{not-json"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.message").value("Request body is not valid JSON"))
+                .andExpect(jsonPath("$.error.message").value(
+                        org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("Jackson"))));
+    }
+
+    @Test
+    void otherWriteRequestFamiliesAlsoReturnAggregatedFieldErrors() throws Exception {
+        mvc.perform(post("/api/v1/storage-profiles")
+                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.errors.length()").value(4));
+        mvc.perform(post("/api/v1/notification-channels")
+                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.errors.length()").value(2));
+        mvc.perform(post("/api/v1/schedules")
+                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.errors.length()").value(4));
+        mvc.perform(post("/api/v1/restores")
+                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.errors.length()").value(3));
+    }
+
+    @Test
     void missingArtifactDownloadKeepsTheJsonErrorContract() throws Exception {
         UUID backupId = UUID.randomUUID();
         when(artifacts.download(backupId)).thenThrow(new NoSuchElementException("No backup execution"));
@@ -149,7 +234,8 @@ class OperatorApiControllerTest {
                         .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.ok").value(false))
-                .andExpect(jsonPath("$.error.code").value("RESOURCE_NOT_FOUND"));
+                .andExpect(jsonPath("$.error.code").value("RESOURCE_NOT_FOUND"))
+                .andExpect(jsonPath("$.error.errors").doesNotExist());
     }
 
     private static DatabaseTarget target(String name) {

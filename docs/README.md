@@ -16,9 +16,9 @@
   the decisions were made.
 
 The current last decision is
-[ADR-035](adr/035-postgresql-17-client-and-version-preflight.md), which pins the
-shipped PostgreSQL client to major 17 and makes target testing reject a server
-newer than the configured `pg_dump`.
+[ADR-036](adr/036-stable-operator-contracts.md), which aggregates operator API
+validation, gives the CLI real text output and makes webhook timestamps
+lossless ISO-8601 strings.
 
 These pages describe the code that exists. When a slice changes the code, it
 changes these files in the same commit.

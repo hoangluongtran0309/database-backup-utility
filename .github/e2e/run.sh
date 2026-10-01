@@ -64,6 +64,13 @@ cli() {
     app dbbackup "$@" --output json
 }
 
+cli_text() {
+  dc exec -T \
+    -e DBBACKUP_API_USERNAME=operator \
+    -e DBBACKUP_API_PASSWORD="$PASSWORD" \
+    app dbbackup "$@"
+}
+
 assert_json() {
   local document=$1
   local expression=$2
@@ -106,13 +113,28 @@ postgres_target="$(dc exec -T \
     trap '\''rm -f "$config" "$payload"'\'' EXIT
     printf '\''user = "operator:%s"\nrequest = "POST"\nheader = "Content-Type: application/json"\n'\'' \
       "$DBBACKUP_API_PASSWORD" >"$config"
-    printf '\''{"name":"e2e-postgres-17","engine":"POSTGRESQL","host":"postgres","port":5432,"database":"dbbackup","username":"dbbackup","password":"%s","verifyAfterBackup":false}'\'' \
+    printf '\''{"name":"e2e-postgres-17","engine":"POSTGRESQL","host":"postgres","port":5432,"database":"dbbackup","username":"dbbackup","password":"%s"}'\'' \
       "$DB_PASSWORD" >"$payload"
     curl --silent --show-error --fail-with-body --config "$config" \
       --data-binary "@$payload" http://localhost:8080/api/v1/targets
   ')"
-assert_json "$postgres_target" '.ok == true and .data.engine == "POSTGRESQL"'
+assert_json "$postgres_target" \
+  '.ok == true and .data.engine == "POSTGRESQL" and .data.verifyAfterBackup == false'
 postgres_id="$(jq -er '.data.id' <<<"$postgres_target")"
+
+# Default text mode is human-readable rather than unwrapped JSON, and an API
+# validation failure prints every returned field error.
+target_text="$(cli_text target list)"
+grep -q 'e2e-postgres-17' <<<"$target_text"
+grep -q 'ENGINE' <<<"$target_text"
+[[ "$target_text" != *'{'* ]]
+set +e
+validation_text="$(cli_text target add --name invalid --engine MYSQL 2>&1)"
+validation_status=$?
+set -e
+[[ $validation_status -eq 2 ]]
+grep -q 'host: Host is required' <<<"$validation_text"
+grep -q 'password: Password is required' <<<"$validation_text"
 
 postgres_test="$(cli target test --id "$postgres_id")"
 assert_json "$postgres_test" '.ok == true and .data.successful == true'
