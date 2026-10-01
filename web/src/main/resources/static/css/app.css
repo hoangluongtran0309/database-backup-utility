@@ -122,6 +122,8 @@ code { color: var(--text); font-family: var(--mono); font-size: .88em; overflow-
 .nav-item:hover { background: var(--surface-hover); color: var(--text); text-decoration: none; }
 .nav-item.active { background: var(--info-bg); color: var(--primary); }
 .nav-item span { width: 18px; text-align: center; }
+.nav-item .nav-icon { display: inline-flex; height: 18px; align-items: center; justify-content: center; }
+.nav-item .nav-icon svg { display: block; width: 16px; height: 16px; }
 .sidebar-footer { display: grid; gap: .75rem; margin-top: auto; padding: 1rem .25rem .2rem; }
 .sidebar-tagline { padding: 0 .45rem; color: var(--muted); font-size: .75rem; }
 .theme-toggle { display: flex; align-items: center; gap: .75rem; min-height: 44px; padding: .55rem .7rem; border: 1px solid var(--border); border-radius: 9px; background: transparent; color: var(--text); cursor: pointer; }

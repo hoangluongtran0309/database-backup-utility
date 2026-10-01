@@ -64,7 +64,7 @@
            th:attr="aria-current=${section == 'schedules' ? 'page' : null}"><span aria-hidden="true">◷</span>Schedules</a>
         <a class="nav-item" th:href="@{/retention}"
            th:classappend="${section == 'retention'} ? 'active'"
-           th:attr="aria-current=${section == 'retention' ? 'page' : null}"><span aria-hidden="true">⌛</span>Retention</a>
+           th:attr="aria-current=${section == 'retention' ? 'page' : null}"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M5 2h14M5 22h14M7 2v4.17a2 2 0 0 0 .59 1.42L12 12l4.41-4.41A2 2 0 0 0 17 6.17V2M7 22v-4.17a2 2 0 0 1 .59-1.42L12 12l4.41 4.41a2 2 0 0 1 .59 1.42V22"/></svg></span>Retention</a>
       </div>
       <div class="nav-group">
         <div class="nav-label">Operations</div>
