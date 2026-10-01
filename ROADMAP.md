@@ -156,9 +156,9 @@ Each slice below fixes a group of them and marks them fixed there.
 - [x] **34. API, CLI and webhook contracts.** Optional `verifyAfterBackup`,
       every validation error at once, ISO-8601 webhook timestamps, readable CLI
       text output. ISSUE-09, ISSUE-10, ISSUE-11, ISSUE-14. See ADR-036.
-- [ ] **35. Console layout and wording.** Table and header layout at laptop
+- [x] **35. Console layout and wording.** Table and header layout at laptop
       widths, target form autofill, Azure wording and the cron hint. ISSUE-06,
-      ISSUE-07, ISSUE-08, ISSUE-12, ISSUE-13.
+      ISSUE-07, ISSUE-08, ISSUE-12, ISSUE-13. See ADR-037.
 
 ## Deliberately out of scope
 

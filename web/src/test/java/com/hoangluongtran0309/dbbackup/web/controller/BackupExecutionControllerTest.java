@@ -141,6 +141,7 @@ class BackupExecutionControllerTest {
         mockMvc.perform(get("/executions/{id}", execution.getId()))
                 .andExpect(status().isOk())
                 .andExpect(view().name("execution/detail"))
+                .andExpect(content().string(containsString("page-header page-header-laptop-stack")))
                 .andExpect(content().string(containsString(ARTIFACT_FILE_NAME)))
                 .andExpect(content().string(containsString(ARTIFACT_DIRECTORY)))
                 .andExpect(content().string(not(containsString("/backups/shop_20260909_100000.sql.gz"))))

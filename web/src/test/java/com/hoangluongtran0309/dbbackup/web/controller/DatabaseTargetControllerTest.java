@@ -40,6 +40,7 @@ import com.hoangluongtran0309.dbbackup.application.target.RegisterTargetCommand;
 import com.hoangluongtran0309.dbbackup.application.target.TestTargetConnectionService;
 import com.hoangluongtran0309.dbbackup.application.storage.ManageStorageProfileService;
 import com.hoangluongtran0309.dbbackup.core.exception.DuplicateTargetNameException;
+import com.hoangluongtran0309.dbbackup.core.exception.InvalidTargetException;
 import com.hoangluongtran0309.dbbackup.core.exception.TargetInUseException;
 import com.hoangluongtran0309.dbbackup.core.model.BackupExecution;
 import com.hoangluongtran0309.dbbackup.core.model.ConnectionCheck;
@@ -96,6 +97,10 @@ class DatabaseTargetControllerTest {
         mockMvc.perform(get("/databases"))
                 .andExpect(status().isOk())
                 .andExpect(view().name("database/list"))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "table-wrap responsive-cards responsive-cards-laptop")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("<th scope=\"col\">Destination</th>")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("<th scope=\"col\">Address</th>")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("production")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("127.0.0.1:3306/shop")));
     }
@@ -189,6 +194,26 @@ class DatabaseTargetControllerTest {
     }
 
     @Test
+    void targetCredentialsAreSeparatedFromTheOperatorLoginFields() throws Exception {
+        mockMvc.perform(get("/databases/new"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "class=\"form-panel\" method=\"post\" autocomplete=\"off\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "id=\"databaseUsername\" type=\"text\" autocomplete=\"off\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "name=\"databaseUsername\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "id=\"databasePassword\" type=\"password\" autocomplete=\"off\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "name=\"databasePassword\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.not(
+                        org.hamcrest.Matchers.containsString("name=\"username\""))))
+                .andExpect(content().string(org.hamcrest.Matchers.not(
+                        org.hamcrest.Matchers.containsString("name=\"password\""))));
+    }
+
+    @Test
     void newFormOffersOnlyImplementedEnginesWithTheirDefaultPorts() throws Exception {
         mockMvc.perform(get("/databases/new"))
                 .andExpect(status().isOk())
@@ -215,8 +240,8 @@ class DatabaseTargetControllerTest {
                         .param("host", "sql.internal")
                         .param("port", "1433")
                         .param("database", "orders")
-                        .param("username", "backup")
-                        .param("password", "Str0ng! password")
+                        .param("databaseUsername", "backup")
+                        .param("databasePassword", "Str0ng! password")
                         .param("verifyAfterBackup", "true"))
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrl("/databases"));
@@ -227,6 +252,8 @@ class DatabaseTargetControllerTest {
         verify(service).register(command.capture());
         assertThat(command.getValue().engine()).isEqualTo(DatabaseEngine.SQLSERVER);
         assertThat(command.getValue().port()).isEqualTo(1433);
+        assertThat(command.getValue().username()).isEqualTo("backup");
+        assertThat(command.getValue().password()).isEqualTo("Str0ng! password");
         assertThat(command.getValue().verifyAfterBackup()).isTrue();
     }
 
@@ -240,8 +267,8 @@ class DatabaseTargetControllerTest {
                         .param("host", "127.0.0.1")
                         .param("port", "3306")
                         .param("database", "shop")
-                        .param("username", "backup")
-                        .param("password", "s3cr3t"))
+                        .param("databaseUsername", "backup")
+                        .param("databasePassword", "s3cr3t"))
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrl("/databases"));
 
@@ -258,8 +285,8 @@ class DatabaseTargetControllerTest {
                         .param("host", "127.0.0.1")
                         .param("port", "3306")
                         .param("database", "shop")
-                        .param("username", "backup")
-                        .param("password", "s3cr3t")
+                        .param("databaseUsername", "backup")
+                        .param("databasePassword", "s3cr3t")
                         .param("verifyAfterBackup", "true"))
                 .andExpect(status().is3xxRedirection());
 
@@ -278,8 +305,8 @@ class DatabaseTargetControllerTest {
                         .param("host", "postgres.internal")
                         .param("port", "5432")
                         .param("database", "warehouse")
-                        .param("username", "backup")
-                        .param("password", "s3cr3t"))
+                        .param("databaseUsername", "backup")
+                        .param("databasePassword", "s3cr3t"))
                 .andExpect(status().is3xxRedirection());
 
         ArgumentCaptor<RegisterTargetCommand> command = ArgumentCaptor.forClass(RegisterTargetCommand.class);
@@ -299,8 +326,8 @@ class DatabaseTargetControllerTest {
                         .param("host", "mariadb.internal")
                         .param("port", "3306")
                         .param("database", "orders")
-                        .param("username", "backup")
-                        .param("password", "s3cr3t"))
+                        .param("databaseUsername", "backup")
+                        .param("databasePassword", "s3cr3t"))
                 .andExpect(status().is3xxRedirection());
 
         ArgumentCaptor<RegisterTargetCommand> command = ArgumentCaptor.forClass(RegisterTargetCommand.class);
@@ -319,8 +346,8 @@ class DatabaseTargetControllerTest {
                         .param("host", "mongo.internal")
                         .param("port", "27017")
                         .param("database", "shop")
-                        .param("username", "backup")
-                        .param("password", "s3cr3t")
+                        .param("databaseUsername", "backup")
+                        .param("databasePassword", "s3cr3t")
                         .param("authenticationDatabase", "admin"))
                 .andExpect(status().is3xxRedirection());
 
@@ -362,8 +389,8 @@ class DatabaseTargetControllerTest {
                         .param("host", "oracle.internal")
                         .param("port", "1521")
                         .param("database", "FREEPDB1")
-                        .param("username", "APP_OWNER")
-                        .param("password", "s3cr3t")
+                        .param("databaseUsername", "APP_OWNER")
+                        .param("databasePassword", "s3cr3t")
                         .param("dataPumpDirectory", "DBBACKUP_PUMP_DIR"))
                 .andExpect(status().is3xxRedirection());
 
@@ -382,8 +409,8 @@ class DatabaseTargetControllerTest {
                         .param("host", "oracle.internal")
                         .param("port", "1521")
                         .param("database", "FREEPDB1")
-                        .param("username", "APP_OWNER")
-                        .param("password", "s3cr3t"))
+                        .param("databaseUsername", "APP_OWNER")
+                        .param("databasePassword", "s3cr3t"))
                 .andExpect(status().isOk())
                 .andExpect(model().attributeHasFieldErrors("form", "dataPumpDirectory"));
 
@@ -412,8 +439,8 @@ class DatabaseTargetControllerTest {
                         .param("host", "db.internal")
                         .param("port", "3306")
                         .param("database", "shop")
-                        .param("username", "backup")
-                        .param("password", "s3cr3t"))
+                        .param("databaseUsername", "backup")
+                        .param("databasePassword", "s3cr3t"))
                 .andExpect(status().isOk())
                 .andExpect(view().name("database/form"))
                 .andExpect(model().attributeHasFieldErrors("form", "name"))
@@ -433,12 +460,30 @@ class DatabaseTargetControllerTest {
                         .param("host", "127.0.0.1")
                         .param("port", "3306")
                         .param("database", "shop")
-                        .param("username", "backup")
-                        .param("password", "s3cr3t"))
+                        .param("databaseUsername", "backup")
+                        .param("databasePassword", "s3cr3t"))
                 .andExpect(status().isOk())
                 .andExpect(view().name("database/form"))
                 .andExpect(model().attributeHasFieldErrors("form", "name"))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("already exists")));
+    }
+
+    @Test
+    void mapsDomainCredentialErrorsToTheRenamedConsoleField() throws Exception {
+        when(service.register(any())).thenThrow(
+                new InvalidTargetException("username", "Username is not valid"));
+
+        mockMvc.perform(post("/databases").with(csrf())
+                        .param("engine", "MYSQL")
+                        .param("name", "production")
+                        .param("host", "127.0.0.1")
+                        .param("port", "3306")
+                        .param("database", "shop")
+                        .param("databaseUsername", "backup")
+                        .param("databasePassword", "s3cr3t"))
+                .andExpect(status().isOk())
+                .andExpect(model().attributeHasFieldErrors("form", "databaseUsername"))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Username is not valid")));
     }
 
     @Test
@@ -449,8 +494,8 @@ class DatabaseTargetControllerTest {
                         .param("host", "127.0.0.1")
                         .param("port", "3306")
                         .param("database", "shop")
-                        .param("username", "backup")
-                        .param("password", "s3cr3t"))
+                        .param("databaseUsername", "backup")
+                        .param("databasePassword", "s3cr3t"))
                 .andExpect(status().isOk())
                 .andExpect(content().string(org.hamcrest.Matchers.not(
                         org.hamcrest.Matchers.containsString("s3cr3t"))));
@@ -506,7 +551,7 @@ class DatabaseTargetControllerTest {
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("readonly value=\"SQLite\"")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("readonly value=\"apps/shop.db\"")))
                 .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("name=\"host\""))))
-                .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("name=\"password\""))));
+                .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("name=\"databasePassword\""))));
     }
 
     @Test
@@ -544,8 +589,8 @@ class DatabaseTargetControllerTest {
                         .param("name", "staging")
                         .param("host", "10.0.0.5")
                         .param("port", "3307")
-                        .param("username", "reader")
-                        .param("password", ""))
+                        .param("databaseUsername", "reader")
+                        .param("databasePassword", ""))
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrl("/databases"))
                 .andExpect(flash().attribute("message", "Saved target 'staging'"));
@@ -562,7 +607,7 @@ class DatabaseTargetControllerTest {
                         .param("name", "production")
                         .param("host", "")
                         .param("port", "3306")
-                        .param("username", "backup"))
+                        .param("databaseUsername", "backup"))
                 .andExpect(status().isOk())
                 .andExpect(view().name("database/form"))
                 .andExpect(model().attributeHasFieldErrors("form", "host"))
@@ -581,7 +626,7 @@ class DatabaseTargetControllerTest {
                         .param("name", "production")
                         .param("host", "127.0.0.1")
                         .param("port", "3306")
-                        .param("username", "backup"))
+                        .param("databaseUsername", "backup"))
                 .andExpect(status().isOk())
                 .andExpect(model().attributeHasFieldErrors("form", "name"))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("already exists")));
@@ -593,7 +638,7 @@ class DatabaseTargetControllerTest {
                         .param("name", "production")
                         .param("host", "127.0.0.1")
                         .param("port", "3306")
-                        .param("username", "backup"))
+                        .param("databaseUsername", "backup"))
                 .andExpect(status().isForbidden());
 
         verify(service, never()).edit(any(), any());

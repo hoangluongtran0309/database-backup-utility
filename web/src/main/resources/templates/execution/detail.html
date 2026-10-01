@@ -9,7 +9,7 @@
      th:attr="data-live-active=${execution.status.name() == 'RUNNING' or (latestVerification != null and latestVerification.status.name() == 'RUNNING')},
               data-live-announce=|Backup ${#strings.toLowerCase(execution.status)}|">
 
-  <div class="page-header">
+  <div class="page-header page-header-laptop-stack">
     <div>
       <div class="eyebrow">Backup</div>
       <h1 th:text="${targetName != null ? targetName : '(removed)'}">production</h1>

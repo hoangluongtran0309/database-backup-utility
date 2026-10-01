@@ -69,6 +69,10 @@ credentials.
 The console asks you to sign in first. There is one operator account, set from
 the environment with a bcrypt hash, and every form carries a CSRF token. See
 [ADR-011](docs/adr/011-one-operator-account-from-the-environment.md).
+Database credential fields use a separate browser form identity from that
+operator login. At laptop widths, the wide target and storage tables become
+labelled cards and action-heavy headers stack without hiding controls; see
+[ADR-037](docs/adr/037-console-layout-and-credential-autofill.md).
 
 The same operator can automate every management and execution flow through the
 versioned `/api/v1` HTTP API and the bundled `dbbackup` CLI. The API owns no

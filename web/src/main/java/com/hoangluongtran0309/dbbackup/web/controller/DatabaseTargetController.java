@@ -57,10 +57,10 @@ public class DatabaseTargetController {
             Map.entry("host", "host"),
             Map.entry("port", "port"),
             Map.entry("databaseName", "database"),
-            Map.entry("username", "username"),
+            Map.entry("username", "databaseUsername"),
             Map.entry("authenticationDatabase", "authenticationDatabase"),
             Map.entry("dataPumpDirectory", "dataPumpDirectory"),
-            Map.entry("password", "password"),
+            Map.entry("password", "databasePassword"),
             Map.entry("storageProfileId", "storageProfileId"),
             Map.entry("verifyAfterBackup", "verifyAfterBackup"));
 
@@ -295,8 +295,10 @@ public class DatabaseTargetController {
         if (form.getPort() == null) {
             binding.rejectValue("port", "target.required", "Port is required");
         }
-        ValidationUtils.rejectIfEmptyOrWhitespace(binding, "username", "target.required", "Username is required");
-        ValidationUtils.rejectIfEmptyOrWhitespace(binding, "password", "target.required", "Password is required");
+        ValidationUtils.rejectIfEmptyOrWhitespace(
+                binding, "databaseUsername", "target.required", "Username is required");
+        ValidationUtils.rejectIfEmptyOrWhitespace(
+                binding, "databasePassword", "target.required", "Password is required");
         if (form.getEngine() == DatabaseEngine.MONGODB) {
             ValidationUtils.rejectIfEmptyOrWhitespace(
                     binding, "authenticationDatabase", "target.required", "Authentication database is required");
@@ -316,7 +318,8 @@ public class DatabaseTargetController {
         if (form.getPort() == null) {
             binding.rejectValue("port", "target.required", "Port is required");
         }
-        ValidationUtils.rejectIfEmptyOrWhitespace(binding, "username", "target.required", "Username is required");
+        ValidationUtils.rejectIfEmptyOrWhitespace(
+                binding, "databaseUsername", "target.required", "Username is required");
         if (target.getEngine() == DatabaseEngine.MONGODB) {
             ValidationUtils.rejectIfEmptyOrWhitespace(
                     binding, "authenticationDatabase", "target.required", "Authentication database is required");

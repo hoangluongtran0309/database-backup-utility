@@ -4,7 +4,11 @@
 <body><div id="content">
   <div class="page-header"><div><div class="eyebrow">Storage</div>
     <h1 th:text="${editing == null ? 'Add ' + provider.displayName + ' profile' : 'Edit ' + editing.name}">Add storage profile</h1>
-    <p>The bucket must already exist. Prefer HTTPS endpoints in production.</p></div></div>
+    <p th:text="${provider.name() == 'AZURE_BLOB'
+                  ? 'The container must already exist. Prefer HTTPS endpoints in production.'
+                  : 'The bucket must already exist. Prefer HTTPS endpoints in production.'}">
+      The bucket must already exist. Prefer HTTPS endpoints in production.
+    </p></div></div>
   <form class="form-panel" method="post" th:object="${form}"
         th:action="@{${editing == null ? '/storage' : '/storage/' + editing.id}}">
     <input type="hidden" th:field="*{provider}">

@@ -286,6 +286,26 @@ input[readonly] { background: var(--surface); color: var(--muted); border-style:
 .modal { width: min(520px, 100%); padding: 1.25rem; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); box-shadow: var(--shadow); }
 .modal p { color: var(--muted); }
 
+/* The target and storage tables carry more columns and actions than a laptop
+   content area can show together. Use their existing mobile card semantics at
+   laptop widths without changing the denser tables elsewhere. */
+@media (max-width: 1399px) {
+    .page-header-laptop-stack { align-items: stretch; flex-direction: column; }
+    .page-header-laptop-stack > .actions { justify-content: flex-start; }
+    .table-wrap.responsive-cards-laptop { overflow: visible; border: 0; background: transparent; }
+    .responsive-cards-laptop table, .responsive-cards-laptop tbody,
+    .responsive-cards-laptop tr, .responsive-cards-laptop td { display: block; width: 100%; }
+    .responsive-cards-laptop thead { display: none; }
+    .responsive-cards-laptop tr { margin-bottom: .8rem; padding: .75rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+    .responsive-cards-laptop td { display: grid; grid-template-columns: minmax(120px, 24%) minmax(0, 1fr); gap: .7rem; padding: .42rem 0; border: 0; white-space: normal; overflow-wrap: anywhere; }
+    .responsive-cards-laptop .nowrap { white-space: normal; }
+    .responsive-cards-laptop td > .badge { justify-self: start; }
+    .responsive-cards-laptop td::before { content: attr(data-label); color: var(--muted); font-size: .72rem; font-weight: 720; letter-spacing: .04em; text-transform: uppercase; }
+    .responsive-cards-laptop td.actions { display: block; width: 100%; padding-top: .75rem; border-top: 1px solid var(--border); }
+    .responsive-cards-laptop td.actions::before { display: none; }
+    .responsive-cards-laptop .row-actions { justify-content: flex-start; flex-wrap: wrap; }
+}
+
 @media (max-width: 767px) {
     html { scroll-behavior: auto; }
     .mobile-header { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; justify-content: space-between; height: 64px; padding: .6rem .85rem; background: color-mix(in srgb, var(--surface) 94%, transparent); border-bottom: 1px solid var(--border); backdrop-filter: blur(10px); }

@@ -238,7 +238,10 @@ ISSUE-01 fix (per-execution directories) cover it.
 
 - **Severity:** Low (depends on the browser)
 - **Area:** target form, sign-in
-- **Status:** Open – awaiting review
+- **Status:** Fixed in slice 35. Target forms now use distinct database
+  credential field names with autocomplete disabled, while operator sign-in
+  keeps the standard login fields. See
+  [ADR-037](../adr/037-console-layout-and-credential-autofill.md).
 
 After registering targets in Chrome and signing out, the sign-in form was
 pre-filled with the *database* user `shop` and its password
@@ -263,7 +266,9 @@ re-check in Chrome and Firefox.
 
 - **Severity:** Low
 - **Area:** `database/list.html`, `storage/list.html`
-- **Status:** Open – awaiting review
+- **Status:** Fixed in slice 35. Targets and storage switch to labelled cards
+  at laptop widths, with all row actions visible and wrapped. See
+  [ADR-037](../adr/037-console-layout-and-credential-autofill.md).
 
 At a 1366×683 viewport (a common laptop size), the targets table needs
 horizontal scrolling even with one row. **Back up now** is cut off, and
@@ -287,7 +292,9 @@ a second line, or switch to the existing `responsive-cards` layout
 
 - **Severity:** Low
 - **Area:** `execution/detail.html` header, Storage page header
-- **Status:** Open – awaiting review
+- **Status:** Fixed in slice 35. Storage and backup-detail actions move below
+  the title at laptop widths. See
+  [ADR-037](../adr/037-console-layout-and-credential-autofill.md).
 
 On a successful backup's page, six buttons sit next to the title, so
 `shop-postgres` breaks into "shop- / postgres" and **Delete** wraps onto its
@@ -373,7 +380,9 @@ avoid it.
 
 - **Severity:** Low
 - **Area:** `storage/form.html:7`, `storage/list.html:14`
-- **Status:** Open – awaiting review
+- **Status:** Fixed in slice 35. Azure forms say `container`, and the mixed
+  storage list uses `Bucket / container` with provider-specific card labels.
+  See [ADR-037](../adr/037-console-layout-and-credential-autofill.md).
 
 The Azure form's subtitle says "The bucket must already exist", although the
 field is labelled *Container*. The storage list's column header is *Bucket*
@@ -389,7 +398,9 @@ provider-specific wording, or a neutral header such as "Bucket / container".
 
 - **Severity:** Low
 - **Area:** `schedule/form.html:42`
-- **Status:** Open – awaiting review
+- **Status:** Fixed in slice 35. The fixed cron expression is explicitly
+  introduced as an example rather than a description of the entered value.
+  See [ADR-037](../adr/037-console-layout-and-credential-autofill.md).
 
 The hint under the cron field always reads "`0 0 2 * * ?` means every day at
 02:00:00", even when editing a schedule whose expression is `0 * * * * ?`
