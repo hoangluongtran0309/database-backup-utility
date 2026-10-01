@@ -137,7 +137,10 @@ walkthrough used a patched copy containing exactly that symlink.
 
 - **Severity:** Medium
 - **Area:** PostgreSQL engine, packaging
-- **Status:** Open – awaiting review
+- **Status:** Fixed in slice 33. The image and CI use PGDG client 17, **Test**
+  rejects a server newer than its configured `pg_dump`, and the release-shaped
+  E2E image backs up PostgreSQL 17. See
+  [ADR-035](../adr/035-postgresql-17-client-and-version-preflight.md).
 
 **Steps to reproduce:** register a target on `postgres:17-alpine`. **Test**
 reports *Connected*. Press **Back up now**.

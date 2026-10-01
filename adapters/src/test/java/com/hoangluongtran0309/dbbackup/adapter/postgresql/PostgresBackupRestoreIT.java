@@ -12,8 +12,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -33,14 +31,13 @@ import com.hoangluongtran0309.dbbackup.core.model.DatabaseTarget;
 @Testcontainers
 class PostgresBackupRestoreIT {
 
-    private static final Path PSQL = Path.of("/usr/bin/psql");
-    private static final Path PG_DUMP = Path.of("/usr/bin/pg_dump");
-    private static final Path PG_RESTORE = Path.of("/usr/bin/pg_restore");
-    private static final Pattern CLIENT_MAJOR = Pattern.compile("PostgreSQL\\) (\\d+)");
+    private static final Path PSQL = client("PSQL_PATH", "psql");
+    private static final Path PG_DUMP = client("PG_DUMP_PATH", "pg_dump");
+    private static final Path PG_RESTORE = client("PG_RESTORE_PATH", "pg_restore");
 
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer(
-            "postgres:" + clientMajor() + "-alpine")
+            "postgres:17-alpine")
             .withDatabaseName("shop_source")
             .withUsername("backup")
             .withPassword("s3cr3t");
@@ -62,7 +59,8 @@ class PostgresBackupRestoreIT {
     @BeforeEach
     void setUp() throws Exception {
         ProcessRunner runner = new ProcessRunner();
-        connectionTest = new PostgresCliConnectionTestAdapter(runner, PSQL, Duration.ofSeconds(10));
+        connectionTest = new PostgresCliConnectionTestAdapter(
+                runner, PSQL, PG_DUMP, Duration.ofSeconds(10));
         backup = new PostgresDumpBackupAdapter(
                 runner, PG_DUMP, Duration.ofSeconds(10), Duration.ofMinutes(2));
         restore = new PostgresRestoreAdapter(
@@ -150,23 +148,9 @@ class PostgresBackupRestoreIT {
                 Duration.ofMinutes(2), Duration.ofSeconds(30));
     }
 
-    private static String clientMajor() {
-        try {
-            Process process = new ProcessBuilder(PG_DUMP.toString(), "--version")
-                    .redirectErrorStream(true)
-                    .start();
-            String version = new String(process.getInputStream().readAllBytes()).strip();
-            if (process.waitFor() != 0) {
-                throw new IllegalStateException("Could not read pg_dump version: " + version);
-            }
-            Matcher matcher = CLIENT_MAJOR.matcher(version);
-            if (!matcher.find()) {
-                throw new IllegalStateException("Unrecognised pg_dump version: " + version);
-            }
-            return matcher.group(1);
-        } catch (Exception e) {
-            throw new IllegalStateException("The pg_dump client version could not be determined", e);
-        }
+    private static Path client(String environment, String name) {
+        return Path.of(System.getenv().getOrDefault(
+                environment, "/usr/lib/postgresql/17/bin/" + name));
     }
 
     private static Connection jdbc(String database) throws Exception {

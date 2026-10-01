@@ -16,9 +16,9 @@
   the decisions were made.
 
 The current last decision is
-[ADR-034](adr/034-oracle-pack-runtime-and-shared-staging-permissions.md), which
-makes the optional Oracle client image loadable on Ubuntu 24.04 and requires
-bidirectional access to its shared Data Pump staging directory.
+[ADR-035](adr/035-postgresql-17-client-and-version-preflight.md), which pins the
+shipped PostgreSQL client to major 17 and makes target testing reject a server
+newer than the configured `pg_dump`.
 
 These pages describe the code that exists. When a slice changes the code, it
 changes these files in the same commit.
