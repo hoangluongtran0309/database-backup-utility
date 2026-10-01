@@ -60,14 +60,14 @@ class OracleDataPumpRestoreAdapter implements LogicalRestorePort {
         try {
             files.stageForImport(artifact, staged);
             run(connection, preflightCommand(connection, sourceNamespace, staged, sqlFile, sqlJob),
-                    "The Oracle Data Pump archive preflight failed");
+                    "The Oracle Data Pump archive preflight failed", staged);
             if (!files.isReadableRegularFile(sqlFile)) {
                 throw new RestoreFailedException(
                         "Oracle completed the preflight but its SQLFILE is not visible at " + sqlFile);
             }
             files.delete(sqlFile);
             run(connection, importCommand(connection, sourceNamespace, staged, importJob),
-                    "impdp failed");
+                    "impdp failed", staged);
             files.delete(staged);
         } catch (RestoreFailedException e) {
             throw cleanupFailure(connection, operationId, staged, sqlFile, e);
@@ -88,7 +88,7 @@ class OracleDataPumpRestoreAdapter implements LogicalRestorePort {
         files.delete(files.restoreDump(operationId));
     }
 
-    private void run(DatabaseConnection connection, List<String> command, String prefix) {
+    private void run(DatabaseConnection connection, List<String> command, String prefix, Path staged) {
         ProcessRunner.Result result;
         try {
             result = OracleClient.run(runner, binary, connection, command, timeout);
@@ -96,9 +96,21 @@ class OracleDataPumpRestoreAdapter implements LogicalRestorePort {
             throw new RestoreFailedException(e.getMessage(), e);
         }
         if (!result.succeeded()) {
+            String error = result.errorOutput();
+            if (isPermissionFailure(error)) {
+                error = files.oracleReadFailure(staged, error);
+            }
             throw new RestoreFailedException(
-                    "%s (exit %d): %s".formatted(prefix, result.exitCode(), result.errorOutput()));
+                    "%s (exit %d): %s".formatted(prefix, result.exitCode(), error));
         }
+    }
+
+    private static boolean isPermissionFailure(String error) {
+        String normalized = error.toLowerCase(java.util.Locale.ROOT);
+        return normalized.contains("ora-31640")
+                || normalized.contains("ora-27041")
+                || normalized.contains("error: 13")
+                || normalized.contains("permission denied");
     }
 
     List<String> preflightCommand(

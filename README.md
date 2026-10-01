@@ -257,8 +257,14 @@ Run that image with the shared bind/NFS directory mounted at
 `/var/lib/dbbackup/oracle-datapump`. Set `ORACLE_ENABLED=true` (already set by
 the example image) and register the service name, schema/login user and
 directory object. The path referenced by Oracle may differ from the container
-mount path, but both must resolve to the same storage. Full deployment details
-and restore limitations are in [ADR-020](docs/adr/020-oracle-data-pump-shared-staging-and-optional-client-pack.md).
+mount path, but both must resolve to the same storage. Give the directory one
+numeric group shared by the Oracle server and application containers, add the
+application to it with Compose `group_add` (or `docker run --group-add`), and
+make the directory group-owned and setgid with mode `2770`; equivalent ACLs
+are also supported. **Test** verifies access in both directions. Full
+deployment details and restore limitations are in
+[ADR-020](docs/adr/020-oracle-data-pump-shared-staging-and-optional-client-pack.md)
+and [ADR-034](docs/adr/034-oracle-pack-runtime-and-shared-staging-permissions.md).
 
 ### Optional SQL Server pack
 

@@ -99,7 +99,9 @@ of the same database name with a fixed clock.
 
 - **Severity:** High (every Oracle test, backup and restore fails with the documented image)
 - **Area:** Oracle client pack, CI
-- **Status:** Open – awaiting review
+- **Status:** Fixed in slice 32. The Oracle image supplies the Ubuntu 24.04
+  `libaio.so.1` compatibility link and rejects unresolved client dependencies
+  at build time. See [ADR-034](../adr/034-oracle-pack-runtime-and-shared-staging-permissions.md).
 
 **Steps to reproduce**
 
@@ -169,7 +171,10 @@ shipped major in the docs and make **Test** compare `server_version_num` with
 
 - **Severity:** Medium
 - **Area:** Oracle backup and restore, deployment docs
-- **Status:** Open – awaiting review
+- **Status:** Fixed in slice 32. The connection test probes the shared staging
+  directory in both directions, deployment documents the shared group/setgid
+  requirement, and permission failures include ownership and mode. See
+  [ADR-034](../adr/034-oracle-pack-runtime-and-shared-staging-permissions.md).
 
 **Steps to reproduce:** follow `docs/deployment.md:236-251`. Mount one directory
 at `/srv/dbbackup/oracle-datapump` in the Oracle server and at
