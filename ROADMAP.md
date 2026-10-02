@@ -169,7 +169,7 @@ A second browser run recorded every feature on all seven engines for
 - [x] **36. Feature tour documentation.** Screenshots and GIFs of every
       console flow in `docs/tour/`, a feature guide in `docs/FEATURES.md`, a
       restructured README and the SELinux note in deployment.
-- [ ] **37. A buildable Oracle pack with current Instant Client.** Run the
+- [x] **37. A buildable Oracle pack with current Instant Client.** Run the
       dependency check with the Instant Client library path. ISSUE-15.
 - [ ] **38. Card layout by table width.** Switch the targets and storage
       tables to cards whenever they do not fit, not below a fixed viewport

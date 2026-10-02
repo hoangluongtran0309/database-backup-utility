@@ -444,7 +444,9 @@ document that `text` means "unwrapped JSON".
 
 - **Severity:** High (the documented Oracle pack cannot be built)
 - **Area:** `Dockerfile.oracle.example:27-33`
-- **Status:** Open, assigned to slice 37.
+- **Status:** Fixed in slice 37. The Instant Client library path is present
+  during both the build-time dependency check and normal runtime; CI uses
+  ELF clients linked to a colocated library without RPATH/RUNPATH.
 
 **Steps to reproduce:** download the current Linux x64 Instant Client Basic,
 SQL*Plus and Tools archives (23.26.2.0.0), copy `instantclient_23_26/*` into
@@ -470,9 +472,9 @@ uses stub tools, so CI does not catch it.
 runs `LD_LIBRARY_PATH=/opt/oracle/instantclient ldd "$path"`. The resulting
 image backed up, restored and verified Oracle Free 23 successfully.
 
-**Suggested fix:** export `LD_LIBRARY_PATH` for the check (or move the `ENV`
-above the `RUN`), and add a CI step that runs the check against a real Instant
-Client layout or an equivalent fixture without RPATH.
+**Fix:** `LD_LIBRARY_PATH` is now part of the image before `ldd` runs. The CI
+fixture links all three clients to a shared library that is available only
+through that path and asserts that no client has RPATH or RUNPATH.
 
 ---
 
@@ -525,8 +527,9 @@ test for a lifecycle event.
 
 - **Slack and Telegram** were not test-sent, because they would contact real
   external services. Slack's URL validation was checked.
-- **`dbbackup-ci:oracle`** contains stub Oracle tools. That is fine for CI's
-  structure check, but it is why ISSUE-02 went unnoticed.
+- **`dbbackup-ci:oracle`** contains synthetic ELF Oracle tools. They exercise
+  dynamic library discovery and image structure, but not Oracle's proprietary
+  client implementation.
 - **MinIO** could no longer be pulled from Docker Hub or quay.io without
   credentials, so S3 was tested with `adobe/s3mock`.
 - **SELinux (Fedora, enforcing)** denied the containers access to their bind
