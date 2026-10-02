@@ -173,7 +173,10 @@ jobs:
           for client in sqlplus expdp impdp; do
             cc -o ".oracle-client-fixture/$client" /tmp/oracle-fixture-client.c \
               -L.oracle-client-fixture -Wl,--no-as-needed -loraclefixture
-            ! readelf -d ".oracle-client-fixture/$client" | grep -Eq 'RPATH|RUNPATH'
+            if readelf -d ".oracle-client-fixture/$client" | grep -Eq 'RPATH|RUNPATH'; then
+              echo "$client fixture must not contain RPATH or RUNPATH" >&2
+              exit 1
+            fi
             ldd ".oracle-client-fixture/$client" | grep -F 'liboraclefixture.so => not found'
           done
           docker build -f Dockerfile.oracle.example \
