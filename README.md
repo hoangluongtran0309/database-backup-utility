@@ -228,9 +228,6 @@ docker build -f Dockerfile.oracle.example \
   --build-arg BASE_IMAGE=dbbackup:base -t dbbackup:oracle .
 ```
 
-> Instant Client 23.26 currently fails the example's library check; see
-> [ISSUE-15](docs/walkthrough/ISSUES.md#issue-15) for the cause and workaround.
-
 **3. Share the staging directory.**
 
 - Mount the shared bind or NFS directory at

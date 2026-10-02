@@ -163,11 +163,19 @@ jobs:
               dbbackup-ci:base --version | grep -E "^$client \\(PostgreSQL\\) 17\\."
           done
           mkdir -p .oracle-client-fixture
-          fixture_container="$(docker create dbbackup-ci:base)"
+          printf '%s\n' 'int oracle_fixture(void) { return 0; }' > /tmp/oracle-fixture-library.c
+          printf '%s\n' \
+            'extern int oracle_fixture(void);' \
+            'int main(void) { return oracle_fixture(); }' \
+            > /tmp/oracle-fixture-client.c
+          cc -shared -fPIC -Wl,-soname,liboraclefixture.so \
+            -o .oracle-client-fixture/liboraclefixture.so /tmp/oracle-fixture-library.c
           for client in sqlplus expdp impdp; do
-            docker cp "$fixture_container:/usr/bin/true" ".oracle-client-fixture/$client"
+            cc -o ".oracle-client-fixture/$client" /tmp/oracle-fixture-client.c \
+              -L.oracle-client-fixture -Wl,--no-as-needed -loraclefixture
+            ! readelf -d ".oracle-client-fixture/$client" | grep -Eq 'RPATH|RUNPATH'
+            ldd ".oracle-client-fixture/$client" | grep -F 'liboraclefixture.so => not found'
           done
-          docker rm "$fixture_container"
           docker build -f Dockerfile.oracle.example \
             --build-arg BASE_IMAGE=dbbackup-ci:base \
             --build-arg ORACLE_CLIENT_DIR=.oracle-client-fixture \
