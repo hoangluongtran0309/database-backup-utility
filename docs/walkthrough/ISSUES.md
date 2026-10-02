@@ -508,7 +508,8 @@ cards; at or above it the dense table remains available.
 
 - **Severity:** Low
 - **Area:** `application/.../notification/NotificationDispatcher.java:55-76`
-- **Status:** Open, assigned to slice 39.
+- **Status:** Fixed in slice 39. Every adapter delivery receives an immutable
+  copy of the message carrying that channel's actual id and name.
 
 ADR-028 promises that the generic webhook body carries the channel identity.
 A **Send test** delivery does carry it. A real `BACKUP_SUCCESS` delivery for
@@ -519,9 +520,10 @@ the same channel arrives as
 with `null, null` for the channel fields and send that same message to every
 subscribed channel.
 
-**Suggested fix:** in `publish`, copy the message with the channel's id and
-name before `send(channel, ...)`, and assert the field in the webhook adapter
-test for a lifecycle event.
+**Fix:** `NotificationMessage.withChannel` preserves the lifecycle payload and
+adds the selected channel identity immediately before adapter delivery. Tests
+cover one event delivered to multiple channels and the non-test webhook JSON
+contract.
 
 ---
 

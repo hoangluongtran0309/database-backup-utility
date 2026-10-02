@@ -56,18 +56,27 @@ class NotificationAdaptersTest {
         assertThat(payload.path("occurredAt").asText()).isEqualTo(occurredAt.toString());
     }
 
-    @Test void verificationWebhookUsesVerificationAsExecutionIdAndKeepsBackupIdentity() throws Exception {
+    @Test void lifecycleWebhookCarriesChannelAndExecutionIdentity() throws Exception {
         HttpClient client = successfulClient("{}");
         UUID backupId = UUID.randomUUID();
         UUID verificationId = UUID.randomUUID();
+        UUID channelId = UUID.randomUUID();
         NotificationMessage message = new NotificationMessage(NotificationEventType.VERIFICATION_SUCCESS,
                 Instant.parse("2026-09-24T01:00:00Z"), UUID.randomUUID(), "production", null,
-                null, null, null, backupId, null, verificationId, "SUCCEEDED", null, null, null);
+                null, null, null, backupId, null, verificationId, "SUCCEEDED", null,
+                channelId, "operations-webhook");
 
         new WebhookNotificationAdapter(new HttpNotificationSupport(client))
                 .send(new WebhookNotificationSettings("https://hooks.example.test/notify"), message);
 
-        assertThat(body(capturedRequest(client)))
+        com.fasterxml.jackson.databind.JsonNode payload = new com.fasterxml.jackson.databind.ObjectMapper()
+                .readTree(body(capturedRequest(client)));
+        assertThat(payload.path("isTest").asBoolean()).isFalse();
+        assertThat(payload.path("channel").path("id").asText()).isEqualTo(channelId.toString());
+        assertThat(payload.path("channel").path("name").asText()).isEqualTo("operations-webhook");
+        assertThat(payload.path("executionId").asText()).isEqualTo(verificationId.toString());
+        assertThat(payload.path("backupExecutionId").asText()).isEqualTo(backupId.toString());
+        assertThat(payload.toString())
                 .contains("\"executionId\":\"" + verificationId + "\"")
                 .contains("\"backupExecutionId\":\"" + backupId + "\"");
     }

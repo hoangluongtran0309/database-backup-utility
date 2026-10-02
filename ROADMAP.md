@@ -174,7 +174,7 @@ A second browser run recorded every feature on all seven engines for
 - [x] **38. Card layout by table width.** Switch the targets and storage
       tables to cards whenever they do not fit, not below a fixed viewport
       width. ISSUE-16. See ADR-038.
-- [ ] **39. Channel identity in lifecycle webhooks.** Fill `channel.id` and
+- [x] **39. Channel identity in lifecycle webhooks.** Fill `channel.id` and
       `channel.name` per delivered channel. ISSUE-17.
 
 ## Deliberately out of scope

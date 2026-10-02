@@ -366,11 +366,11 @@ settings (`DBBACKUP_SMTP_*`) and stays disabled until a host is configured.
 
 | Generic webhook delivery | Email (here caught by Mailpit) |
 | --- | --- |
-| ![A BACKUP_SUCCESS webhook delivery](tour/images/24-webhook-delivery.jpg) | ![A test email](tour/images/26-email-in-mailpit.jpg) |
+| ![A BACKUP_SUCCESS webhook delivery with channel identity](tour/images/39-webhook-channel-identity.jpg) | ![A test email](tour/images/26-email-in-mailpit.jpg) |
 
 The generic webhook body is stable JSON. It contains the event, `isTest`, an
-ISO-8601 `occurredAt`, source and destination targets, the execution ids,
-status and a sanitized error message.
+ISO-8601 `occurredAt`, the receiving channel's id and name, source and
+destination targets, the execution ids, status and a sanitized error message.
 
 Delivery is best effort with short timeouts. A notification failure is logged
 and never changes the result of a backup or restore. See
@@ -456,7 +456,8 @@ The full resource list is in the [HTTP API reference](http-api.md).
   ([ADR-020](adr/020-oracle-data-pump-shared-staging-and-optional-client-pack.md)).
   SQL Server uses SqlPackage BACPAC, which suits databases below roughly
   200 GB ([ADR-022](adr/022-sql-server-bacpac-and-optional-client-pack.md)).
-- **Known issues.** Open issues from the walkthroughs are tracked in
+- **Walkthrough findings.** Issues found by the recorded walkthroughs and the
+  slices that fixed them are tracked in
   [walkthrough/ISSUES.md](walkthrough/ISSUES.md).
 
 ## How this tour was recorded
@@ -481,6 +482,6 @@ same forms with the page's own CSRF token. Slack and Telegram channels were
 created but not test-sent, because that would contact the real services. All
 credentials in the images belong to the throwaway environment.
 
-The tour found three problems, now
-[ISSUE-15 to ISSUE-17](walkthrough/ISSUES.md#issue-15). One of them is a build
-fix that the Oracle pack needed for this recording.
+The tour found three problems, all fixed in slices 37–39 and recorded as
+[ISSUE-15 to ISSUE-17](walkthrough/ISSUES.md#issue-15). One of them is the
+build fix that the Oracle pack needed for this recording.
