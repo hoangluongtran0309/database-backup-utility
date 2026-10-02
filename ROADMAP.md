@@ -137,6 +137,46 @@ their design is decided.
       checks; publish an attested GHCR image, JARs, checksums and SBOMs from an
       approved release tag. See ADR-032.
 
+## Fixes from the 0.19.0 walkthrough
+
+A browser walkthrough of every console feature on 0.20.0-SNAPSHOT found the
+problems listed in [docs/walkthrough/ISSUES.md](docs/walkthrough/ISSUES.md).
+Each slice below fixes a group of them and marks them fixed there.
+
+- [x] **31. Unique local artifact paths.** Store local artifacts as
+      `<targetId>/<executionId>/<file>`, like remote keys, so two backups can
+      never share a file, and refuse to overwrite one that exists. ISSUE-01,
+      ISSUE-05. See ADR-033.
+- [x] **32. A working Oracle pack.** Provide `libaio.so.1` in the Oracle image
+      and document the Data Pump staging ownership, with a precise error
+      message. ISSUE-02, ISSUE-04. See ADR-034.
+- [x] **33. A current PostgreSQL client.** Back up PostgreSQL 17 with the
+      shipped image, and make the connection test catch a client/server
+      mismatch. ISSUE-03. See ADR-035.
+- [x] **34. API, CLI and webhook contracts.** Optional `verifyAfterBackup`,
+      every validation error at once, ISO-8601 webhook timestamps, readable CLI
+      text output. ISSUE-09, ISSUE-10, ISSUE-11, ISSUE-14. See ADR-036.
+- [x] **35. Console layout and wording.** Table and header layout at laptop
+      widths, target form autofill, Azure wording and the cron hint. ISSUE-06,
+      ISSUE-07, ISSUE-08, ISSUE-12, ISSUE-13. See ADR-037.
+
+## Fixes from the 0.20.0 feature tour
+
+A second browser run recorded every feature on all seven engines for
+[docs/FEATURES.md](docs/FEATURES.md) and found three more problems, listed in
+[docs/walkthrough/ISSUES.md](docs/walkthrough/ISSUES.md).
+
+- [x] **36. Feature tour documentation.** Screenshots and GIFs of every
+      console flow in `docs/tour/`, a feature guide in `docs/FEATURES.md`, a
+      restructured README and the SELinux note in deployment.
+- [x] **37. A buildable Oracle pack with current Instant Client.** Run the
+      dependency check with the Instant Client library path. ISSUE-15.
+- [x] **38. Card layout by table width.** Switch the targets and storage
+      tables to cards whenever they do not fit, not below a fixed viewport
+      width. ISSUE-16. See ADR-038.
+- [x] **39. Channel identity in lifecycle webhooks.** Fill `channel.id` and
+      `channel.name` per delivered channel. ISSUE-17.
+
 ## Deliberately out of scope
 
 Not "later" — absent, and not to be reintroduced without a decision that

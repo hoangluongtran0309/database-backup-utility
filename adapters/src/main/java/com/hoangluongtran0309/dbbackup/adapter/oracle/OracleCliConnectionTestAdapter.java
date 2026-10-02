@@ -44,7 +44,7 @@ class OracleCliConnectionTestAdapter implements ConnectionTestPort {
     public Result test(DatabaseConnection connection) {
         Path probe = files.probe(UUID.randomUUID());
         String filename = probe.getFileName().toString();
-        String script = """
+        String writeThroughOracle = """
                 WHENEVER SQLERROR EXIT FAILURE ROLLBACK
                 DECLARE
                   f UTL_FILE.FILE_TYPE;
@@ -58,28 +58,59 @@ class OracleCliConnectionTestAdapter implements ConnectionTestPort {
                 """.formatted(connection.dataPumpDirectory(), filename);
         try {
             ProcessRunner.Result result = OracleClient.runSqlPlus(
-                    runner, binary, connection, timeout, script);
+                    runner, binary, connection, timeout, writeThroughOracle);
             if (!result.succeeded()) {
-                removeProbe(connection, probe, filename);
-                return Result.failed(result.errorOutput());
+                return failedAfterCleanup(connection, probe, filename, result.errorOutput());
             }
-            if (!files.isReadableRegularFile(probe)) {
-                String visibility = "exists=%s, regular=%s, readable=%s".formatted(
-                        Files.exists(probe), Files.isRegularFile(probe), Files.isReadable(probe));
-                removeProbe(connection, probe, filename);
-                return Result.failed(
-                        "Oracle created the probe in directory object %s, but it is not visible at %s (%s)"
-                                .formatted(connection.dataPumpDirectory(), probe, visibility));
+            files.requireReadableRegularFile(probe,
+                    "Oracle created a staging probe that the application cannot read");
+            removeProbe(connection, probe, filename);
+
+            files.writeProbe(probe);
+            ProcessRunner.Result reverse = OracleClient.runSqlPlus(
+                    runner, binary, connection, timeout, readThroughOracle(connection, filename));
+            if (!reverse.succeeded()) {
+                return failedAfterCleanup(connection, probe, filename,
+                        files.oracleReadFailure(probe, reverse.errorOutput()));
             }
-            files.delete(probe);
-            return Result.ok();
+            return finishAfterCleanup(connection, probe, filename);
         } catch (RuntimeException e) {
-            try {
-                removeProbe(connection, probe, filename);
-            } catch (RuntimeException cleanup) {
-                e.addSuppressed(cleanup);
-            }
-            return Result.failed(e.getMessage());
+            return failedAfterCleanup(connection, probe, filename, e.getMessage());
+        }
+    }
+
+    private static String readThroughOracle(DatabaseConnection connection, String filename) {
+        return """
+                WHENEVER SQLERROR EXIT FAILURE ROLLBACK
+                DECLARE
+                  f UTL_FILE.FILE_TYPE;
+                  line VARCHAR2(32767);
+                BEGIN
+                  f := UTL_FILE.FOPEN('%s', '%s', 'r');
+                  UTL_FILE.GET_LINE(f, line);
+                  UTL_FILE.FCLOSE(f);
+                END;
+                /
+                EXIT SUCCESS
+                """.formatted(connection.dataPumpDirectory(), filename);
+    }
+
+    private Result finishAfterCleanup(DatabaseConnection connection, Path probe, String filename) {
+        try {
+            removeProbe(connection, probe, filename);
+            return Result.ok();
+        } catch (RuntimeException cleanup) {
+            return Result.failed("Oracle staging probe cleanup failed: " + cleanup.getMessage());
+        }
+    }
+
+    private Result failedAfterCleanup(
+            DatabaseConnection connection, Path probe, String filename, String message) {
+        try {
+            removeProbe(connection, probe, filename);
+            return Result.failed(message);
+        } catch (RuntimeException cleanup) {
+            return Result.failed(message + " (probe cleanup also failed: " + cleanup.getMessage() + ")");
         }
     }
 

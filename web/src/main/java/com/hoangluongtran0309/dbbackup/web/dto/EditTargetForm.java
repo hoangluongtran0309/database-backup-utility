@@ -34,7 +34,7 @@ public class EditTargetForm {
     private Integer port;
 
     @Size(max = 128, message = "Username must be at most 128 characters")
-    private String username;
+    private String databaseUsername;
 
     @Size(max = 64, message = "Authentication database must be at most 64 characters")
     private String authenticationDatabase;
@@ -43,7 +43,7 @@ public class EditTargetForm {
     private String dataPumpDirectory;
 
     /** Blank keeps the stored password. */
-    private String password;
+    private String databasePassword;
     private UUID storageProfileId;
     private boolean verifyAfterBackup;
 
@@ -53,7 +53,7 @@ public class EditTargetForm {
         form.setName(target.getName());
         form.setHost(target.getHost());
         form.setPort(target.getPort());
-        form.setUsername(target.getUsername());
+        form.setDatabaseUsername(target.getUsername());
         form.setAuthenticationDatabase(target.getAuthenticationDatabase());
         form.setDataPumpDirectory(target.getDataPumpDirectory());
         form.setStorageProfileId(target.getStorageProfileId());
@@ -63,7 +63,7 @@ public class EditTargetForm {
 
     public EditTargetCommand toCommand() {
         return new EditTargetCommand(
-                name, host, port, username, password, authenticationDatabase, dataPumpDirectory,
+                name, host, port, databaseUsername, databasePassword, authenticationDatabase, dataPumpDirectory,
                 storageProfileId, verifyAfterBackup);
     }
 }

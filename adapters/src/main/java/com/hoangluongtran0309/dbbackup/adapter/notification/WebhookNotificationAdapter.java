@@ -7,6 +7,7 @@ import org.springframework.stereotype.Component;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import com.hoangluongtran0309.dbbackup.core.model.NotificationChannelSettings;
 import com.hoangluongtran0309.dbbackup.core.model.NotificationChannelType;
 import com.hoangluongtran0309.dbbackup.core.model.NotificationMessage;
@@ -15,7 +16,8 @@ import com.hoangluongtran0309.dbbackup.core.port.NotificationPort;
 
 @Component
 public class WebhookNotificationAdapter implements NotificationPort {
-    private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
+    private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules()
+            .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
     private final HttpNotificationSupport http;
     public WebhookNotificationAdapter() { this(new HttpNotificationSupport()); }
     WebhookNotificationAdapter(HttpNotificationSupport http) { this.http = http; }

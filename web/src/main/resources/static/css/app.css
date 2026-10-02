@@ -122,6 +122,8 @@ code { color: var(--text); font-family: var(--mono); font-size: .88em; overflow-
 .nav-item:hover { background: var(--surface-hover); color: var(--text); text-decoration: none; }
 .nav-item.active { background: var(--info-bg); color: var(--primary); }
 .nav-item span { width: 18px; text-align: center; }
+.nav-item .nav-icon { display: inline-flex; height: 18px; align-items: center; justify-content: center; }
+.nav-item .nav-icon svg { display: block; width: 16px; height: 16px; }
 .sidebar-footer { display: grid; gap: .75rem; margin-top: auto; padding: 1rem .25rem .2rem; }
 .sidebar-tagline { padding: 0 .45rem; color: var(--muted); font-size: .75rem; }
 .theme-toggle { display: flex; align-items: center; gap: .75rem; min-height: 44px; padding: .55rem .7rem; border: 1px solid var(--border); border-radius: 9px; background: transparent; color: var(--text); cursor: pointer; }
@@ -283,6 +285,35 @@ input[readonly] { background: var(--surface); color: var(--muted); border-style:
 .modal-backdrop { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 1rem; background: rgba(3, 8, 13, .74); }
 .modal { width: min(520px, 100%); padding: 1.25rem; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); box-shadow: var(--shadow); }
 .modal p { color: var(--muted); }
+
+/* The target and storage tables need 1540px to show their columns and actions
+   without scrolling. Query their available content width rather than the
+   viewport: the fixed sidebar and page padding make viewport breakpoints lie. */
+.wide-table-container { width: 100%; container: wide-table / inline-size; }
+.wide-table-container > .responsive-cards-laptop table { min-width: 1540px; }
+
+@container wide-table (max-width: 1539px) {
+    .table-wrap.responsive-cards-laptop { overflow: visible; border: 0; background: transparent; }
+    .wide-table-container > .responsive-cards-laptop table { min-width: 0; }
+    .responsive-cards-laptop table, .responsive-cards-laptop tbody,
+    .responsive-cards-laptop tr, .responsive-cards-laptop td { display: block; width: 100%; }
+    .responsive-cards-laptop thead { display: none; }
+    .responsive-cards-laptop tr { margin-bottom: .8rem; padding: .75rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+    .responsive-cards-laptop td { display: grid; grid-template-columns: minmax(120px, 24%) minmax(0, 1fr); gap: .7rem; padding: .42rem 0; border: 0; white-space: normal; overflow-wrap: anywhere; }
+    .responsive-cards-laptop .nowrap { white-space: normal; }
+    .responsive-cards-laptop td > .badge { justify-self: start; }
+    .responsive-cards-laptop td::before { content: attr(data-label); color: var(--muted); font-size: .72rem; font-weight: 720; letter-spacing: .04em; text-transform: uppercase; }
+    .responsive-cards-laptop td.actions { display: block; width: 100%; padding-top: .75rem; border-top: 1px solid var(--border); }
+    .responsive-cards-laptop td.actions::before { display: none; }
+    .responsive-cards-laptop .row-actions { justify-content: flex-start; flex-wrap: wrap; }
+}
+
+/* Headers with several actions still stack according to the viewport; unlike
+   a table, their own contents are not the overflow boundary. */
+@media (max-width: 1399px) {
+    .page-header-laptop-stack { align-items: stretch; flex-direction: column; }
+    .page-header-laptop-stack > .actions { justify-content: flex-start; }
+}
 
 @media (max-width: 767px) {
     html { scroll-behavior: auto; }

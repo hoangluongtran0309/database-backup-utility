@@ -131,6 +131,12 @@ public class RunBackupService {
         BackupExecution succeeded;
         try (PreparedWrite destination = storage.prepareWrite(
                 execution.getStorageProfileId(), target.getId(), executionId, filename)) {
+            // A BackupFailedException, not a generic one: for local storage
+            // that path does not clean up, and the file found here is not ours.
+            if (storage.occupied(destination)) {
+                throw new BackupFailedException(
+                        "Refusing to overwrite an existing artifact: " + destination.path());
+            }
             // Decrypted here, at the last moment and on the thread that uses
             // it, rather than being carried through the queue.
             DatabaseConnection connection = connectionTo(target);

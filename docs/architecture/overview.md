@@ -141,7 +141,10 @@ The PostgreSQL adapters pass the host, port, user and database explicitly and
 set `PGCONNECT_TIMEOUT`. `PostgresDumpBackupAdapter` writes a custom-format
 archive directly to its destination; `PostgresRestoreAdapter` lists that
 archive before starting a destructive restore. Each configured binary is
-checked for executability when its adapter is constructed.
+checked for executability when its adapter is constructed. The connection
+adapter also reads `server_version_num` and the configured `pg_dump --version`;
+it rejects a server newer than the dump client before a backup can start. See
+[ADR-035](../adr/035-postgresql-17-client-and-version-preflight.md).
 
 The MongoDB adapters pass an explicit authentication database separately from
 the database being backed up. `mongodump` writes a gzip-compressed archive;
@@ -158,14 +161,18 @@ replace the destination. See
 [ADR-019](../adr/019-sqlite-files-below-one-root.md).
 
 Oracle is an optional, all-or-nothing adapter pack. SQL*Plus probes the login,
-directory grant and shared mount with `UTL_FILE`. Data Pump exports the login
-schema to shared staging and copies a completed `.dmp` into artifact storage.
+directory grant and shared mount in both directions: the application reads an
+Oracle-created `UTL_FILE`, then Oracle reads an application-created file. Data
+Pump exports the login schema to shared staging and copies a completed `.dmp`
+into artifact storage.
 Restore stages and byte-compares the artifact, uses `impdp SQLFILE` as a
 non-mutating preflight, then imports with replacement, portable transforms and
 schema remapping. Stable job names derived from execution UUIDs let timeout
 handling and startup repair attach and issue `KILL_JOB`; staging is retained
 when termination cannot be confirmed. See
 [ADR-020](../adr/020-oracle-data-pump-shared-staging-and-optional-client-pack.md).
+The optional image runtime and staging ownership contract are refined by
+[ADR-034](../adr/034-oracle-pack-runtime-and-shared-staging-permissions.md).
 
 SQL Server is another optional, all-or-nothing pack. `sqlcmd` runs `SELECT 1`
 over an encrypted connection. SqlPackage exports a validated `.bacpac` and

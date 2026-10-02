@@ -8,6 +8,7 @@ import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
+import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -41,8 +42,14 @@ class LocalFilesystemStorageAdapter implements StoragePort {
     }
 
     @Override
-    public Path locationFor(String filename) {
-        return root.resolve(requireBareFilename(filename));
+    public Path locationFor(UUID targetId, UUID executionId, String filename) {
+        Path directory = root.resolve(targetId.toString()).resolve(executionId.toString());
+        try {
+            Files.createDirectories(directory);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+        return directory.resolve(requireBareFilename(filename));
     }
 
     @Override
@@ -81,10 +88,29 @@ class LocalFilesystemStorageAdapter implements StoragePort {
 
     @Override
     public void delete(Path artifact) {
+        Path file = within(artifact, "delete");
         try {
-            Files.deleteIfExists(within(artifact, "delete"));
+            Files.deleteIfExists(file);
         } catch (IOException e) {
             throw new UncheckedIOException(e);
+        }
+        pruneEmptyParents(file.getParent());
+    }
+
+    /**
+     * Removes the execution and target directories once they are empty.
+     * Artifacts written before ADR-033 sit directly in the root, which is
+     * never removed. A directory that still holds anything is left alone, and
+     * failing to prune is not a failed delete.
+     */
+    private void pruneEmptyParents(Path directory) {
+        for (Path current = directory; current != null && !current.equals(root) && current.startsWith(root);
+                current = current.getParent()) {
+            try {
+                Files.delete(current);
+            } catch (IOException e) {
+                return;
+            }
         }
     }
 

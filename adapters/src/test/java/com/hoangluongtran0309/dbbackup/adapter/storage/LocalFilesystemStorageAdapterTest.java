@@ -7,6 +7,7 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -21,7 +22,14 @@ class LocalFilesystemStorageAdapterTest {
     @TempDir
     Path root;
 
+    private static final UUID TARGET = UUID.fromString("0c95c68c-e1aa-4eb9-b63a-ba3980d10c05");
+    private static final UUID EXECUTION = UUID.fromString("365da2d3-1fbe-4723-83dd-7f514a651d87");
+
     private StoragePort storage;
+
+    private Path location(String filename) {
+        return storage.locationFor(TARGET, EXECUTION, filename);
+    }
 
     @BeforeEach
     void setUp() {
@@ -29,16 +37,75 @@ class LocalFilesystemStorageAdapterTest {
     }
 
     @Test
-    void placesArtifactsUnderTheConfiguredRoot() {
-        assertThat(storage.locationFor("shop_20260909_100000.sql"))
-                .isEqualTo(root.resolve("shop_20260909_100000.sql"))
+    void placesEachArtifactInADirectoryForItsTargetAndExecution() {
+        Path location = location("shop_20260909_100000.sql");
+
+        assertThat(location)
+                .isEqualTo(root.resolve(TARGET.toString()).resolve(EXECUTION.toString())
+                        .resolve("shop_20260909_100000.sql"))
                 .isAbsolute();
+        assertThat(location.getParent()).isDirectory();
+    }
+
+    /**
+     * Two backups named after the same database in the same second used to
+     * write one file, and the second truncated the first. See ISSUE-01.
+     */
+    @Test
+    void givesTwoExecutionsWithTheSameFileNameDifferentFiles() throws Exception {
+        String name = "shop_20261001_032242.sql.gz";
+        Path first = storage.locationFor(TARGET, EXECUTION, name);
+        Path second = storage.locationFor(UUID.randomUUID(), UUID.randomUUID(), name);
+        Path sameTarget = storage.locationFor(TARGET, UUID.randomUUID(), name);
+        Files.writeString(first, "mariadb");
+        Files.writeString(second, "mysql");
+        Files.writeString(sameTarget, "again");
+
+        assertThat(first).hasContent("mariadb");
+        assertThat(second).hasContent("mysql");
+        assertThat(sameTarget).hasContent("again");
+    }
+
+    @Test
+    void deletingAnArtifactRemovesTheDirectoriesItLeavesEmpty() throws Exception {
+        Path artifact = Files.writeString(location("shop.sql"), "-- dump");
+
+        storage.delete(artifact);
+
+        assertThat(root.resolve(TARGET.toString())).doesNotExist();
+        assertThat(root).isDirectory();
+    }
+
+    @Test
+    void deletingOneArtifactKeepsItsTargetsOtherBackups() throws Exception {
+        Path deleted = Files.writeString(location("shop.sql"), "-- dump");
+        Path kept = Files.writeString(storage.locationFor(TARGET, UUID.randomUUID(), "shop.sql"), "-- other");
+
+        storage.delete(deleted);
+
+        assertThat(deleted.getParent()).doesNotExist();
+        assertThat(kept).hasContent("-- other");
+    }
+
+    /** Artifacts written before ADR-033 sit directly in the root. */
+    @Test
+    void stillReadsAndDeletesAFlatArtifactFromBeforeTheLayoutChange() throws Exception {
+        Path flat = Files.writeString(root.resolve("shop_20260909_100000.sql.gz"), "test");
+
+        assertThat(storage.exists(flat)).isTrue();
+        assertThat(storage.sha256Of(flat))
+                .isEqualTo("9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08");
+
+        storage.delete(flat);
+
+        assertThat(flat).doesNotExist();
+        assertThat(root).isDirectory();
     }
 
     /** The value sha256sum prints for the same bytes, so the two can be compared by eye. */
     @Test
     void checksumsAnArtifactAsSha256sumWould() throws Exception {
-        Path artifact = storage.locationFor("shop.sql.gz");
+        Path artifact = location("shop.sql.gz");
         Files.writeString(artifact, "test");
 
         assertThat(storage.sha256Of(artifact))
@@ -48,7 +115,7 @@ class LocalFilesystemStorageAdapterTest {
     /** Bigger than one read buffer, so the digest has to be fed in pieces. */
     @Test
     void checksumsAFileLargerThanOneBufferTheSameAsAllAtOnce() throws Exception {
-        Path artifact = storage.locationFor("big.sql.gz");
+        Path artifact = location("big.sql.gz");
         byte[] content = new byte[200_000];
         new java.util.Random(7).nextBytes(content);
         Files.write(artifact, content);
@@ -69,7 +136,7 @@ class LocalFilesystemStorageAdapterTest {
 
     @Test
     void checksummingAMissingArtifactFails() {
-        assertThatThrownBy(() -> storage.sha256Of(storage.locationFor("gone.sql.gz")))
+        assertThatThrownBy(() -> storage.sha256Of(location("gone.sql.gz")))
                 .isInstanceOf(java.io.UncheckedIOException.class);
     }
 
@@ -90,7 +157,7 @@ class LocalFilesystemStorageAdapterTest {
     @ParameterizedTest
     @ValueSource(strings = {"../escape.sql", "sub/dir.sql", "..", "a\\b.sql", "../../etc/passwd"})
     void refusesAnythingThatIsAPathRatherThanAName(String filename) {
-        assertThatThrownBy(() -> storage.locationFor(filename))
+        assertThatThrownBy(() -> location(filename))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("must not contain a path");
     }
@@ -98,13 +165,13 @@ class LocalFilesystemStorageAdapterTest {
     @ParameterizedTest
     @ValueSource(strings = {"", "   "})
     void refusesABlankName(String filename) {
-        assertThatThrownBy(() -> storage.locationFor(filename))
+        assertThatThrownBy(() -> location(filename))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void reportsWhetherAnArtifactIsThere() throws Exception {
-        Path artifact = storage.locationFor("shop.sql.gz");
+        Path artifact = location("shop.sql.gz");
         assertThat(storage.exists(artifact)).isFalse();
 
         Files.writeString(artifact, "-- dump");
@@ -121,7 +188,7 @@ class LocalFilesystemStorageAdapterTest {
 
     @Test
     void opensAnArtifactForReading() throws Exception {
-        Path artifact = Files.writeString(storage.locationFor("shop.sql.gz"), "-- dump contents");
+        Path artifact = Files.writeString(location("shop.sql.gz"), "-- dump contents");
 
         try (InputStream in = storage.openForReading(artifact)) {
             assertThat(new String(in.readAllBytes(), StandardCharsets.UTF_8)).isEqualTo("-- dump contents");
@@ -145,7 +212,7 @@ class LocalFilesystemStorageAdapterTest {
 
     @Test
     void deletesAnArtifact() throws Exception {
-        Path artifact = Files.writeString(storage.locationFor("shop.sql"), "-- dump");
+        Path artifact = Files.writeString(location("shop.sql"), "-- dump");
 
         storage.delete(artifact);
 
@@ -154,7 +221,7 @@ class LocalFilesystemStorageAdapterTest {
 
     @Test
     void deletingSomethingAlreadyGoneIsNotAnError() {
-        storage.delete(storage.locationFor("never-existed.sql"));
+        storage.delete(location("never-existed.sql"));
     }
 
     /**

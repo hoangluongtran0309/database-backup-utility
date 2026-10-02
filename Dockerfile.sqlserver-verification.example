@@ -23,7 +23,14 @@ USER root
 COPY --from=dotnet-runtime /usr/share/dotnet/ /usr/share/dotnet/
 COPY --from=sqlpackage /opt/sqlpackage/ /opt/sqlpackage/
 
-RUN test "$(dpkg --print-architecture)" = amd64 \
+# Pick up Ubuntu's OpenSSL security fix that Microsoft's 2022-latest tag has
+# not yet rebuilt in. Only OpenSSL: a full upgrade would also upgrade
+# msodbcsql18, whose installer stops unless its EULA is accepted.
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --only-upgrade --no-install-recommends \
+        libssl3 openssl \
+    && rm -rf /var/lib/apt/lists/* \
+    && test "$(dpkg --print-architecture)" = amd64 \
     && test -x /opt/sqlpackage/sqlpackage \
     && test -x /opt/mssql-tools18/bin/sqlcmd \
     && /opt/sqlpackage/sqlpackage /Version \

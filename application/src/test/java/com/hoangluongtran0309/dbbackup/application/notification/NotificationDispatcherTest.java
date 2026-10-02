@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -25,6 +26,7 @@ import com.hoangluongtran0309.dbbackup.core.model.NotificationChannelSettings;
 import com.hoangluongtran0309.dbbackup.core.model.NotificationChannelType;
 import com.hoangluongtran0309.dbbackup.core.model.NotificationEventType;
 import com.hoangluongtran0309.dbbackup.core.model.NotificationMessage;
+import com.hoangluongtran0309.dbbackup.core.model.RestoreExecution;
 import com.hoangluongtran0309.dbbackup.core.model.RestoreVerificationExecution;
 import com.hoangluongtran0309.dbbackup.core.model.RestoreVerificationResult;
 import com.hoangluongtran0309.dbbackup.core.model.TargetNotificationSubscription;
@@ -50,6 +52,24 @@ class NotificationDispatcherTest {
                 .failed("boom", NOW.plusSeconds(1)), NotificationEventType.BACKUP_FAILED);
 
         assertThat(port.calls).isEqualTo(2);
+    }
+
+    @Test void eachSubscribedChannelReceivesItsOwnIdentity() {
+        RecordingPort port = new RecordingPort(false);
+        UUID firstId = UUID.randomUUID(); UUID secondId = UUID.randomUUID();
+        NotificationDispatcher dispatcher = dispatcher(List.of(port), new InMemorySubscriptions(List.of(
+                new TargetNotificationSubscription(firstId, Set.of(NotificationEventType.BACKUP_STARTED)),
+                new TargetNotificationSubscription(secondId, Set.of(NotificationEventType.BACKUP_STARTED)))),
+                new InMemoryChannels(channel(firstId), channel(secondId)));
+        DatabaseTarget target = target();
+
+        dispatcher.publishBackup(target, BackupExecution.started(UUID.randomUUID(), target.getId(), NOW),
+                NotificationEventType.BACKUP_STARTED);
+
+        assertThat(port.messages).extracting(NotificationMessage::channelId)
+                .containsExactly(firstId, secondId);
+        assertThat(port.messages).extracting(NotificationMessage::channelName)
+                .containsExactly("email-" + firstId, "email-" + secondId);
     }
 
     @Test void ignoresEventsNotSelectedByTheTarget() {
@@ -98,6 +118,27 @@ class NotificationDispatcherTest {
         assertThat(port.calls).isOne();
         assertThat(port.last.backupExecutionId()).isEqualTo(backupId);
         assertThat(port.last.verificationExecutionId()).isEqualTo(verificationId);
+        assertThat(port.last.channelId()).isEqualTo(channelId);
+        assertThat(port.last.channelName()).isEqualTo("email-" + channelId);
+    }
+
+    @Test void restoreEventCarriesTheDestinationSubscriptionChannelIdentity() {
+        RecordingPort port = new RecordingPort(false);
+        UUID channelId = UUID.randomUUID();
+        NotificationDispatcher dispatcher = dispatcher(List.of(port),
+                new InMemorySubscriptions(List.of(new TargetNotificationSubscription(
+                        channelId, Set.of(NotificationEventType.RESTORE_SUCCESS)))),
+                new InMemoryChannels(channel(channelId)));
+        DatabaseTarget source = target();
+        DatabaseTarget destination = target(UUID.randomUUID(), "recovery");
+        RestoreExecution execution = RestoreExecution.started(
+                UUID.randomUUID(), UUID.randomUUID(), destination.getId(), NOW).succeeded(NOW.plusSeconds(1));
+
+        dispatcher.publishRestore(source, destination, execution, NotificationEventType.RESTORE_SUCCESS);
+
+        assertThat(port.last.channelId()).isEqualTo(channelId);
+        assertThat(port.last.channelName()).isEqualTo("email-" + channelId);
+        assertThat(port.last.destinationTargetId()).isEqualTo(destination.getId());
     }
 
     @Test void reportsAMissingAdapterClearly() {
@@ -122,17 +163,22 @@ class NotificationDispatcherTest {
                 .emailTo("ops@example.com").createdAt(NOW).updatedAt(NOW).build();
     }
     private static DatabaseTarget target() {
-        return DatabaseTarget.builder().id(UUID.fromString("00000000-0000-0000-0000-000000000001"))
-                .name("production").engine(DatabaseEngine.MYSQL).host("db").port(3306)
+        return target(UUID.fromString("00000000-0000-0000-0000-000000000001"), "production");
+    }
+    private static DatabaseTarget target(UUID id, String name) {
+        return DatabaseTarget.builder().id(id)
+                .name(name).engine(DatabaseEngine.MYSQL).host("db").port(3306)
                 .databaseName("shop").username("backup").passwordCiphertext("sealed").createdAt(NOW).build();
     }
     private static final class RecordingPort implements NotificationPort {
         private final boolean failFirst; private int calls; private NotificationMessage last;
+        private final List<NotificationMessage> messages = new ArrayList<>();
         RecordingPort(boolean failFirst) { this.failFirst = failFirst; }
         @Override public NotificationChannelType supportedType() { return NotificationChannelType.EMAIL; }
         @Override public void send(NotificationChannelSettings settings, NotificationMessage message) {
             assertThat(settings).isInstanceOf(EmailNotificationSettings.class);
-            calls++; last = message; if (failFirst && calls == 1) throw new IllegalStateException("unavailable");
+            calls++; last = message; messages.add(message);
+            if (failFirst && calls == 1) throw new IllegalStateException("unavailable");
         }
     }
     private static final class InMemoryChannels implements NotificationChannelRepository {

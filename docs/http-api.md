@@ -9,8 +9,25 @@ the console. It is stateless and returns JSON for success and failure:
 ```
 
 ```json
-{"ok": false, "data": null, "error": {"code": "VALIDATION_ERROR", "message": "...", "field": null}}
+{
+  "ok": false,
+  "data": null,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Name is required",
+    "field": "name",
+    "errors": [
+      {"field": "name", "message": "Name is required"},
+      {"field": "host", "message": "Host is required"}
+    ]
+  }
+}
 ```
+
+Validation collects independently detectable field errors in request-field
+order. For compatibility, `message` and `field` repeat the first entry in
+`errors`; other error codes retain the original three-field shape. Malformed
+JSON returns `Request body is not valid JSON` without parser internals.
 
 HTTP status remains authoritative: 400 validation, 401/403 authentication and
 authorization, 404 missing resource, 409 state/name conflict, and 202 for an
@@ -41,7 +58,8 @@ The create/edit representations use the same camel-case fields as their safe
 response projections. Enum values use their documented uppercase names. Secret
 fields are write-only: `password`, `botToken`, `webhookUrl`,
 `secretAccessKey`, `serviceAccountJson` and `accountKey`. Responses expose only
-`secretConfigured` where needed.
+`secretConfigured` where needed. Target `verifyAfterBackup` is optional;
+omitting it or sending JSON `null` selects `false`.
 
 ## CLI mapping and credentials
 
@@ -52,6 +70,13 @@ forms of API fields; UUID selectors use `--id` or `--target-id`. Repeat
 API credentials come from `DBBACKUP_API_USERNAME` and
 `DBBACKUP_API_PASSWORD`, or the corresponding global options. Resource secrets
 must use `--secret FIELD=ENV_VAR`; known secret fields passed directly are
-rejected. `--output json` prints the full envelope for automation. Exit codes
+rejected. Default text output uses tables for collections, key/value sections
+for details and all field messages for validation failures. `--output json`
+prints the full envelope for automation. Exit codes
 are `0` success, `2` local/remote validation, `3` not found, `4` conflict, `5`
 authentication/operation failure and `70` transport or internal CLI failure.
+
+Generic webhook payloads encode `occurredAt` as a lossless UTC ISO-8601 string,
+for example `2026-10-01T03:35:25.003285481Z`. The `channel` object always
+contains the id and name of the channel that received that delivery, including
+lifecycle events delivered to more than one subscribed channel.

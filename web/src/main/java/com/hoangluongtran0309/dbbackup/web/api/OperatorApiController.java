@@ -77,12 +77,14 @@ public class OperatorApiController {
 
     @PostMapping("/targets")
     ResponseEntity<ApiEnvelope<?>> addTarget(@RequestBody TargetRequest request) {
+        ApiRequestValidation.target(request, request.engine(), true);
         var saved = targets.register(request.registerCommand());
         return ResponseEntity.status(201).body(ok(ApiModel.target(saved)));
     }
 
     @PutMapping("/targets/{id}")
     ApiEnvelope<?> updateTarget(@PathVariable UUID id, @RequestBody TargetRequest request) {
+        ApiRequestValidation.target(request, targets.get(id).getEngine(), false);
         return ok(ApiModel.target(targets.edit(id, request.editCommand())));
     }
 
@@ -109,6 +111,7 @@ public class OperatorApiController {
 
     @PutMapping("/targets/{id}/notifications")
     ApiEnvelope<?> setTargetNotifications(@PathVariable UUID id, @RequestBody SubscriptionRequest request) {
+        ApiRequestValidation.subscriptions(request);
         subscriptions.replace(id, request.toDomain());
         return targetNotifications(id);
     }
@@ -121,11 +124,13 @@ public class OperatorApiController {
 
     @PostMapping("/storage-profiles")
     ResponseEntity<ApiEnvelope<?>> addStorage(@RequestBody StorageRequest request) {
+        ApiRequestValidation.storage(request, true);
         return ResponseEntity.status(201).body(ok(ApiModel.storage(storage.create(request.command()))));
     }
 
     @PutMapping("/storage-profiles/{id}")
     ApiEnvelope<?> updateStorage(@PathVariable UUID id, @RequestBody StorageRequest request) {
+        ApiRequestValidation.storage(request, false);
         return ok(ApiModel.storage(storage.edit(id, request.command())));
     }
 
@@ -145,11 +150,13 @@ public class OperatorApiController {
 
     @PostMapping("/notification-channels")
     ResponseEntity<ApiEnvelope<?>> addChannel(@RequestBody NotificationRequest request) {
+        ApiRequestValidation.notification(request, true);
         return ResponseEntity.status(201).body(ok(ApiModel.channel(channels.create(request.command()))));
     }
 
     @PutMapping("/notification-channels/{id}")
     ApiEnvelope<?> updateChannel(@PathVariable UUID id, @RequestBody NotificationRequest request) {
+        ApiRequestValidation.notification(request, false);
         return ok(ApiModel.channel(channels.edit(id, request.command())));
     }
 
@@ -173,12 +180,14 @@ public class OperatorApiController {
 
     @PostMapping("/schedules")
     ResponseEntity<ApiEnvelope<?>> addSchedule(@RequestBody ScheduleRequest request) {
+        ApiRequestValidation.schedule(request);
         var saved = schedules.create(request.command());
         return ResponseEntity.status(201).body(scheduleById(saved.getId()));
     }
 
     @PutMapping("/schedules/{id}")
     ApiEnvelope<?> updateSchedule(@PathVariable UUID id, @RequestBody ScheduleRequest request) {
+        ApiRequestValidation.schedule(request);
         schedules.edit(id, request.command()); return schedule(id);
     }
 
@@ -199,6 +208,7 @@ public class OperatorApiController {
 
     @PutMapping("/retention/{targetId}")
     ApiEnvelope<?> setRetention(@PathVariable UUID targetId, @RequestBody RetentionRequest request) {
+        ApiRequestValidation.retention(request);
         retention.save(targetId, new SaveBackupRetentionPolicyCommand(request.keepSuccessful()));
         return retention(targetId);
     }
@@ -264,6 +274,7 @@ public class OperatorApiController {
 
     @PostMapping("/restores")
     ResponseEntity<ApiEnvelope<?>> runRestore(@RequestBody RestoreRequest request) {
+        ApiRequestValidation.restore(request);
         var destination = targets.get(request.targetId());
         if (request.confirmation() == null || !destination.getName().equals(request.confirmation().strip())) {
             throw new IllegalArgumentException("Type the destination target name exactly to confirm the overwrite");
@@ -291,19 +302,21 @@ public class OperatorApiController {
 
     public record TargetRequest(String name, DatabaseEngine engine, String host, Integer port, String database,
             String username, String password, String authenticationDatabase, String dataPumpDirectory,
-            UUID storageProfileId, boolean verifyAfterBackup) {
+            UUID storageProfileId, Boolean verifyAfterBackup) {
         RegisterTargetCommand registerCommand() { return new RegisterTargetCommand(name, engine, host, port, database,
-                username, password, authenticationDatabase, dataPumpDirectory, storageProfileId, verifyAfterBackup); }
+                username, password, authenticationDatabase, dataPumpDirectory, storageProfileId,
+                Boolean.TRUE.equals(verifyAfterBackup)); }
         EditTargetCommand editCommand() { return new EditTargetCommand(name, host, port, username, password,
-                authenticationDatabase, dataPumpDirectory, storageProfileId, verifyAfterBackup); }
+                authenticationDatabase, dataPumpDirectory, storageProfileId,
+                Boolean.TRUE.equals(verifyAfterBackup)); }
     }
 
     public record StorageRequest(String name, StorageProvider provider, String endpoint, String region,
-            String projectId, String accountName, String bucket, String keyPrefix, boolean pathStyle,
+            String projectId, String accountName, String bucket, String keyPrefix, Boolean pathStyle,
             StorageCredentialMode credentialMode, String accessKeyId, String secretAccessKey,
             String serviceAccountJson, String accountKey) {
         SaveStorageProfileCommand command() { return new SaveStorageProfileCommand(name, provider, endpoint, region,
-                projectId, accountName, bucket, keyPrefix, pathStyle, credentialMode, accessKeyId,
+                projectId, accountName, bucket, keyPrefix, Boolean.TRUE.equals(pathStyle), credentialMode, accessKeyId,
                 secretAccessKey, serviceAccountJson, accountKey); }
     }
 
@@ -322,9 +335,10 @@ public class OperatorApiController {
     public record SubscriptionInput(UUID channelId, Set<NotificationEventType> events) {
         TargetNotificationSubscription toDomain() { return new TargetNotificationSubscription(channelId, events); }
     }
-    public record ScheduleRequest(String name, UUID targetId, String cronExpression, String zoneId, boolean enabled) {
-        SaveBackupScheduleCommand command() { return new SaveBackupScheduleCommand(name, targetId, cronExpression, zoneId, enabled); }
+    public record ScheduleRequest(String name, UUID targetId, String cronExpression, String zoneId, Boolean enabled) {
+        SaveBackupScheduleCommand command() { return new SaveBackupScheduleCommand(
+                name, targetId, cronExpression, zoneId, Boolean.TRUE.equals(enabled)); }
     }
-    public record RetentionRequest(int keepSuccessful) { }
+    public record RetentionRequest(Integer keepSuccessful) { }
     public record RestoreRequest(UUID backupExecutionId, UUID targetId, String confirmation) { }
 }

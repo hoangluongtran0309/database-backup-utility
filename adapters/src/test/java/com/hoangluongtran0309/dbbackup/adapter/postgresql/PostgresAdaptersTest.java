@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import java.nio.file.Files;
@@ -26,6 +27,7 @@ import com.hoangluongtran0309.dbbackup.adapter.process.ProcessRunner;
 import com.hoangluongtran0309.dbbackup.core.exception.BackupFailedException;
 import com.hoangluongtran0309.dbbackup.core.model.DatabaseConnection;
 import com.hoangluongtran0309.dbbackup.core.model.DatabaseEngine;
+import com.hoangluongtran0309.dbbackup.core.port.ConnectionTestPort;
 
 @ExtendWith(MockitoExtension.class)
 class PostgresAdaptersTest {
@@ -42,19 +44,101 @@ class PostgresAdaptersTest {
     Path temporaryDirectory;
 
     @Test
-    void connectionTestUsesPsqlAndKeepsPasswordOutOfArguments() {
-        when(runner.run(anyList(), anyMap(), any())).thenReturn(new ProcessRunner.Result(0, "1", ""));
+    void connectionTestChecksServerAndDumpVersionsWithoutPuttingPasswordInArguments() {
+        when(runner.run(anyList(), anyMap(), any())).thenReturn(
+                new ProcessRunner.Result(0, "170011\n", ""),
+                new ProcessRunner.Result(0, "pg_dump (PostgreSQL) 17.11", ""));
         PostgresCliConnectionTestAdapter adapter = new PostgresCliConnectionTestAdapter(
-                runner, Path.of("/usr/bin/psql"), CONNECT_TIMEOUT);
+                runner, Path.of("/usr/bin/psql"), Path.of("/usr/bin/pg_dump"), CONNECT_TIMEOUT);
 
         assertThat(adapter.test(CONNECTION).successful()).isTrue();
 
         ArgumentCaptor<List<String>> command = commandCaptor();
         ArgumentCaptor<Map<String, String>> environment = environmentCaptor();
-        verify(runner).run(command.capture(), environment.capture(), any());
-        assertThat(command.getValue()).contains("--command=SELECT 1", "--no-password");
-        assertThat(command.getValue()).noneMatch(argument -> argument.contains(CONNECTION.password()));
-        assertThat(environment.getValue()).containsEntry("PGPASSWORD", CONNECTION.password());
+        verify(runner, times(2)).run(command.capture(), environment.capture(), any());
+        assertThat(command.getAllValues().get(0))
+                .contains("--command=SHOW server_version_num", "--no-password")
+                .noneMatch(argument -> argument.contains(CONNECTION.password()));
+        assertThat(command.getAllValues().get(1)).containsExactly("/usr/bin/pg_dump", "--version");
+        assertThat(environment.getAllValues().get(0)).containsEntry("PGPASSWORD", CONNECTION.password());
+        assertThat(environment.getAllValues().get(1)).isEmpty();
+    }
+
+    @Test
+    void connectionTestAllowsAnOlderServer() {
+        when(runner.run(anyList(), anyMap(), any())).thenReturn(
+                new ProcessRunner.Result(0, "160015", ""),
+                new ProcessRunner.Result(0, "pg_dump (PostgreSQL) 17.11 (Ubuntu 17.11-1.pgdg24.04+1)", ""));
+        PostgresCliConnectionTestAdapter adapter = connectionTestAdapter();
+
+        assertThat(adapter.test(CONNECTION).successful()).isTrue();
+    }
+
+    @Test
+    void connectionTestRejectsAServerNewerThanPgDumpWithAnActionableMessage() {
+        when(runner.run(anyList(), anyMap(), any())).thenReturn(
+                new ProcessRunner.Result(0, "180006", ""),
+                new ProcessRunner.Result(0, "pg_dump (PostgreSQL) 17.11", ""));
+        PostgresCliConnectionTestAdapter adapter = connectionTestAdapter();
+
+        ConnectionTestPort.Result result = adapter.test(CONNECTION);
+
+        assertThat(result.successful()).isFalse();
+        assertThat(result.message())
+                .contains("server major 18", "pg_dump major 17", "/usr/bin/pg_dump",
+                        "PG_DUMP_PATH", "major 18 or newer");
+    }
+
+    @Test
+    void connectionTestPreservesPsqlFailureAndDoesNotInspectPgDump() {
+        when(runner.run(anyList(), anyMap(), any()))
+                .thenReturn(new ProcessRunner.Result(2, "", "password authentication failed"));
+        PostgresCliConnectionTestAdapter adapter = connectionTestAdapter();
+
+        ConnectionTestPort.Result result = adapter.test(CONNECTION);
+
+        assertThat(result.successful()).isFalse();
+        assertThat(result.message()).isEqualTo("password authentication failed");
+        verify(runner).run(anyList(), anyMap(), any());
+        verifyNoMoreInteractions(runner);
+    }
+
+    @Test
+    void connectionTestRejectsUnrecognisedServerVersionOutput() {
+        when(runner.run(anyList(), anyMap(), any()))
+                .thenReturn(new ProcessRunner.Result(0, "PostgreSQL seventeen", ""));
+        PostgresCliConnectionTestAdapter adapter = connectionTestAdapter();
+
+        ConnectionTestPort.Result result = adapter.test(CONNECTION);
+
+        assertThat(result.successful()).isFalse();
+        assertThat(result.message()).contains("server version", "PostgreSQL seventeen");
+    }
+
+    @Test
+    void connectionTestRejectsAFailedPgDumpVersionCommand() {
+        when(runner.run(anyList(), anyMap(), any())).thenReturn(
+                new ProcessRunner.Result(0, "170011", ""),
+                new ProcessRunner.Result(1, "", "broken executable"));
+        PostgresCliConnectionTestAdapter adapter = connectionTestAdapter();
+
+        ConnectionTestPort.Result result = adapter.test(CONNECTION);
+
+        assertThat(result.successful()).isFalse();
+        assertThat(result.message()).contains("configured pg_dump version", "/usr/bin/pg_dump", "broken executable");
+    }
+
+    @Test
+    void connectionTestRejectsUnrecognisedPgDumpVersionOutput() {
+        when(runner.run(anyList(), anyMap(), any())).thenReturn(
+                new ProcessRunner.Result(0, "170011", ""),
+                new ProcessRunner.Result(0, "not pg_dump", ""));
+        PostgresCliConnectionTestAdapter adapter = connectionTestAdapter();
+
+        ConnectionTestPort.Result result = adapter.test(CONNECTION);
+
+        assertThat(result.successful()).isFalse();
+        assertThat(result.message()).contains("configured pg_dump version", "/usr/bin/pg_dump", "not pg_dump");
     }
 
     @Test
@@ -137,6 +221,11 @@ class PostgresAdaptersTest {
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("dbbackup.postgresql.dump-path")
                 .hasMessageContaining(missing.toString());
+    }
+
+    private PostgresCliConnectionTestAdapter connectionTestAdapter() {
+        return new PostgresCliConnectionTestAdapter(
+                runner, Path.of("/usr/bin/psql"), Path.of("/usr/bin/pg_dump"), CONNECT_TIMEOUT);
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})

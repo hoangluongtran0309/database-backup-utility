@@ -2,8 +2,10 @@
 
 One base image and one compose file, plus operator-built Oracle and SQL Server variants. See
 [ADR-009](adr/009-one-image-that-carries-the-mysql-client.md) for the original
-packaging decision and [ADR-017](adr/017-route-logical-backups-by-database-engine.md)
-for the PostgreSQL client added to it. MongoDB packaging is recorded in
+packaging decision, [ADR-017](adr/017-route-logical-backups-by-database-engine.md)
+for the PostgreSQL client added to it, and
+[ADR-035](adr/035-postgresql-17-client-and-version-preflight.md) for its pinned
+major and version preflight. MongoDB packaging is recorded in
 [ADR-018](adr/018-mongodb-archives-and-explicit-authentication-database.md).
 SQLite file mounting is recorded in
 [ADR-019](adr/019-sqlite-files-below-one-root.md). The optional Oracle pack and
@@ -17,7 +19,7 @@ pack is recorded in
 ## What the image contains
 
 A JRE, the application jar, Oracle's MySQL client, MariaDB's `mariadb-client`,
-`postgresql-client`, MongoDB's `mongodb-database-tools`, and `sqlite3`. The
+PGDG's `postgresql-client-17`, MongoDB's `mongodb-database-tools`, and `sqlite3`. The
 MySQL/MariaDB distinction is load-bearing: MariaDB's dump client rejects the
 MySQL-only `--set-gtid-purged`, and the two artifact producers must not be
 silently substituted for each other.
@@ -26,8 +28,9 @@ Ubuntu's MySQL and MariaDB client packages conflict over the legacy
 `mysql`/`mysqldump` names. The image installs MySQL first and preserves its real
 executables below `/opt/mysql/bin`, then installs MariaDB and uses its canonical
 `mariadb`/`mariadb-dump` names from `/usr/bin`. The build runs `--version` on
-all four paths. The PostgreSQL package supplies `psql`, `pg_dump` and
-`pg_restore`; the MongoDB package supplies `mongodump` and `mongorestore`.
+all four paths. The PostgreSQL package supplies versioned `psql`, `pg_dump` and
+`pg_restore` paths below `/usr/lib/postgresql/17/bin`; the build rejects a
+different major. The MongoDB package supplies `mongodump` and `mongorestore`.
 
 Oracle Instant Client, SqlPackage and `sqlcmd` are intentionally not among
 them. The base image and default compose deployment keep `ORACLE_ENABLED=false`
@@ -170,6 +173,13 @@ the socket volume and `group_add` in `docker-compose.yml`, then set
 `DOCKER_SOCKET_GID` to `stat -c '%g' /var/run/docker.sock` on the host. The
 application image already carries the Docker CLI.
 
+On a host with SELinux enforcing (Fedora, RHEL and derivatives) the group is
+not enough: the container is still denied the socket, and **Test restore**
+reports that the verification adapter is unavailable. Add
+`security_opt: ["label=disable"]` to the `app` service, which turns off SELinux
+separation for that container only. Bind mounts such as `./sqlite` likewise
+need the `:z` suffix there, or the container cannot read them.
+
 Mounting `/var/run/docker.sock` grants root-equivalent control over the Docker
 host. Keep verification disabled when that trust boundary is unacceptable;
 startup and every other feature remain available. Verification containers
@@ -245,8 +255,39 @@ GRANT READ, WRITE ON DIRECTORY DBBACKUP_PUMP_DIR TO APP_OWNER;
 Mount that same bind/NFS/shared storage into the Oracle-pack application image
 at `ORACLE_DATAPUMP_ROOT` (the example image uses
 `/var/lib/dbbackup/oracle-datapump`). The two path strings need not match, but
-they must be views of the same files. The connection test proves both the
-Oracle grant and that shared visibility by creating and removing a probe.
+they must be views of the same files.
+
+Both processes must also be able to read files created by the other. Use the
+Oracle server's Data Pump group as a supplemental group for the application,
+identified by its numeric GID rather than a container-local group name. For an
+Oracle image whose `oinstall` GID is `54321`, prepare the host directory and
+application service like this:
+
+```bash
+sudo chgrp 54321 /srv/dbbackup/oracle-datapump
+sudo chmod 2770 /srv/dbbackup/oracle-datapump
+```
+
+```yaml
+services:
+  app:
+    group_add:
+      - "54321"
+    volumes:
+      - /srv/dbbackup/oracle-datapump:/var/lib/dbbackup/oracle-datapump
+```
+
+Use the actual group from the Oracle server; `54321` is only the common
+`oinstall` default. Mode `2770` gives both members access and makes new files
+inherit the shared group. On storage where numeric groups are unsuitable, an
+access ACL plus a matching default ACL may provide the same bidirectional
+rights. Do not solve this by making Data Pump files world-readable.
+
+The connection test first has Oracle create a probe that the application
+reads, then has the application create one that Oracle reads. A failure reports
+the path and, where supported, numeric owner, group and POSIX mode. Data Pump
+itself can create a stricter mode than `UTL_FILE`, so backup validates the
+finished dump and reports the same ownership details if it remains unreadable.
 Oracle local storage that the application cannot mount, including ASM-only
 staging, is not supported.
 
@@ -254,8 +295,11 @@ Build `Dockerfile.oracle.example` only after extracting operator-supplied
 Instant Client Basic, SQL*Plus and Tools archives and consolidating their
 `instantclient_*` contents under `oracle-client/`. Build the ordinary image as
 `dbbackup:base`, then pass it as `BASE_IMAGE`. The variant enables Oracle and
-sets all four Oracle paths; override them for a different layout. The base
-image remains unchanged.
+sets all four Oracle paths; override them for a different layout. Ubuntu 24.04
+renames the asynchronous-I/O library to `libaio.so.1t64`; the variant supplies
+Oracle's required `libaio.so.1` compatibility name and rejects unresolved
+SQL\*Plus or Data Pump dependencies during its build. The base image remains
+unchanged.
 
 The Oracle login user is also the schema being backed up and must already
 exist. Restore may remap a dump from another source schema into that login,
@@ -294,8 +338,9 @@ target automatically. Backing it up requires registering a PostgreSQL target
 explicitly, with credentials that have the required access.
 
 **Client paths.** The image sets `MYSQL_CLIENT_PATH` and `MYSQLDUMP_PATH` below
-`/opt/mysql/bin`; `MARIADB_CLIENT_PATH`, `MARIADB_DUMP_PATH`, `PSQL_PATH`,
-`PG_DUMP_PATH`, `PG_RESTORE_PATH`, `MONGODUMP_PATH`, `MONGORESTORE_PATH` and
+`/opt/mysql/bin`; `MARIADB_CLIENT_PATH` and `MARIADB_DUMP_PATH` point below
+`/usr/bin`; `PSQL_PATH`, `PG_DUMP_PATH` and `PG_RESTORE_PATH` point below
+`/usr/lib/postgresql/17/bin`; and `MONGODUMP_PATH`, `MONGORESTORE_PATH` and
 `SQLITE_PATH` point below `/usr/bin`. `SQLITE_ROOT` is
 `/var/lib/dbbackup/sqlite`. A source or custom-image deployment may override
 them, but every configured file must be executable or startup fails.
@@ -310,13 +355,15 @@ up. The registration form therefore asks for an authentication database and
 defaults it to `admin`. Passwords are handed to each tool through a temporary
 owner-only config file, never through its visible command line.
 
-PostgreSQL's dump tools have major-version compatibility rules: a client that
-can read a source is not necessarily able to produce an archive loadable by an
-older destination. The first PostgreSQL slice does not install or select among
-several client majors. Use `pg_dump --version` and provide `PSQL_PATH`,
-`PG_DUMP_PATH` and `PG_RESTORE_PATH` from a client release compatible with both
-the source and destination; the integration test proves a matching client and
-server major end to end.
+PostgreSQL's dump tools have major-version compatibility rules. The image pins
+major 17 from PGDG and supports backups from servers no newer than 17. **Test**
+reads `server_version_num`, compares it with the configured `pg_dump --version`
+and rejects a newer server with the exact majors and path. A newer client can
+dump a supported older source, but its output is not guaranteed to load into a
+server older than that client. A source or custom-image deployment must provide
+`PSQL_PATH`, `PG_DUMP_PATH` and `PG_RESTORE_PATH` from a set compatible with
+both source and restore destination; there is no automatic multi-major
+selection.
 
 MariaDB likewise uses one configured client pair rather than a version matrix.
 The base image carries Ubuntu Noble's MariaDB 10.11 client and the integration

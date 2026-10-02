@@ -90,6 +90,10 @@ class SecurityConfigTest {
         mockMvc.perform(get("/login"))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("name=\"_csrf\"")))
+                .andExpect(content().string(containsString("name=\"username\"")))
+                .andExpect(content().string(containsString("autocomplete=\"username\"")))
+                .andExpect(content().string(containsString("name=\"password\"")))
+                .andExpect(content().string(containsString("autocomplete=\"current-password\"")))
                 // No sidebar: its links lead nowhere until signed in.
                 .andExpect(content().string(not(containsString("Primary navigation"))));
     }

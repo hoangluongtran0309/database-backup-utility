@@ -13,10 +13,12 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -32,6 +34,7 @@ import com.hoangluongtran0309.dbbackup.core.exception.BackupFailedException;
 import com.hoangluongtran0309.dbbackup.core.exception.RestoreFailedException;
 import com.hoangluongtran0309.dbbackup.core.model.DatabaseConnection;
 import com.hoangluongtran0309.dbbackup.core.model.DatabaseEngine;
+import com.hoangluongtran0309.dbbackup.core.port.ConnectionTestPort;
 
 @ExtendWith(MockitoExtension.class)
 class OracleAdaptersTest {
@@ -58,7 +61,14 @@ class OracleAdaptersTest {
                     "CONNECT APP_OWNER/\"" + PASSWORD + "\"@//oracle.internal:1521/FREEPDB1\n");
             Matcher filename = Pattern.compile("dbbackup-probe-[0-9a-f]+\\.tmp").matcher(input);
             assertThat(filename.find()).isTrue();
-            Files.writeString(temporaryDirectory.resolve(filename.group()), "probe");
+            Path probe = temporaryDirectory.resolve(filename.group());
+            if (input.contains("UTL_FILE.FOPEN('DBBACKUP_PUMP_DIR', '" + filename.group() + "', 'w')")) {
+                Files.writeString(probe, "probe");
+            } else {
+                assertThat(input).contains(
+                        "UTL_FILE.FOPEN('DBBACKUP_PUMP_DIR', '" + filename.group() + "', 'r')");
+                assertThat(probe).hasContent("dbbackup probe\n");
+            }
             return success();
         });
 
@@ -68,10 +78,92 @@ class OracleAdaptersTest {
         assertThat(adapter.test(CONNECTION).successful()).isTrue();
 
         ArgumentCaptor<List<String>> commands = commandCaptor();
-        verify(runner).runFeeding(commands.capture(), anyMap(), any(), any(InputStream.class));
-        assertSafeCommand(commands.getValue());
-        assertThat(commands.getValue()).containsExactly(BINARY.toString(), "-L", "-S", "/NOLOG");
+        verify(runner, times(2)).runFeeding(commands.capture(), anyMap(), any(), any(InputStream.class));
+        assertThat(commands.getAllValues()).allSatisfy(command -> {
+            assertSafeCommand(command);
+            assertThat(command).containsExactly(BINARY.toString(), "-L", "-S", "/NOLOG");
+        });
         assertThat(temporaryDirectory).isEmptyDirectory();
+    }
+
+    @Test
+    void connectionProbeReportsOwnershipWhenTheApplicationCannotReadOracleFile() throws Exception {
+        OracleDataPumpFiles files = new OracleDataPumpFiles(temporaryDirectory);
+        AtomicInteger calls = new AtomicInteger();
+        when(runner.runFeeding(anyList(), anyMap(), any(), any(InputStream.class))).thenAnswer(call -> {
+            String input = readInput(call);
+            Matcher filename = Pattern.compile("dbbackup-probe-[0-9a-f]+\\.tmp").matcher(input);
+            assertThat(filename.find()).isTrue();
+            Path probe = temporaryDirectory.resolve(filename.group());
+            if (calls.getAndIncrement() == 0) {
+                Files.writeString(probe, "probe");
+                Files.setPosixFilePermissions(probe, PosixFilePermissions.fromString("---------"));
+            } else {
+                assertThat(input).contains("UTL_FILE.FREMOVE");
+                Files.delete(probe);
+            }
+            return success();
+        });
+
+        ConnectionTestPort.Result result = new OracleCliConnectionTestAdapter(
+                runner, files, BINARY, TIMEOUT).test(CONNECTION);
+
+        assertThat(result.successful()).isFalse();
+        assertThat(result.message())
+                .contains("application cannot read")
+                .contains("owner uid")
+                .contains("gid")
+                .contains("mode ---------")
+                .contains("group shared by the application and the Oracle server");
+        assertThat(temporaryDirectory).isEmptyDirectory();
+    }
+
+    @Test
+    void connectionProbeReportsOwnershipWhenOracleCannotReadApplicationFile() throws Exception {
+        OracleDataPumpFiles files = new OracleDataPumpFiles(temporaryDirectory);
+        AtomicInteger calls = new AtomicInteger();
+        when(runner.runFeeding(anyList(), anyMap(), any(), any(InputStream.class))).thenAnswer(call -> {
+            String input = readInput(call);
+            Matcher filename = Pattern.compile("dbbackup-probe-[0-9a-f]+\\.tmp").matcher(input);
+            assertThat(filename.find()).isTrue();
+            Path probe = temporaryDirectory.resolve(filename.group());
+            if (calls.getAndIncrement() == 0) {
+                Files.writeString(probe, "probe");
+                return success();
+            }
+            assertThat(input).contains("UTL_FILE.FOPEN").contains("'r'");
+            assertThat(probe).hasContent("dbbackup probe\n");
+            return new ProcessRunner.Result(1, "", "ORA-29283: invalid file operation");
+        });
+
+        ConnectionTestPort.Result result = new OracleCliConnectionTestAdapter(
+                runner, files, BINARY, TIMEOUT).test(CONNECTION);
+
+        assertThat(result.successful()).isFalse();
+        assertThat(result.message())
+                .contains("Oracle cannot read the file staged by the application")
+                .contains("owner uid")
+                .contains("gid")
+                .contains("mode")
+                .contains("ORA-29283")
+                .contains("group shared by the application and the Oracle server");
+        assertThat(temporaryDirectory).isEmptyDirectory();
+    }
+
+    @Test
+    void unreadableDataPumpFileReportsOwnershipAndMode() throws Exception {
+        OracleDataPumpFiles files = new OracleDataPumpFiles(temporaryDirectory);
+        Path staged = files.backupDump(UUID.randomUUID());
+        Files.writeString(staged, "oracle archive");
+        Files.setPosixFilePermissions(staged, PosixFilePermissions.fromString("---------"));
+
+        assertThatThrownBy(() -> files.copyFromDataPump(staged, temporaryDirectory.resolve("artifact.dmp")))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Oracle Data Pump did not produce a readable dump file")
+                .hasMessageContaining("owner uid")
+                .hasMessageContaining("gid")
+                .hasMessageContaining("mode ---------")
+                .hasMessageContaining("group shared by the application and the Oracle server");
     }
 
     @Test
@@ -212,6 +304,34 @@ class OracleAdaptersTest {
         assertThat(seen).hasSize(3);
         assertThat(seen).allSatisfy(command -> assertThat(command)
                 .doesNotContain("TABLE_EXISTS_ACTION=REPLACE"));
+        assertThat(files.restoreDump(executionId)).doesNotExist();
+    }
+
+    @Test
+    void restorePermissionFailureReportsTheStagedFileOwnership() throws Exception {
+        UUID executionId = UUID.randomUUID();
+        Path artifact = temporaryDirectory.resolve("source.dmp");
+        Files.writeString(artifact, "valid data pump archive");
+        OracleDataPumpFiles files = new OracleDataPumpFiles(temporaryDirectory);
+        when(runner.runFeeding(anyList(), anyMap(), any(), any(InputStream.class)))
+                .thenReturn(new ProcessRunner.Result(1, "", """
+                        ORA-31640: unable to open dump file for read
+                        ORA-27041: unable to open file
+                        Linux-x86_64 Error: 13: Permission denied
+                        """));
+        when(runner.runResponding(anyList(), anyMap(), any(), anyList()))
+                .thenReturn(new ProcessRunner.Result(1, "", "ORA-31626: job does not exist"));
+
+        assertThatThrownBy(() -> restoreAdapter(files).restore(
+                CONNECTION, "APP_OWNER", artifact, executionId))
+                .isInstanceOf(RestoreFailedException.class)
+                .hasMessageContaining("Oracle cannot read the file staged by the application")
+                .hasMessageContaining("owner uid")
+                .hasMessageContaining("gid")
+                .hasMessageContaining("mode")
+                .hasMessageContaining("Permission denied")
+                .hasMessageContaining("group shared by the application and the Oracle server");
+
         assertThat(files.restoreDump(executionId)).doesNotExist();
     }
 

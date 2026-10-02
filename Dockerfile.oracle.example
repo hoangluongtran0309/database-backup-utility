@@ -20,11 +20,21 @@ USER root
 ARG ORACLE_CLIENT_DIR=oracle-client
 COPY --chown=root:root ${ORACLE_CLIENT_DIR}/ /opt/oracle/instantclient/
 
+# Oracle's executables do not carry an RPATH/RUNPATH for the libraries shipped
+# beside them. Set this before the build-time ldd gate as well as for runtime.
+ENV LD_LIBRARY_PATH=/opt/oracle/instantclient
+
 RUN apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends libaio1t64 \
-    && test -x /opt/oracle/instantclient/sqlplus \
-    && test -x /opt/oracle/instantclient/expdp \
-    && test -x /opt/oracle/instantclient/impdp \
+    && test -e /usr/lib/x86_64-linux-gnu/libaio.so.1t64 \
+    && ln -s libaio.so.1t64 /usr/lib/x86_64-linux-gnu/libaio.so.1 \
+    && for client in sqlplus expdp impdp; do \
+         path="/opt/oracle/instantclient/$client"; \
+         test -x "$path"; \
+         dependencies="$(ldd "$path" 2>&1)" || { printf '%s\n' "$dependencies"; exit 1; }; \
+         printf '%s\n' "$dependencies"; \
+         if printf '%s\n' "$dependencies" | grep -q 'not found'; then exit 1; fi; \
+       done \
     && mkdir -p /var/lib/dbbackup/oracle-datapump \
     && chown dbbackup:dbbackup /var/lib/dbbackup/oracle-datapump \
     && rm -rf /var/lib/apt/lists/*
@@ -33,8 +43,7 @@ ENV ORACLE_ENABLED=true \
     ORACLE_SQLPLUS_PATH=/opt/oracle/instantclient/sqlplus \
     ORACLE_EXPDP_PATH=/opt/oracle/instantclient/expdp \
     ORACLE_IMPDP_PATH=/opt/oracle/instantclient/impdp \
-    ORACLE_DATAPUMP_ROOT=/var/lib/dbbackup/oracle-datapump \
-    LD_LIBRARY_PATH=/opt/oracle/instantclient
+    ORACLE_DATAPUMP_ROOT=/var/lib/dbbackup/oracle-datapump
 
 VOLUME ["/var/lib/dbbackup/oracle-datapump"]
 USER dbbackup

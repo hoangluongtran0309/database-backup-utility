@@ -31,6 +31,13 @@ public record NotificationMessage(
         return new NotificationMessage(NotificationEventType.TEST, occurredAt,
                 null, null, null, null, null, null, null, null, null, null, null, channelId, channelName);
     }
+    public NotificationMessage withChannel(UUID channelId, String channelName) {
+        return new NotificationMessage(event, occurredAt,
+                sourceTargetId, sourceTargetName, sourceTargetEngine,
+                destinationTargetId, destinationTargetName, destinationTargetEngine,
+                backupExecutionId, restoreExecutionId, verificationExecutionId,
+                status, errorMessage, channelId, channelName);
+    }
     public boolean isTest() { return event == NotificationEventType.TEST; }
     public String title() {
         return isTest() ? "[DB Backup] Test notification"
