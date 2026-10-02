@@ -171,9 +171,9 @@ A second browser run recorded every feature on all seven engines for
       restructured README and the SELinux note in deployment.
 - [x] **37. A buildable Oracle pack with current Instant Client.** Run the
       dependency check with the Instant Client library path. ISSUE-15.
-- [ ] **38. Card layout by table width.** Switch the targets and storage
+- [x] **38. Card layout by table width.** Switch the targets and storage
       tables to cards whenever they do not fit, not below a fixed viewport
-      width. ISSUE-16.
+      width. ISSUE-16. See ADR-038.
 - [ ] **39. Channel identity in lifecycle webhooks.** Fill `channel.id` and
       `channel.name` per delivered channel. ISSUE-17.
 

@@ -174,6 +174,7 @@ class StorageProfileControllerTest {
         when(service.listAll()).thenReturn(List.of(profile(UUID.randomUUID())));
         mvc.perform(get("/storage")).andExpect(status().isOk())
                 .andExpect(content().string(containsString("page-header page-header-laptop-stack")))
+                .andExpect(content().string(containsString("class=\"wide-table-container\"")))
                 .andExpect(content().string(containsString(
                         "table-wrap responsive-cards responsive-cards-laptop")))
                 .andExpect(content().string(containsString("Bucket / container")))

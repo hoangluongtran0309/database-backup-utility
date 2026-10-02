@@ -5,8 +5,9 @@ Screenshots and animations recorded for [../FEATURES.md](../FEATURES.md) on
 engines, the S3, GCS and Azure emulators, Mailpit and restore verification
 enabled. Everything shown belongs to a throwaway environment.
 
-Screenshots are 1440 × 723 JPEGs. Animations are 1080 px wide GIFs without
-action labels, so nothing typed into a password field appears in them.
+The original screenshots are 1440 × 723 JPEGs. Follow-up responsive-layout
+evidence is full-page and 1440 px wide. Animations are 1080 px wide GIFs
+without action labels, so nothing typed into a password field appears in them.
 
 ## Animations (`gifs/`)
 
@@ -26,11 +27,11 @@ action labels, so nothing typed into a password field appears in them.
 | Files | Area |
 | --- | --- |
 | `01` | Sign-in |
-| `03`–`05`, `16`, `28`, `30` | Targets: validation, connection tests, laptop cards, edit, removal |
+| `03`–`05`, `16`, `28`, `30`, `37` | Targets: validation, connection tests, laptop cards, edit, removal, container-query follow-up |
 | `06`–`08`, `27`, `29` | Backups: detail, checksum, all engines, delete many, a failure |
 | `09`–`11` | Restores |
 | `12`, `35`, `36` | Restore verification (MySQL, Oracle, SQL Server) |
-| `13`–`15`, `17` | Storage profiles and a backup stored in S3 |
+| `13`–`15`, `17`, `38` | Storage profiles, a backup stored in S3, and the container-query follow-up |
 | `18`–`19` | Schedules |
 | `20`–`21` | Retention |
 | `22`–`26` | Notifications, subscriptions, webhook and email deliveries |

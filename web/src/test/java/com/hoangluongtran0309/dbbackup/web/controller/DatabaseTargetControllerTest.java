@@ -98,6 +98,8 @@ class DatabaseTargetControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(view().name("database/list"))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "class=\"wide-table-container\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
                         "table-wrap responsive-cards responsive-cards-laptop")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("<th scope=\"col\">Destination</th>")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("<th scope=\"col\">Address</th>")))

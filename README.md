@@ -65,9 +65,9 @@ and what comes next.
 
 | Targets across engines | Restore with typed confirmation |
 | --- | --- |
-| ![Targets](docs/tour/images/04-targets-tested.jpg) | ![Restore confirmation](docs/tour/images/09-restore-confirm.jpg) |
+| ![Targets](docs/tour/images/37-targets-container-cards.jpg) | ![Restore confirmation](docs/tour/images/09-restore-confirm.jpg) |
 | **Remote storage profiles** | **Restore verification (SQL Server)** |
-| ![Storage profiles](docs/tour/images/14-storage-profiles-passed.jpg) | ![Verification](docs/tour/images/36-restore-verification-sqlserver.jpg) |
+| ![Storage profiles](docs/tour/images/38-storage-container-cards.jpg) | ![Verification](docs/tour/images/36-restore-verification-sqlserver.jpg) |
 
 More in the [feature guide](docs/FEATURES.md); all media is in
 [docs/tour/](docs/tour/).

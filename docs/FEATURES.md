@@ -95,7 +95,12 @@ failure shows the server's own message, which usually says exactly what is
 wrong. Below, a target whose password was rotated elsewhere is rejected by
 MySQL while the others connect:
 
-![Target list with passing and failing connection tests](tour/images/04-targets-tested.jpg)
+![Target cards with every action visible at 1440px](tour/images/37-targets-container-cards.jpg)
+
+Targets and Storage choose between labelled cards and a table from their own
+available width, not the viewport width. Below 1540px the cards wrap every
+action without a horizontal scrollbar; a wider container uses the table
+([ADR-038](adr/038-wide-tables-query-their-container.md)).
 
 For PostgreSQL, **Test** also checks that `pg_dump` is not older than the
 server ([ADR-035](adr/035-postgresql-17-client-and-version-preflight.md)).
@@ -277,7 +282,7 @@ the bucket or container. In the animation the first test fails, because a
 development S3 server needs path-style access. After that option is turned on,
 the test passes.
 
-![Three remote profiles, all passing](tour/images/14-storage-profiles-passed.jpg)
+![Storage profile cards without horizontal scrolling at 1440px](tour/images/38-storage-container-cards.jpg)
 
 | S3 form | Azure form |
 | --- | --- |

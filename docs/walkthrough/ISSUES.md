@@ -484,7 +484,9 @@ through that path and asserts that no client has RPATH or RUNPATH.
 
 - **Severity:** Low
 - **Area:** `web/src/main/resources/static/css/app.css:292` (`@media (max-width: 1399px)`)
-- **Status:** Open, assigned to slice 38.
+- **Status:** Fixed in slice 38. Targets and storage use a 1540-pixel named
+  size container, so their card layout follows available content width rather
+  than the viewport. See [ADR-038](../adr/038-wide-tables-query-their-container.md).
 
 Slice 35 switches the targets and storage tables to labelled cards below
 1400 px. At a 1440 px wide window the main column is 1090 px wide, but the
@@ -494,9 +496,9 @@ targets table needs 1540 px, so it scrolls sideways again. Only **Test** and
 ([screenshot](../tour/images/04-targets-tested.jpg)). The storage table shows the same scrollbar
 ([screenshot](../tour/images/14-storage-profiles-passed.jpg)).
 
-**Suggested fix:** base the switch on the table's own width (a container
-query on `.table-wrap`) rather than the viewport, or raise the breakpoint to
-cover the measured table width plus the sidebar.
+**Fix:** a wrapper exposes the available inline size as a named CSS container.
+Below the table's measured 1540-pixel minimum the same rows become labelled
+cards; at or above it the dense table remains available.
 
 ---
 
