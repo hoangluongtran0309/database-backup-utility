@@ -21,9 +21,9 @@
   the decisions were made.
 
 The current last decision is
-[ADR-037](adr/037-console-layout-and-credential-autofill.md), which keeps wide
-console resources usable at laptop widths and separates database credential
-fields from the operator sign-in form.
+[ADR-038](adr/038-wide-tables-query-their-container.md), which makes wide
+resource tables respond to their available content width instead of the
+browser viewport.
 
 These pages describe the code that exists. When a slice changes the code, it
 changes these files in the same commit.

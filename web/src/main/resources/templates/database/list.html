@@ -19,8 +19,9 @@
     No targets yet. <a th:href="@{/databases/new}">Add one</a> to get started.
   </p>
 
-  <div class="table-wrap responsive-cards responsive-cards-laptop" th:unless="${targets.isEmpty()}">
-    <table>
+  <div class="wide-table-container" th:unless="${targets.isEmpty()}">
+    <div class="table-wrap responsive-cards responsive-cards-laptop">
+      <table>
       <thead>
         <tr>
           <th scope="col">Name</th>
@@ -130,7 +131,8 @@
           </td>
         </tr>
       </tbody>
-    </table>
+      </table>
+    </div>
   </div>
 
 </div>

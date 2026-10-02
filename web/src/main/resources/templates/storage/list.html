@@ -10,7 +10,8 @@
   <section class="panel"><h2>Local filesystem <span class="badge badge-neutral">Default</span></h2>
     <p>Uses <code>BACKUP_DIR</code>. This built-in destination cannot be edited or removed.</p></section>
   <p class="empty-state panel" th:if="${profiles.isEmpty()}">No remote storage profiles yet.</p>
-  <div class="table-wrap responsive-cards responsive-cards-laptop" th:unless="${profiles.isEmpty()}"><table><thead><tr>
+  <div class="wide-table-container" th:unless="${profiles.isEmpty()}">
+  <div class="table-wrap responsive-cards responsive-cards-laptop"><table><thead><tr>
     <th>Name</th><th>Provider</th><th>Bucket / container</th><th>Endpoint</th><th>Credentials</th><th>Last test</th><th></th>
   </tr></thead><tbody><tr th:each="profile : ${profiles}">
     <td data-label="Name"><strong th:text="${profile.name}">archive</strong></td>
@@ -35,5 +36,5 @@
             th:attr="data-confirm=|Remove storage profile “${profile.name}”?|" data-confirm-title="Remove profile" data-confirm-accept="Remove">
         <button class="button button-small button-danger" type="submit">Remove</button></form>
     </div></td>
-  </tr></tbody></table></div>
+  </tr></tbody></table></div></div>
 </div></body></html>
