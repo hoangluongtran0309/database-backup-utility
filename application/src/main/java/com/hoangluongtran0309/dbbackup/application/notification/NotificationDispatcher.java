@@ -100,7 +100,7 @@ public class NotificationDispatcher {
     public void sendDirect(NotificationChannel channel, NotificationMessage message) {
         NotificationPort adapter = adapters.get(channel.getType());
         if (adapter == null) throw new IllegalStateException("No notification adapter registered for " + channel.getType());
-        adapter.send(credentials.decrypt(channel), message);
+        adapter.send(credentials.decrypt(channel), message.withChannel(channel.getId(), channel.getName()));
     }
 
     static String sanitize(String value) {

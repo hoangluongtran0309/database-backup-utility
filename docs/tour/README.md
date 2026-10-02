@@ -34,7 +34,7 @@ without action labels, so nothing typed into a password field appears in them.
 | `13`–`15`, `17`, `38` | Storage profiles, a backup stored in S3, and the container-query follow-up |
 | `18`–`19` | Schedules |
 | `20`–`21` | Retention |
-| `22`–`26` | Notifications, subscriptions, webhook and email deliveries |
+| `22`–`26`, `39` | Notifications, subscriptions, webhook and email deliveries, channel-identity follow-up |
 | `31`–`33` | CLI and HTTP API |
 | `34` | Light theme |
 

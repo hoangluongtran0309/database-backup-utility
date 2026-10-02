@@ -77,4 +77,6 @@ are `0` success, `2` local/remote validation, `3` not found, `4` conflict, `5`
 authentication/operation failure and `70` transport or internal CLI failure.
 
 Generic webhook payloads encode `occurredAt` as a lossless UTC ISO-8601 string,
-for example `2026-10-01T03:35:25.003285481Z`.
+for example `2026-10-01T03:35:25.003285481Z`. The `channel` object always
+contains the id and name of the channel that received that delivery, including
+lifecycle events delivered to more than one subscribed channel.
